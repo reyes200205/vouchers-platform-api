@@ -1,98 +1,74 @@
 # Laravel API Kit
 
-A production-ready, API-only Laravel 13 starter kit following the 2025-2026 REST API ecosystem best practices. No frontend dependencies - purely headless API for mobile apps, SPAs, or microservices.
+Un kit de inicio (starter kit) de Laravel 13 listo para producción y exclusivo para APIs, que sigue las mejores prácticas del ecosistema de APIs REST para 2025-2026. Sin dependencias de frontend: una API puramente headless para aplicaciones móviles, SPAs o microservicios.
 
-[![PHP Version](https://img.shields.io/badge/PHP-8.3%2B-blue)](https://php.net)
-[![Laravel Version](https://img.shields.io/badge/Laravel-13.x-red)](https://laravel.com)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Versión de PHP](https://img.shields.io/badge/PHP-8.3%2B-blue)](https://php.net)
+[![Versión de Laravel](https://img.shields.io/badge/Laravel-13.x-red)](https://laravel.com)
+[![Licencia](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-## Features
+## Características
 
-- **API-Only** - No Blade, Vite, or frontend assets
-- **Token Authentication** - Laravel Sanctum for mobile/SPA auth
-- **Email Verification** - Built-in email verification flow with signed URLs
-- **Password Reset** - Secure password reset with token-based flow
-- **API Versioning** - URI-based versioning with deprecation support via [grazulex/laravel-apiroute](https://github.com/Grazulex/laravel-apiroute)
-- **Query Building** - Filtering, sorting, includes via [spatie/laravel-query-builder](https://github.com/spatie/laravel-query-builder)
-- **Data Objects** - Type-safe DTOs via [spatie/laravel-data](https://github.com/spatie/laravel-data)
-- **Auto Documentation** - Zero-annotation OpenAPI 3.1 via [dedoc/scramble](https://github.com/dedoc/scramble)
-- **Modern Testing** - Pest PHP with Laravel HTTP testing
-- **Code Quality** - PHPStan (max level), Rector, and Pint with strict rules
-- **Rate Limiting** - Configurable per-route rate limiters
-- **Reusable Middleware** - ForceJsonResponse, LogApiRequests, EnsureEmailVerified
-- **Standardized Responses** - Consistent JSON response format
-- **Optional: API Idempotency** - RFC-compliant idempotency via [grazulex/laravel-api-idempotency](https://github.com/Grazulex/laravel-api-idempotency)
-- **Optional: Smart Rate Limiting** - Plan-aware throttling with quotas via [grazulex/laravel-api-throttle-smart](https://github.com/Grazulex/laravel-api-throttle-smart)
+- **Solo API** - Sin Blade, Vite ni recursos de frontend.
+- **Autenticación por Tokens** - Laravel Sanctum para autenticación de móviles/SPAs.
+- **Verificación de Correo Electrónico** - Flujo integrado de verificación de correo electrónico con URLs firmadas.
+- **Restablecimiento de Contraseña** - Restablecimiento seguro de contraseña con flujo basado en tokens.
+- **Versionado de API** - Versionado basado en URIs con soporte de depreciación a través de [grazulex/laravel-apiroute](https://github.com/Grazulex/laravel-apiroute).
+- **Construcción de Consultas** - Filtrado, ordenamiento e inclusiones mediante [spatie/laravel-query-builder](https://github.com/spatie/laravel-query-builder).
+- **Objetos de Datos (DTOs)** - DTOs con tipado seguro a través de [spatie/laravel-data](https://github.com/spatie/laravel-data).
+- **Documentación Automática** - OpenAPI 3.1 sin anotaciones mediante [dedoc/scramble](https://github.com/dedoc/scramble).
+- **Pruebas Modernas** - Pest PHP con pruebas HTTP de Laravel.
+- **Calidad de Código** - PHPStan (nivel máximo), Rector y Pint con reglas estrictas.
+- **Límite de Tasa (Rate Limiting)** - Limitadores de tasa configurables por ruta.
+- **Middleware Reutilizable** - ForceJsonResponse, LogApiRequests, EnsureEmailVerified.
+- **Respuestas Estandarizadas** - Formato de respuesta JSON consistente.
+- **Opcional: Idempotencia de API** - Idempotencia que cumple con RFC mediante [grazulex/laravel-api-idempotency](https://github.com/Grazulex/laravel-api-idempotency).
+- **Opcional: Límite de Tasa Inteligente** - Limitación de tasa basada en planes con cuotas mediante [grazulex/laravel-api-throttle-smart](https://github.com/Grazulex/laravel-api-throttle-smart).
 
-## Requirements
+## Requisitos
 
-- Docker & Docker Compose
-- Or: PHP 8.3+, Composer 2.x
+- PHP 8.3+
+- Composer 2.x
+- Base de datos (SQLite por defecto, MySQL, PostgreSQL, etc.)
 
-## Quick Start
-
-### With Docker (Recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/grazulex/laravel-api-kit.git
-cd laravel-api-kit
-
-# Copy environment file
-cp .env.example .env
-
-# Build and start containers
-docker compose build
-docker compose up -d
-
-# Install dependencies
-docker compose run --rm app composer install
-
-# Generate application key
-docker compose run --rm app php artisan key:generate
-
-# Run migrations
-docker compose run --rm app php artisan migrate
-
-# Run tests to verify installation
-docker compose run --rm app ./vendor/bin/pest
-```
-
-### Without Docker
+## Inicio Rápido
 
 ```bash
-# Clone and install
-git clone https://github.com/grazulex/laravel-api-kit.git
-cd laravel-api-kit
+# Clonar el repositorio
+git clone https://github.com/reyes200205/vouchers-platform-api.git
+cd vouchers-platform-api
+
+# Instalar dependencias
 composer install
 
-# Configure
+# Configurar el archivo de entorno
 cp .env.example .env
 php artisan key:generate
 
-# Database (SQLite by default)
+# Base de datos (SQLite por defecto)
 touch database/database.sqlite
 php artisan migrate
 
-# Verify
+# Ejecutar pruebas para verificar la instalación
 ./vendor/bin/pest
 ```
 
-## API Documentation
+## Documentación de la API
 
-Once running, access the auto-generated documentation:
+Una vez en ejecución, puedes acceder a la documentación autogenerada:
 
-- **Swagger UI**: [http://localhost:8080/docs/api](http://localhost:8080/docs/api)
-- **OpenAPI JSON**: [http://localhost:8080/docs/api.json](http://localhost:8080/docs/api.json)
+- **Swagger UI**: [http://localhost:8000/docs/api](http://localhost:8000/docs/api)
+- **OpenAPI JSON**: [http://localhost:8000/docs/api.json](http://localhost:8000/docs/api.json)
 
-## Authentication
+> **Nota:** Puedes iniciar el servidor de desarrollo local ejecutando `php artisan serve`.
 
-This kit uses **Laravel Sanctum** with token-based authentication (ideal for mobile apps and third-party API consumers).
+## Autenticación
 
-### Register a New User
+Este kit utiliza **Laravel Sanctum** con autenticación basada en tokens (ideal para aplicaciones móviles y consumidores de API de terceros).
+
+### Registrar un Nuevo Usuario
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/register \
+curl -X POST http://localhost:8000/api/v1/register \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d '{
@@ -103,7 +79,7 @@ curl -X POST http://localhost:8080/api/v1/register \
   }'
 ```
 
-**Response:**
+**Respuesta:**
 ```json
 {
   "success": true,
@@ -121,10 +97,10 @@ curl -X POST http://localhost:8080/api/v1/register \
 }
 ```
 
-### Login
+### Iniciar Sesión (Login)
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/login \
+curl -X POST http://localhost:8000/api/v1/login \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d '{
@@ -133,45 +109,45 @@ curl -X POST http://localhost:8080/api/v1/login \
   }'
 ```
 
-### Using the Token
+### Usar el Token
 
-Include the token in the `Authorization` header for protected routes:
+Incluye el token en la cabecera `Authorization` para las rutas protegidas:
 
 ```bash
-curl -X GET http://localhost:8080/api/v1/me \
+curl -X GET http://localhost:8000/api/v1/me \
   -H "Authorization: Bearer 1|abc123..." \
   -H "Accept: application/json"
 ```
 
-### Logout
+### Cerrar Sesión (Logout)
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/logout \
+curl -X POST http://localhost:8000/api/v1/logout \
   -H "Authorization: Bearer 1|abc123..." \
   -H "Accept: application/json"
 ```
 
-### Email Verification
+### Verificación de Correo Electrónico
 
-After registration, users receive a verification email. The kit integrates with Laravel's `MustVerifyEmail` contract.
+Después del registro, los usuarios reciben un correo electrónico de verificación. El kit se integra con el contrato `MustVerifyEmail` de Laravel.
 
-**Verify Email (via signed URL from email):**
+**Verificar Correo Electrónico (a través de la URL firmada del correo):**
 ```bash
-curl -X POST "http://localhost:8080/api/v1/email/verify/{id}/{hash}?signature=..." \
+curl -X POST "http://localhost:8000/api/v1/email/verify/{id}/{hash}?signature=..." \
   -H "Authorization: Bearer 1|abc123..." \
   -H "Accept: application/json"
 ```
 
-**Resend Verification Email:**
+**Reenviar Correo de Verificación:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/email/resend \
+curl -X POST http://localhost:8000/api/v1/email/resend \
   -H "Authorization: Bearer 1|abc123..." \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d '{"email": "john@example.com"}'
 ```
 
-**Response:**
+**Respuesta:**
 ```json
 {
   "success": true,
@@ -180,17 +156,17 @@ curl -X POST http://localhost:8080/api/v1/email/resend \
 }
 ```
 
-### Password Reset
+### Restablecer Contraseña
 
-**Request Password Reset Link:**
+**Solicitar Enlace de Restablecimiento:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/forgot-password \
+curl -X POST http://localhost:8000/api/v1/forgot-password \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d '{"email": "john@example.com"}'
 ```
 
-**Response:**
+**Respuesta:**
 ```json
 {
   "success": true,
@@ -199,9 +175,9 @@ curl -X POST http://localhost:8080/api/v1/forgot-password \
 }
 ```
 
-**Reset Password (with token from email):**
+**Restablecer Contraseña (con el token del correo):**
 ```bash
-curl -X POST http://localhost:8080/api/v1/reset-password \
+curl -X POST http://localhost:8000/api/v1/reset-password \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
   -d '{
@@ -212,7 +188,7 @@ curl -X POST http://localhost:8080/api/v1/reset-password \
   }'
 ```
 
-**Response:**
+**Respuesta:**
 ```json
 {
   "success": true,
@@ -221,40 +197,40 @@ curl -X POST http://localhost:8080/api/v1/reset-password \
 }
 ```
 
-> **Note:** After a successful password reset, all user tokens are revoked for security.
+> **Nota:** Después de restablecer la contraseña con éxito, todos los tokens del usuario se revocan por seguridad.
 
-## API Endpoints
+## Puntos de Entrada de la API (Endpoints)
 
-### Version 1 (`/api/v1`)
+### Versión 1 (`/api/v1`)
 
-| Method | Endpoint                     | Auth | Description                   | Rate Limit |
-|--------|------------------------------|------|-------------------------------|------------|
-| POST   | /register                    | No   | Register new user             | 5/min      |
-| POST   | /login                       | No   | Get authentication token      | 5/min      |
-| POST   | /logout                      | Yes  | Revoke current token          | 120/min    |
-| GET    | /me                          | Yes  | Get current user profile      | 120/min    |
-| POST   | /email/verify/{id}/{hash}    | Yes  | Verify email address          | 120/min    |
-| POST   | /email/resend                | Yes  | Resend verification email     | 6/min      |
-| POST   | /forgot-password             | No   | Request password reset link   | 6/min      |
-| POST   | /reset-password              | No   | Reset password with token     | 6/min      |
+| Método | Ruta                         | Autenticación | Descripción                                     | Límite de Tasa |
+|--------|------------------------------|---------------|-------------------------------------------------|----------------|
+| POST   | /register                    | No            | Registrar nuevo usuario                         | 5/min          |
+| POST   | /login                       | No            | Obtener token de autenticación                  | 5/min          |
+| POST   | /logout                      | Sí            | Revocar token actual                            | 120/min        |
+| GET    | /me                          | Sí            | Obtener perfil del usuario actual               | 120/min        |
+| POST   | /email/verify/{id}/{hash}    | Sí            | Verificar dirección de correo electrónico       | 120/min        |
+| POST   | /email/resend                | Sí            | Reenviar correo de verificación                 | 6/min          |
+| POST   | /forgot-password             | No            | Solicitar enlace de restablecimiento            | 6/min          |
+| POST   | /reset-password              | No            | Restablecer contraseña con token                | 6/min          |
 
-## Response Format
+## Formato de Respuestas
 
-All API responses follow a consistent format:
+Todas las respuestas de la API siguen un formato consistente:
 
-### Success Response
+### Respuesta Exitosa (Success)
 
 ```json
 {
   "success": true,
   "message": "Operation successful",
   "data": {
-    // Response data here
+    // Datos de la respuesta aquí
   }
 }
 ```
 
-### Error Response
+### Respuesta de Error
 
 ```json
 {
@@ -266,78 +242,76 @@ All API responses follow a consistent format:
 }
 ```
 
-### HTTP Status Codes
+### Códigos de Estado HTTP
 
-| Code | Description |
+| Código | Descripción |
 |------|-------------|
-| 200  | Success |
-| 201  | Resource created |
-| 204  | No content |
-| 400  | Bad request |
-| 401  | Unauthorized |
-| 403  | Forbidden |
-| 404  | Not found |
-| 422  | Validation error |
-| 429  | Too many requests |
-| 500  | Server error |
+| 200  | Éxito (Success) |
+| 201  | Recurso creado |
+| 204  | Sin contenido |
+| 400  | Solicitud incorrecta (Bad request) |
+| 401  | No autorizado (Unauthorized) |
+| 403  | Prohibido (Forbidden) |
+| 404  | No encontrado (Not found) |
+| 422  | Error de validación |
+| 429  | Demasiadas solicitudes (Too many requests) |
+| 500  | Error del servidor |
 
-## Project Structure
+## Estructura del Proyecto
 
 ```
 laravel-api-kit/
 ├── app/
-│   ├── Actions/                    # Single-purpose action classes
-│   ├── DTOs/                       # Data Transfer Objects (spatie/laravel-data)
+│   ├── Actions/                    # Clases de acción de propósito único
+│   ├── DTOs/                       # Objetos de Transferencia de Datos (spatie/laravel-data)
 │   ├── Http/
 │   │   ├── Controllers/
 │   │   │   └── Api/
-│   │   │       ├── ApiController.php      # Base controller with ApiResponse
-│   │   │       └── V1/                    # Version 1 controllers
+│   │   │       ├── ApiController.php      # Controlador base con ApiResponse
+│   │   │       └── V1/                    # Controladores de la Versión 1
 │   │   │           └── AuthController.php
 │   │   ├── Requests/
-│   │   │   └── Api/V1/                    # Form Requests per version
+│   │   │   └── Api/V1/                    # Form Requests por versión
 │   │   │       ├── LoginRequest.php
 │   │   │       └── RegisterRequest.php
-│   │   └── Resources/                     # API Resources
+│   │   └── Resources/                     # Recursos de la API
 │   │       └── UserResource.php
 │   ├── Models/
-│   │   └── User.php                       # With HasApiTokens trait
+│   │   └── User.php                       # Con el trait HasApiTokens
 │   ├── Providers/
-│   │   └── AppServiceProvider.php         # Rate limiting config
-│   ├── Services/                          # Business logic services
+│   │   └── AppServiceProvider.php         # Configuración del límite de tasa
+│   ├── Services/                          # Servicios de lógica de negocio
 │   └── Traits/
-│       └── ApiResponse.php                # Standardized responses
+│       └── ApiResponse.php                # Respuestas estandarizadas
 ├── config/
-│   ├── apiroute.php                       # API versioning config
-│   ├── cors.php                           # CORS settings
-│   ├── sanctum.php                        # Token auth config
-│   └── scramble.php                       # API docs config
+│   ├── apiroute.php                       # Configuración de versionado de API
+│   ├── cors.php                           # Configuración de CORS
+│   ├── sanctum.php                        # Configuración de autenticación por token
+│   └── scramble.php                       # Configuración de documentación de API
 ├── routes/
-│   ├── api.php                            # API routes entry point
+│   ├── api.php                            # Punto de entrada de las rutas de API
 │   └── api/
-│       └── v1.php                         # Version 1 routes
+│       └── v1.php                         # Rutas de la versión 1
 ├── tests/
 │   └── Feature/Api/V1/
-│       └── AuthTest.php                   # Authentication tests
-├── docker-compose.yml
-├── Dockerfile
-└── CLAUDE.md                              # AI assistant instructions
+│       └── AuthTest.php                   # Pruebas de autenticación
+└── CLAUDE.md                              # Instrucciones para el asistente de IA
 ```
 
-## API Versioning
+## Versionado de API
 
-This kit uses [grazulex/laravel-apiroute](https://github.com/Grazulex/laravel-apiroute) v2.x for API versioning with support for:
+Este kit utiliza [grazulex/laravel-apiroute](https://github.com/Grazulex/laravel-apiroute) v2.x para el versionado de la API con soporte para:
 
-- **URI Path** (default): `/api/v1/users`, `/api/v2/users`
-- **Header**: `X-API-Version: 2`
-- **Query Parameter**: `?api_version=2`
-- **Accept Header**: `Accept: application/vnd.api.v2+json`
+- **Ruta URI** (por defecto): `/api/v1/users`, `/api/v2/users`
+- **Cabecera**: `X-API-Version: 2`
+- **Parámetro de consulta (Query)**: `?api_version=2`
+- **Cabecera Accept**: `Accept: application/vnd.api.v2+json`
 
-### Adding a New API Version
+### Agregar una Nueva Versión de API
 
-1. Create controllers in `app/Http/Controllers/Api/V2/`
-2. Create requests in `app/Http/Requests/Api/V2/`
-3. Create route file `routes/api/v2.php`:
+1. Crea los controladores en `app/Http/Controllers/Api/V2/`
+2. Crea las solicitudes (Requests) en `app/Http/Requests/Api/V2/`
+3. Crea el archivo de rutas `routes/api/v2.php`:
 
 ```php
 <?php
@@ -346,10 +320,10 @@ use App\Http\Controllers\Api\V2\AuthController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('register', [AuthController::class, 'register']);
-// ... more routes
+// ... más rutas
 ```
 
-4. Update `config/apiroute.php`:
+4. Actualiza `config/apiroute.php`:
 
 ```php
 'versions' => [
@@ -367,9 +341,9 @@ Route::post('register', [AuthController::class, 'register']);
 ],
 ```
 
-### Deprecation Headers
+### Cabeceras de Depreciación (Deprecation Headers)
 
-When accessing deprecated versions, responses include RFC-compliant headers:
+Al acceder a versiones depreciadas, las respuestas incluyen cabeceras conformes con RFC:
 
 ```http
 Deprecation: Sun, 01 Jun 2025 00:00:00 GMT
@@ -377,15 +351,15 @@ Sunset: Mon, 01 Dec 2025 00:00:00 GMT
 Link: </api/v2>; rel="successor-version"
 ```
 
-## Query Building
+## Construcción de Consultas (Query Building)
 
-Use [spatie/laravel-query-builder](https://spatie.be/docs/laravel-query-builder) for filtering, sorting, and including relationships:
+Utiliza [spatie/laravel-query-builder](https://spatie.be/docs/laravel-query-builder) para filtrar, ordenar e incluir relaciones:
 
 ```php
 use Spatie\QueryBuilder\QueryBuilder;
 use Spatie\QueryBuilder\AllowedFilter;
 
-// In your controller
+// En tu controlador
 $users = QueryBuilder::for(User::class)
     ->allowedFilters([
         'name',
@@ -400,7 +374,7 @@ $users = QueryBuilder::for(User::class)
 return UserResource::collection($users);
 ```
 
-**Request examples:**
+**Ejemplos de solicitudes:**
 ```
 GET /api/v1/users?filter[name]=john
 GET /api/v1/users?sort=-created_at
@@ -408,9 +382,9 @@ GET /api/v1/users?include=posts,comments
 GET /api/v1/users?filter[name]=john&sort=name&include=posts
 ```
 
-## Data Transfer Objects
+## Objetos de Transferencia de Datos (DTOs)
 
-Use [spatie/laravel-data](https://spatie.be/docs/laravel-data) for type-safe DTOs:
+Utiliza [spatie/laravel-data](https://spatie.be/docs/laravel-data) para DTOs con tipado seguro:
 
 ```php
 // app/DTOs/UserData.php
@@ -425,7 +399,7 @@ class UserData extends Data
     ) {}
 }
 
-// In controller - validates and transforms automatically
+// En el controlador - se valida y transforma automáticamente
 public function store(UserData $data): JsonResponse
 {
     $user = User::create($data->toArray());
@@ -433,59 +407,59 @@ public function store(UserData $data): JsonResponse
 }
 ```
 
-## Rate Limiting
+## Limitación de Tasa (Rate Limiting)
 
-Configured in `app/Providers/AppServiceProvider.php`:
+Configurado en `app/Providers/AppServiceProvider.php`:
 
-| Limiter | Limit | Use Case |
-|---------|-------|----------|
-| `api` | 60/min | Default for all API routes |
-| `auth` | 5/min | Login/register (brute force protection) |
-| `authenticated` | 120/min | Logged-in users |
+| Limitador | Límite | Caso de Uso |
+|-----------|--------|-------------|
+| `api`     | 60/min | Por defecto para todas las rutas de API |
+| `auth`    | 5/min  | Login/registro (protección contra fuerza bruta) |
+| `authenticated` | 120/min | Usuarios autenticados |
 
-### Applying Rate Limiters
+### Aplicar Limitadores de Tasa
 
 ```php
-// In routes/api.php
+// En routes/api.php
 Route::middleware('throttle:auth')->group(function () {
     Route::post('login', [AuthController::class, 'login']);
     Route::post('register', [AuthController::class, 'register']);
 });
 
 Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function () {
-    // Protected routes with higher limits
+    // Rutas protegidas con límites más altos
 });
 ```
 
-### Rate Limit Headers
+### Cabeceras de Límite de Tasa
 
-Responses include rate limit information:
+Las respuestas incluyen información sobre el límite de tasa:
 
 ```http
 X-RateLimit-Limit: 60
 X-RateLimit-Remaining: 59
-Retry-After: 60  # When limit exceeded
+Retry-After: 60  # Cuando se excede el límite
 ```
 
-## Optional Packages
+## Paquetes Opcionales
 
-The following packages are **suggested** (not required) and can be installed individually to extend the kit's capabilities. They are fully opt-in and will not affect existing behavior.
+Los siguientes paquetes son **sugeridos** (no requeridos) y se pueden instalar de forma individual para ampliar las capacidades del kit. Son completamente opcionales y no afectarán el comportamiento existente.
 
-### API Idempotency
+### Idempotencia de API
 
-[grazulex/laravel-api-idempotency](https://github.com/Grazulex/laravel-api-idempotency) provides RFC-compliant idempotency for your API endpoints. It prevents duplicate operations when clients retry requests (critical for payments, order creation, etc.).
+[grazulex/laravel-api-idempotency](https://github.com/Grazulex/laravel-api-idempotency) proporciona idempotencia que cumple con RFC para los puntos de entrada de tu API. Evita operaciones duplicadas cuando los clientes reintentan solicitudes (crítico para pagos, creación de pedidos, etc.).
 
-**Install:**
+**Instalación:**
 ```bash
 composer require grazulex/laravel-api-idempotency
 ```
 
-**Publish config (optional):**
+**Publicar configuración (opcional):**
 ```bash
 php artisan vendor:publish --tag="api-idempotency-config"
 ```
 
-**Usage — apply the middleware to mutation routes:**
+**Uso — aplicar el middleware a las rutas de mutación:**
 ```php
 // routes/api/v1.php
 Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function () {
@@ -493,41 +467,41 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
         ->middleware('idempotent');
 
     Route::post('payments', [PaymentController::class, 'store'])
-        ->middleware('idempotent:required'); // Require Idempotency-Key header
+        ->middleware('idempotent:required'); // Requiere la cabecera Idempotency-Key
 });
 ```
 
-**Client-side — include the `Idempotency-Key` header:**
+**Lado del cliente — incluir la cabecera `Idempotency-Key`:**
 ```bash
-curl -X POST http://localhost:8080/api/v1/orders \
+curl -X POST http://localhost:8000/api/v1/orders \
   -H "Authorization: Bearer 1|abc123..." \
   -H "Idempotency-Key: order_unique_key_123" \
   -H "Content-Type: application/json" \
   -d '{"product_id": 1, "quantity": 2}'
 ```
 
-> **Attention:**
-> - Only apply the `idempotent` middleware to mutation routes (POST, PUT, PATCH). GET requests are naturally idempotent.
-> - The default storage driver is `cache`. For production with multiple servers, use the `redis` or `database` driver.
-> - Keys are scoped per user by default. Two different users can use the same key without conflict.
+> **Atención:**
+> - Aplica el middleware `idempotent` únicamente a rutas de mutación (POST, PUT, PATCH). Las solicitudes GET son naturalmente idempotentes.
+> - El controlador de almacenamiento por defecto es `cache`. Para entornos de producción con múltiples servidores, utiliza el controlador `redis` o `database`.
+> - Las claves están limitadas por usuario de forma predeterminada. Dos usuarios distintos pueden usar la misma clave sin conflicto.
 
 ---
 
-### Smart Rate Limiting
+### Límite de Tasa Inteligente (Smart Rate Limiting)
 
-[grazulex/laravel-api-throttle-smart](https://github.com/Grazulex/laravel-api-throttle-smart) provides plan-aware rate limiting with quotas, multiple algorithms (fixed window, sliding window, token bucket), and multi-tenant support. Ideal for SaaS APIs with subscription tiers.
+[grazulex/laravel-api-throttle-smart](https://github.com/Grazulex/laravel-api-throttle-smart) proporciona límites de tasa según el plan del usuario, con cuotas, múltiples algoritmos (ventana fija, ventana deslizante, cubo de tokens) y soporte multi-inquilino (multi-tenant). Es ideal para APIs SaaS con niveles de suscripción.
 
-**Install:**
+**Instalación:**
 ```bash
 composer require grazulex/laravel-api-throttle-smart
 ```
 
-**Publish config:**
+**Publicar configuración:**
 ```bash
 php artisan vendor:publish --tag="throttle-smart-config"
 ```
 
-**Usage — apply to routes where plan-based limiting is needed:**
+**Uso — aplicar a las rutas donde se necesite limitación basada en planes:**
 ```php
 // routes/api/v1.php
 Route::middleware(['auth:sanctum', 'throttle.smart'])->group(function () {
@@ -535,65 +509,65 @@ Route::middleware(['auth:sanctum', 'throttle.smart'])->group(function () {
 });
 ```
 
-> **Attention:**
-> - This package **coexists** with Laravel's built-in `throttle:` middleware. You do not need to remove the existing rate limiters.
-> - If you want to **replace** the native throttle on specific routes, swap `throttle:authenticated` with `throttle.smart` on those routes only.
-> - Do **not** apply both `throttle:authenticated` and `throttle.smart` on the same route group — choose one per group to avoid double rate limiting.
-> - The default driver is `cache`. For production, `redis` is recommended for performance and distributed consistency.
-> - Configure your subscription plans in `config/throttle-smart.php` to match your business model (Free, Pro, Enterprise, etc.).
+> **Atención:**
+> - Este paquete **coexiste** con el middleware `throttle:` integrado de Laravel. No necesitas eliminar los limitadores de tasa existentes.
+> - Si deseas **reemplazar** el limitador nativo en rutas específicas, cambia `throttle:authenticated` por `throttle.smart` solo en esas rutas.
+> - **No** apliques tanto `throttle:authenticated` como `throttle.smart` en el mismo grupo de rutas — elige uno por grupo para evitar una doble limitación de tasa.
+> - El controlador por defecto es `cache`. Para entornos de producción, se recomienda `redis` para un mejor rendimiento y consistencia distribuida.
+> - Configura tus planes de suscripción en `config/throttle-smart.php` para que coincidan con tu modelo de negocio (Free, Pro, Enterprise, etc.).
 
 ---
 
-## Middleware
+## Middlewares
 
-The kit includes three production-ready middleware patterns that you can apply to your routes as needed.
+El kit incluye tres middlewares listos para producción que puedes aplicar a tus rutas según lo necesites.
 
-### Available Middleware
+### Middlewares Disponibles
 
-| Alias | Class | Description |
+| Alias | Clase | Descripción |
 |-------|-------|-------------|
-| `force.json` | `ForceJsonResponse` | Ensures all responses are JSON formatted |
-| `log.api` | `LogApiRequests` | Logs API requests with timing information |
-| `verified` | `EnsureEmailVerified` | Requires verified email to access route |
+| `force.json` | `ForceJsonResponse` | Asegura que todas las respuestas tengan formato JSON |
+| `log.api` | `LogApiRequests` | Registra las solicitudes de API con información de tiempo de respuesta |
+| `verified` | `EnsureEmailVerified` | Requiere correo electrónico verificado para acceder a la ruta |
 
 ### ForceJsonResponse
 
-Automatically sets `Accept: application/json` header and converts non-JSON responses to JSON format.
+Establece automáticamente la cabecera `Accept: application/json` y convierte las respuestas que no sean JSON al formato JSON.
 
 ```php
 Route::middleware('force.json')->group(function () {
-    // All responses will be JSON
+    // Todas las respuestas serán JSON
 });
 ```
 
 ### LogApiRequests
 
-Logs API requests with detailed information and adds `X-Response-Time` header to responses.
+Registra las solicitudes de API con información detallada y agrega la cabecera `X-Response-Time` a las respuestas.
 
-**Logged data:** timestamp, method, URL, IP, user ID, status code, duration (ms), user agent.
+**Datos registrados:** marca de tiempo, método, URL, IP, ID de usuario, código de estado, duración (ms), user agent.
 
-**Enable logging via environment:**
+**Habilitar el registro a través del entorno:**
 ```env
 APP_LOG_API_REQUESTS=true
 ```
 
 ```php
 Route::middleware('log.api')->group(function () {
-    // Requests will be logged
+    // Las solicitudes serán registradas
 });
 ```
 
 ### EnsureEmailVerified
 
-Protects routes that require a verified email address. Returns 403 if email is not verified.
+Protege las rutas que requieren una dirección de correo electrónico verificada. Devuelve 403 si el correo no está verificado.
 
 ```php
 Route::middleware(['auth:sanctum', 'verified'])->group(function () {
-    // Only users with verified emails can access
+    // Solo accesible para usuarios con correos verificados
 });
 ```
 
-**Response when email not verified:**
+**Respuesta cuando el correo no está verificado:**
 ```json
 {
   "success": false,
@@ -601,25 +575,25 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 }
 ```
 
-## Testing
+## Pruebas (Testing)
 
-This kit uses [Pest PHP](https://pestphp.com/) for testing:
+Este kit utiliza [Pest PHP](https://pestphp.com/) para las pruebas:
 
 ```bash
-# Run all tests
-docker compose run --rm app ./vendor/bin/pest
+# Ejecutar todas las pruebas
+./vendor/bin/pest
 
-# Run specific test file
-docker compose run --rm app ./vendor/bin/pest tests/Feature/Api/V1/AuthTest.php
+# Ejecutar un archivo de prueba específico
+./vendor/bin/pest tests/Feature/Api/V1/AuthTest.php
 
-# Run with coverage
-docker compose run --rm app ./vendor/bin/pest --coverage
+# Ejecutar con cobertura de código
+./vendor/bin/pest --coverage
 
-# Run in parallel
-docker compose run --rm app ./vendor/bin/pest --parallel
+# Ejecutar en paralelo
+./vendor/bin/pest --parallel
 ```
 
-### Writing Tests
+### Escribir Pruebas
 
 ```php
 // tests/Feature/Api/V1/UserTest.php
@@ -652,149 +626,127 @@ it('requires authentication', function () {
 });
 ```
 
-## Code Quality
+## Calidad de Código
 
-This kit includes strict code quality tools configured following [nunomaduro/laravel-starter-kit](https://github.com/nunomaduro/laravel-starter-kit) standards.
+Este kit incluye herramientas estrictas de calidad de código configuradas siguiendo los estándares de [nunomaduro/laravel-starter-kit](https://github.com/nunomaduro/laravel-starter-kit).
 
-### Tools
+### Herramientas
 
-| Tool | Purpose | Config |
-|------|---------|--------|
-| [PHPStan](https://phpstan.org/) + [Larastan](https://github.com/larastan/larastan) | Static analysis (level max) | `phpstan.neon` |
-| [Rector](https://getrector.com/) | Automated refactoring | `rector.php` |
-| [Pint](https://laravel.com/docs/pint) | Code style (strict rules) | `pint.json` |
+| Herramienta | Propósito | Configuración |
+|-------------|-----------|---------------|
+| [PHPStan](https://phpstan.org/) + [Larastan](https://github.com/larastan/larastan) | Análisis estático (nivel máximo) | `phpstan.neon` |
+| [Rector](https://getrector.com/) | Refactorización automática | `rector.php` |
+| [Pint](https://laravel.com/docs/pint) | Estilo de código (reglas estrictas) | `pint.json` |
 
-### Composer Scripts
+### Scripts de Composer
 
 ```bash
-# Apply all fixes (Rector + Pint)
+# Aplicar todas las correcciones (Rector + Pint)
 composer lint
 
-# Check without fixing (CI mode)
+# Verificar sin corregir (modo CI)
 composer test:lint
 
-# Static analysis only
+# Solo análisis estático
 composer test:types
 
-# Unit tests only
+# Solo pruebas unitarias
 composer test:unit
 
-# Full test suite (lint + types + unit)
+# Suite de pruebas completa (lint + types + unit)
 composer test
 ```
 
-### With Docker
+### Reglas Estrictas Aplicadas
 
-```bash
-docker compose exec app composer lint
-docker compose exec app composer test
-```
-
-### Strict Rules Applied
-
-- `declare(strict_types=1)` on all files
-- `final` classes by default
-- Type declarations enforced
-- Dead code removal
-- Early returns
-- Strict comparisons
+- `declare(strict_types=1)` en todos los archivos
+- Clases `final` por defecto
+- Declaraciones de tipo obligatorias
+- Eliminación de código muerto
+- Retornos tempranos (early returns)
+- Comparaciones estrictas
 
 ### GitHub Actions
 
-Tests run automatically on push/PR to `main` via `.github/workflows/tests.yml`.
+Las pruebas se ejecutan automáticamente al realizar push o PR a `main` a través de `.github/workflows/tests.yml`.
 
-## Development Commands
+## Comandos de Desarrollo
 
 ```bash
-# List all routes
-docker compose run --rm app php artisan route:list
+# Listar todas las rutas
+php artisan route:list
 
-# Clear all caches
-docker compose run --rm app php artisan optimize:clear
+# Limpiar todas las cachés
+php artisan optimize:clear
 
-# Generate IDE helper files (if using Laravel IDE Helper)
-docker compose run --rm app php artisan ide-helper:generate
-docker compose run --rm app php artisan ide-helper:models -N
+# Generar archivos de ayuda para el IDE (si usas Laravel IDE Helper)
+php artisan ide-helper:generate
+php artisan ide-helper:models -N
 
-# Export OpenAPI spec to file
-docker compose run --rm app php artisan scramble:export
+# Exportar la especificación OpenAPI a un archivo
+php artisan scramble:export
 ```
 
-## Environment Configuration
+## Configuración del Entorno
 
-Key `.env` variables:
+Variables clave de `.env`:
 
 ```env
-# Application
+# Aplicación
 APP_NAME="Laravel API Kit"
 APP_ENV=local
 APP_DEBUG=true
-APP_URL=http://localhost:8080
+APP_URL=http://localhost:8000
 
-# Database (SQLite for development)
+# Base de Datos (SQLite para desarrollo)
 DB_CONNECTION=sqlite
-DB_DATABASE=/var/www/database/database.sqlite
 
-# For MySQL/PostgreSQL
+# Para MySQL/PostgreSQL
 # DB_CONNECTION=mysql
-# DB_HOST=mysql
+# DB_HOST=127.0.0.1
 # DB_PORT=3306
 # DB_DATABASE=laravel_api_kit
-# DB_USERNAME=laravel
+# DB_USERNAME=root
 # DB_PASSWORD=secret
 
 # Sanctum
 SANCTUM_STATEFUL_DOMAINS=localhost,localhost:3000,127.0.0.1
 
-# API Versioning
+# Versionado de API
 API_VERSION_STRATEGY=uri
 API_DEFAULT_VERSION=latest
 
-# Rate Limiting
+# Límite de Tasa (Rate Limiting)
 API_RATE_LIMIT=60
 
-# Documentation
-API_DOCS_URL=http://localhost:8080/docs/api
+# Documentación
+API_DOCS_URL=http://localhost:8000/docs/api
 ```
 
-## Deployment
+## Despliegue
 
-### Production Checklist
+### Lista de Verificación para Producción
 
-- [ ] Set `APP_ENV=production` and `APP_DEBUG=false`
-- [ ] Configure proper database (MySQL/PostgreSQL)
-- [ ] Set `APP_URL` to your production URL
-- [ ] Configure `SANCTUM_STATEFUL_DOMAINS` for your frontend domains
-- [ ] Review and tighten CORS settings in `config/cors.php`
-- [ ] Set up proper rate limiting for production load
-- [ ] Configure caching (Redis recommended)
-- [ ] Set up queue worker for background jobs
-- [ ] Enable HTTPS and update URLs
+- [ ] Establecer `APP_ENV=production` and `APP_DEBUG=false`
+- [ ] Configurar una base de datos adecuada (MySQL/PostgreSQL)
+- [ ] Configurar `APP_URL` con tu URL de producción
+- [ ] Configurar `SANCTUM_STATEFUL_DOMAINS` para tus dominios de frontend
+- [ ] Revisar y asegurar la configuración de CORS en `config/cors.php`
+- [ ] Configurar límites de tasa apropiados para la carga de producción
+- [ ] Configurar la caché (se recomienda Redis)
+- [ ] Configurar un worker de cola (queue worker) para tareas en segundo plano
+- [ ] Habilitar HTTPS y actualizar las URLs
 
-### Docker Production
+## Extender el Kit
 
-```dockerfile
-# Example production Dockerfile additions
-FROM php:8.3-fpm-alpine
+### Agregar un Nuevo Recurso (Ejemplo de CRUD)
 
-# Install opcache for performance
-RUN docker-php-ext-install opcache
-
-# Production PHP settings
-COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/
-COPY docker/php/php.ini /usr/local/etc/php/conf.d/
-```
-
-## Extending the Kit
-
-### Adding a New Resource (CRUD Example)
-
-1. **Create Model & Migration:**
+1. **Crear Modelo y Migración:**
 ```bash
-docker compose run --rm app php artisan make:model Post -m
+php artisan make:model Post -m
 ```
 
-2. **Create Controller:**
+2. **Crear Controlador:**
 ```php
 // app/Http/Controllers/Api/V1/PostController.php
 namespace App\Http\Controllers\Api\V1;
@@ -822,11 +774,11 @@ class PostController extends ApiController
         return $this->success(new PostResource($post));
     }
 
-    // ... store, update, destroy methods
+    // ... métodos store, update, destroy
 }
 ```
 
-3. **Create Resource:**
+3. **Crear Recurso (Resource):**
 ```php
 // app/Http/Resources/PostResource.php
 namespace App\Http\Resources;
@@ -848,16 +800,16 @@ class PostResource extends JsonResource
 }
 ```
 
-4. **Add Routes:**
+4. **Agregar Rutas:**
 ```php
 // routes/api/v1.php
 Route::middleware('auth:sanctum')->group(function () {
-    // ... existing routes
+    // ... rutas existentes
     Route::apiResource('posts', PostController::class);
 });
 ```
 
-5. **Create Tests:**
+5. **Crear Pruebas:**
 ```php
 // tests/Feature/Api/V1/PostTest.php
 uses(RefreshDatabase::class);
@@ -873,32 +825,32 @@ it('lists posts', function () {
 });
 ```
 
-## Contributing
+## Contribuir
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Hacer un Fork del repositorio
+2. Crear una rama para tu característica (`git checkout -b feature/amazing-feature`)
+3. Confirmar tus cambios (`git commit -m 'Add amazing feature'`)
+4. Empujar a la rama (`git push origin feature/amazing-feature`)
+5. Abrir una solicitud de extracción (Pull Request)
 
-## License
+## Licencia
 
-This project is open-sourced software licensed under the [MIT license](LICENSE).
+Este proyecto es software de código abierto con licencia [MIT](LICENSE).
 
-## Credits
+## Créditos
 
-- [Laravel](https://laravel.com) - The PHP Framework
-- [Laravel Sanctum](https://laravel.com/docs/sanctum) - API Token Authentication
-- [grazulex/laravel-apiroute](https://github.com/Grazulex/laravel-apiroute) - API Versioning
-- [spatie/laravel-query-builder](https://github.com/spatie/laravel-query-builder) - Query Building
-- [spatie/laravel-data](https://github.com/spatie/laravel-data) - Data Transfer Objects
-- [dedoc/scramble](https://github.com/dedoc/scramble) - API Documentation
-- [grazulex/laravel-api-idempotency](https://github.com/Grazulex/laravel-api-idempotency) - API Idempotency (optional)
-- [grazulex/laravel-api-throttle-smart](https://github.com/Grazulex/laravel-api-throttle-smart) - Smart Rate Limiting (optional)
-- [Pest PHP](https://pestphp.com) - Testing Framework
+- [Laravel](https://laravel.com) - El Framework de PHP
+- [Laravel Sanctum](https://laravel.com/docs/sanctum) - Autenticación por Tokens de API
+- [grazulex/laravel-apiroute](https://github.com/Grazulex/laravel-apiroute) - Versionado de API
+- [spatie/laravel-query-builder](https://github.com/spatie/laravel-query-builder) - Construcción de Consultas (Query Building)
+- [spatie/laravel-data](https://github.com/spatie/laravel-data) - Objetos de Transferencia de Datos (DTOs)
+- [dedoc/scramble](https://github.com/dedoc/scramble) - Documentación de API
+- [grazulex/laravel-api-idempotency](https://github.com/Grazulex/laravel-api-idempotency) - Idempotencia de API (opcional)
+- [grazulex/laravel-api-throttle-smart](https://github.com/Grazulex/laravel-api-throttle-smart) - Límite de Tasa Inteligente (opcional)
+- [Pest PHP](https://pestphp.com) - Framework de Pruebas
 
-## Support
+## Soporte
 
-- [Documentation](https://github.com/grazulex/laravel-api-kit/wiki)
-- [Issues](https://github.com/grazulex/laravel-api-kit/issues)
-- [Discussions](https://github.com/grazulex/laravel-api-kit/discussions)
+- [Documentación](https://github.com/reyes200205/vouchers-platform-api/wiki)
+- [Reportar Problemas (Issues)](https://github.com/reyes200205/vouchers-platform-api/issues)
+- [Discusiones](https://github.com/reyes200205/vouchers-platform-api/discussions)
