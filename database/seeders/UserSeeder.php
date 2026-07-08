@@ -8,7 +8,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
-class UserSeeder extends Seeder
+final class UserSeeder extends Seeder
 {
     /**
      * Run the database seeds.
@@ -54,14 +54,11 @@ class UserSeeder extends Seeder
         ];
 
         foreach ($users as $userData) {
-            $user = User::firstOrCreate(
-                ['email' => $userData['email']],
-                [
-                    'name' => $userData['name'],
-                    'password' => Hash::make('password'),
-                    'email_verified_at' => now(),
-                ]
-            );
+            $user = User::query()->firstOrCreate(['email' => $userData['email']], [
+                'name' => $userData['name'],
+                'password' => Hash::make('password'),
+                'email_verified_at' => now(),
+            ]);
 
             // Assign the role to the user
             $user->syncRoles([$userData['role']]);

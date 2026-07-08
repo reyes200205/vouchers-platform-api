@@ -40,9 +40,7 @@ final class User extends Authenticatable implements MustVerifyEmail
     /** @use HasFactory<UserFactory> */
     use HasFactory;
 
-    /** @use \Spatie\Permission\Traits\HasRoles */
     use HasRoles;
-
     use Notifiable;
 
     /**
