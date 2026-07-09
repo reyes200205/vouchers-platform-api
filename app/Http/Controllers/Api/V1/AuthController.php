@@ -40,6 +40,11 @@ final class AuthController extends ApiController
         ], 'User registered successfully. Please check your email to verify your account.');
     }
 
+
+
+
+
+
     public function login(LoginRequest $request): JsonResponse
     {
         $user = User::query()->where('email', $request->email)->first();
@@ -56,11 +61,22 @@ final class AuthController extends ApiController
         ], 'Login successful');
     }
 
+
+
+
+
+
+
+
+
     public function logout(Request $request): JsonResponse
     {
         /** @var User $user */
         $user = $request->user();
-        $user->currentAccessToken()->delete();
+        /** @var \Laravel\Sanctum\PersonalAccessToken|null $token */
+        $token = $user->currentAccessToken();
+
+        $token?->delete();
 
         return $this->success(message: 'Logged out successfully');
     }

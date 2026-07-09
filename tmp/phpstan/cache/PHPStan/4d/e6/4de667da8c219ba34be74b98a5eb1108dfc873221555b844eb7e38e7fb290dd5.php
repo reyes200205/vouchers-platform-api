@@ -2,7 +2,7 @@
 
 // odsl-C:\Users\jorge\Desktop\Projects\laravel-api-kit\database\seeders\UserSeeder.php-PHPStan\BetterReflection\Reflection\ReflectionClass-Database\Seeders\UserSeeder
 return \PHPStan\Cache\CacheItem::__set_state(array(
-   'variableKey' => 'v2-6.65.0.9-8.3-134c0b6fa75b84d00e95b7b5638d8e2fb34b7d52b4f045732a23d23241f87ab1',
+   'variableKey' => 'v2-6.65.0.9-8.3-2abb36863ba46a8f18a4be2405554dd8921c03de5983a154cb12624d24cc43f3',
    'data' => 
   array (
     'locatedSource' => 

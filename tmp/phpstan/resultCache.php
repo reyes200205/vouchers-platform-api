@@ -2183,12 +2183,12 @@ return [
       0 => 
       array (
         0 => 'event',
-        1 => 83,
+        1 => 99,
       ),
       1 => 
       array (
         0 => 'event',
-        1 => 130,
+        1 => 146,
       ),
     ),
     'PHPStan\\Rules\\DeadCode\\PossiblyPureMethodCallCollector' => 
@@ -2200,7 +2200,7 @@ return [
           0 => 'Illuminate\\Database\\Eloquent\\Model',
         ),
         1 => 'save',
-        2 => 124,
+        2 => 140,
       ),
     ),
   ),
@@ -2412,7 +2412,7 @@ return [
   ),
   'C:\\Users\\jorge\\Desktop\\Projects\\laravel-api-kit\\app\\Http\\Controllers\\Api\\V1\\AuthController.php' => 
   array (
-    'fileHash' => '33aeb05438c95a4afb635ec362d629313689f5f90105a3751b09a57fe946cc67',
+    'fileHash' => '5edcbf361c798a1c09488c2df4871cfb69b8205583a29e268cae64bba7bb90d0',
     'dependentFiles' => 
     array (
       0 => 'C:\\Users\\jorge\\Desktop\\Projects\\laravel-api-kit\\routes\\api\\v1.php',
@@ -2676,7 +2676,7 @@ return [
   ),
   'C:\\Users\\jorge\\Desktop\\Projects\\laravel-api-kit\\database\\seeders\\UserSeeder.php' => 
   array (
-    'fileHash' => '134c0b6fa75b84d00e95b7b5638d8e2fb34b7d52b4f045732a23d23241f87ab1',
+    'fileHash' => '2abb36863ba46a8f18a4be2405554dd8921c03de5983a154cb12624d24cc43f3',
     'dependentFiles' => 
     array (
       0 => 'C:\\Users\\jorge\\Desktop\\Projects\\laravel-api-kit\\database\\seeders\\DatabaseSeeder.php',
@@ -2698,7 +2698,7 @@ return [
   ),
   'C:\\Users\\jorge\\Desktop\\Projects\\laravel-api-kit\\routes\\api\\v1.php' => 
   array (
-    'fileHash' => '8362cc41740f356cb7687ff5ebc431f14add632ec82d0d6a88fb3d9a3e1ead43',
+    'fileHash' => 'd1f8b5c9a74d26ae7e07a2a3b4013012f363988d79b25fe6706b7455b8defc4b',
     'dependentFiles' => 
     array (
     ),

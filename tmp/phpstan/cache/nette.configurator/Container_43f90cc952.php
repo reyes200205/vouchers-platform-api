@@ -8,7 +8,7 @@
 
 declare(strict_types=1);
 
-class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
+class Container_43f90cc952 extends _PHPStan_43c1a1b81\Nette\DI\Container
 {
 	protected $tags = [
 		'phpstan.parser.richParserNodeVisitor' => [
@@ -5721,7 +5721,7 @@ class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
 			private $container;
 
 
-			public function __construct(Container_16e98141c8 $container)
+			public function __construct(Container_43f90cc952 $container)
 			{
 				$this->container = $container;
 			}
@@ -5779,7 +5779,7 @@ class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
 			private $container;
 
 
-			public function __construct(Container_16e98141c8 $container)
+			public function __construct(Container_43f90cc952 $container)
 			{
 				$this->container = $container;
 			}
@@ -5799,7 +5799,7 @@ class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
 			private $container;
 
 
-			public function __construct(Container_16e98141c8 $container)
+			public function __construct(Container_43f90cc952 $container)
 			{
 				$this->container = $container;
 			}
@@ -5824,7 +5824,7 @@ class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
 			private $container;
 
 
-			public function __construct(Container_16e98141c8 $container)
+			public function __construct(Container_43f90cc952 $container)
 			{
 				$this->container = $container;
 			}
@@ -5844,7 +5844,7 @@ class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
 			private $container;
 
 
-			public function __construct(Container_16e98141c8 $container)
+			public function __construct(Container_43f90cc952 $container)
 			{
 				$this->container = $container;
 			}
@@ -5910,7 +5910,7 @@ class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
 			private $container;
 
 
-			public function __construct(Container_16e98141c8 $container)
+			public function __construct(Container_43f90cc952 $container)
 			{
 				$this->container = $container;
 			}
@@ -5967,7 +5967,7 @@ class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
 			private $container;
 
 
-			public function __construct(Container_16e98141c8 $container)
+			public function __construct(Container_43f90cc952 $container)
 			{
 				$this->container = $container;
 			}
@@ -6015,7 +6015,7 @@ class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
 			private $container;
 
 
-			public function __construct(Container_16e98141c8 $container)
+			public function __construct(Container_43f90cc952 $container)
 			{
 				$this->container = $container;
 			}
@@ -9373,7 +9373,7 @@ class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
 	}
 
 
-	public function createServiceContainer(): Container_16e98141c8
+	public function createServiceContainer(): Container_43f90cc952
 	{
 		return $this;
 	}
@@ -10045,58 +10045,11 @@ class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
 			'usedLevel' => 'max',
 			'cliAutoloadFile' => null,
 			'env' => [
-				'APP_DEBUG' => 'true',
-				'APP_ENV' => 'local',
-				'APP_FAKER_LOCALE' => 'en_US',
-				'APP_FALLBACK_LOCALE' => 'en',
-				'APP_KEY' => 'base64:5sVyEkI5nlEW5m+m2P6ugqajuGIezcy793ps8e2OS4k=',
-				'APP_LOCALE' => 'en',
-				'APP_MAINTENANCE_DRIVER' => 'file',
-				'APP_NAME' => 'Laravel',
-				'APP_URL' => 'http://localhost',
-				'AWS_ACCESS_KEY_ID' => '',
-				'AWS_BUCKET' => '',
-				'AWS_DEFAULT_REGION' => 'us-east-1',
-				'AWS_SECRET_ACCESS_KEY' => '',
-				'AWS_USE_PATH_STYLE_ENDPOINT' => 'false',
-				'BCRYPT_ROUNDS' => '12',
 				'BIN_TARGET' => 'C:\Users\jorge\Desktop\Projects\laravel-api-kit\vendor\bin\/phpstan',
-				'BROADCAST_CONNECTION' => 'log',
-				'CACHE_STORE' => 'database',
 				'COLUMNS' => '120',
 				'COMPOSER_BINARY' => 'C:\laragon\bin\composer\composer.phar',
 				'COMPOSER_RUNTIME_BIN_DIR' => 'C:\Users\jorge\Desktop\Projects\laravel-api-kit\vendor\bin\\',
-				'DB_CONNECTION' => 'mysql',
-				'DB_DATABASE' => 'laravel',
-				'DB_HOST' => '127.0.0.1',
-				'DB_PASSWORD' => '',
-				'DB_PORT' => '3306',
-				'DB_USERNAME' => 'root',
-				'FILESYSTEM_DISK' => 'local',
 				'LINES' => '9001',
-				'LOG_CHANNEL' => 'stack',
-				'LOG_DEPRECATIONS_CHANNEL' => 'null',
-				'LOG_LEVEL' => 'debug',
-				'LOG_STACK' => 'single',
-				'MAIL_FROM_ADDRESS' => 'hello@example.com',
-				'MAIL_FROM_NAME' => 'Laravel',
-				'MAIL_HOST' => '127.0.0.1',
-				'MAIL_MAILER' => 'log',
-				'MAIL_PASSWORD' => 'null',
-				'MAIL_PORT' => '2525',
-				'MAIL_SCHEME' => 'null',
-				'MAIL_USERNAME' => 'null',
-				'MEMCACHED_HOST' => '127.0.0.1',
-				'QUEUE_CONNECTION' => 'database',
-				'REDIS_CLIENT' => 'phpredis',
-				'REDIS_HOST' => '127.0.0.1',
-				'REDIS_PASSWORD' => 'null',
-				'REDIS_PORT' => '6379',
-				'SESSION_DOMAIN' => 'null',
-				'SESSION_DRIVER' => 'database',
-				'SESSION_ENCRYPT' => 'false',
-				'SESSION_LIFETIME' => '120',
-				'SESSION_PATH' => '/',
 				'SHELL_VERBOSITY' => '0',
 				'GIT_TERMINAL_PROMPT' => '0',
 				'LANGUAGE' => 'C',
@@ -10107,13 +10060,13 @@ class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
 				'ACSvcPort' => '17532',
 				'ALLUSERSPROFILE' => 'C:\ProgramData',
 				'ANTIGRAVITY_AGENT' => '1',
-				'ANTIGRAVITY_CSRF_TOKEN' => 'ee173535-5edb-40df-adf4-4f4a9753fd6c',
+				'ANTIGRAVITY_CSRF_TOKEN' => 'd45ebbba-3272-4bdb-95dd-8a945b9bd025',
 				'ANTIGRAVITY_EDITOR_APP_ROOT' => 'c:\Users\jorge\AppData\Local\Programs\Antigravity IDE\resources\app',
-				'ANTIGRAVITY_LS_ADDRESS' => 'localhost:49676',
-				'ANTIGRAVITY_SOURCE_METADATA' => '{"tool":{"conversationId":"f5faa7fb-abca-463a-84c1-45877d63df5c","stepIndex":154,"toolCall":{"id":"ibvexve8","name":"run_command","argumentsJson":"{\"CommandLine\":\"composer test\",\"Cwd\":\"c:/Users/jorge/Desktop/Projects/laravel-api-kit\",\"WaitMsBeforeAsync\":10000,\"toolAction\":\"Running final test verification\",\"toolSummary\":\"Run tests\"}","thinkingSignature":"EtIBCs8BARFNMg/LsKTPbnUG3bH1+s4HLQPjij5Dy2cPOcCJH4Q0XtJfBZBFLoScED2FZEVaoCqUANXsNqBJDTDQGg8pkBsyPosSy5gYqZdgjr6C7nC9cYkKl4LeiAE37nz4aSAGD2HOJmHB3ViT5g2u7GI02yCOBfh9sF1ZSpR7qc24CA0y0XRbLCeJjs6dFS5jBW3qVhFaPwTtrYFKLdaqbPc6fDRsIUX7PRqnqUThBMp64cJJ15BFjozakfYCVEgmJyXNwaqVH1bdRKQgYjdyRdR9","originalName":"run_command"}}}',
-				'ANTIGRAVITY_TRAJECTORY_ID' => '45c345b7-a7d5-438a-aef2-e4c950482c20',
+				'ANTIGRAVITY_LS_ADDRESS' => 'localhost:58397',
+				'ANTIGRAVITY_SOURCE_METADATA' => '{"tool":{"conversationId":"947b2201-fe70-48ed-a3f3-e753be15ceda","stepIndex":72,"toolCall":{"id":"mmjupq65","name":"run_command","argumentsJson":"{\"CommandLine\":\"composer test:types\",\"Cwd\":\"c:\\\\\\\Users\\\\\\\jorge\\\\\\\Desktop\\\\\\\Projects\\\\\\\laravel-api-kit\",\"WaitMsBeforeAsync\":5000,\"toolAction\":\"Running PHPStan type check\",\"toolSummary\":\"Running PHPStan type check\"}","thinkingSignature":"EpsBCpgBARFNMg/e4lOCxm899UbQ0KugnEuDJAnNDRXS9J8/zI+xQZQUWmh5IBu7FtwWVe0wRM6mmIo2+hU4zWUv9zh1YWm0/QZ/3iJpB/nQM9s0ww0Mn8Z81MPNJqqSwwBoEjwOZZwPTPwUafCs9t1VlqlGGF/mBLBUrsbc0Wen2eZtY3dq/6GOwDeUuZJe2lTH2is30HkTjph8maU=","originalName":"run_command"}}}',
+				'ANTIGRAVITY_TRAJECTORY_ID' => 'db34fdf3-25b4-4db2-906b-408bccd54d80',
 				'APPDATA' => 'C:\Users\jorge\AppData\Roaming',
-				'CHROME_CRASHPAD_PIPE_NAME' => '\\\.\pipe\crashpad_12940_GYJUGOKYISTYVZSB',
+				'CHROME_CRASHPAD_PIPE_NAME' => '\\\.\pipe\crashpad_24120_POUOPIAFDVKRPZAN',
 				'CommonProgramFiles' => 'C:\Program Files\Common Files',
 				'CommonProgramFiles(x86)' => 'C:\Program Files (x86)\Common Files',
 				'CommonProgramW6432' => 'C:\Program Files\Common Files',
@@ -10122,7 +10075,6 @@ class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
 				'DriverData' => 'C:\Windows\System32\Drivers\DriverData',
 				'EFC_8760_1592913036' => '1',
 				'EFC_8760_4126798990' => '1',
-				'ELECTRON_NO_ATTACH_CONSOLE' => '1',
 				'HOMEDRIVE' => 'C:',
 				'HOMEPATH' => '\Users\jorge',
 				'IGCCSVC_DB' => 'AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAsXwrx14czkuhyNlgQg78zgQAAAACAAAAAAAQZgAAAAEAACAAAAB9kyqGq+MxUy6RZ7epA9rw5V96QPMBOOfq1DAC7XYeCgAAAAAOgAAAAAIAACAAAAC57Uzo1XjSFfYMEF0zYs5mvdEA7DQ99mmKbjnSjh1NtmAAAAC+97teJLwF15W1ewPTXPQ1hududz4K1+DkACLWjdzMM0T/9jR8BIMii5EZBwh1SpB841VZo/WGxWjZzTTRzBy0I+cQEzBc5rXq898WOktiyD0Xv73ryU8jl8pnDFtXD61AAAAABEX6n786eDDoCeE0GUl80pM1j1fUhkpod2/unQD3ZX4KwLsbE+PLZ+6q+DwMdhS1VZ3Ao7dno2atAGvj/J96LQ==',
@@ -10146,33 +10098,20 @@ class Container_16e98141c8 extends _PHPStan_43c1a1b81\Nette\DI\Container
 				'PUBLIC' => 'C:\Users\Public',
 				'RlsSvcPort' => '22112',
 				'SESSIONNAME' => 'Console',
-				'SSH_SOCKET_DIR' => '~/.ssh',
 				'SystemDrive' => 'C:',
 				'SystemRoot' => 'C:\WINDOWS',
 				'TEMP' => 'C:\Users\jorge\AppData\Local\Temp',
-				'TERM_PROGRAM' => 'WarpTerminal',
 				'TMP' => 'C:\Users\jorge\AppData\Local\Temp',
 				'USERDOMAIN' => 'MX-ALEJANDRO',
 				'USERDOMAIN_ROAMINGPROFILE' => 'MX-ALEJANDRO',
 				'USERNAME' => 'jorge',
 				'USERPROFILE' => 'C:\Users\jorge',
 				'VBOX_MSI_INSTALL_PATH' => 'C:\Program Files\Oracle\VirtualBox\\',
-				'VITE_APP_NAME' => 'Laravel',
-				'VSCODE_CLI' => '1',
 				'VSCODE_CODE_CACHE_PATH' => 'C:\Users\jorge\AppData\Roaming\Antigravity IDE\CachedData\e0b7a2bcf575cfba10528c4e7c10bd3ce2d7769a',
-				'VSCODE_CWD' => 'C:\Users\jorge\Desktop\Projects\laravel-api-kit',
+				'VSCODE_CWD' => 'C:\WINDOWS\system32',
 				'VSCODE_IPC_HOOK' => '\\\.\pipe\77f92d33-1.107.0-main-sock',
 				'VSCODE_NLS_CONFIG' => '{"userLocale":"en-us","osLocale":"es-mx","resolvedLanguage":"en","defaultMessagesFile":"C:\\\Users\\\jorge\\\AppData\\\Local\\\Programs\\\Antigravity IDE\\\resources\\\app\\\out\\\nls.messages.json","locale":"en-us","availableLanguages":{}}',
-				'VSCODE_PID' => '12940',
-				'WARP_CLIENT_VERSION' => 'v0.2026.05.27.15.44.stable_01',
-				'WARP_CLI_AGENT_PROTOCOL_VERSION' => '1',
-				'WARP_FOCUS_URL' => 'warp://session/d16e5a22672e48f7adeae685101c2161',
-				'WARP_HONOR_PS1' => '0',
-				'WARP_IS_LOCAL_SHELL_SESSION' => '1',
-				'WARP_PATH_APPEND' => '',
-				'WARP_SHELL_DEBUG_MODE' => '0',
-				'WARP_TERMINAL_SESSION_UUID' => 'd16e5a22672e48f7adeae685101c2161',
-				'WARP_USE_SSH_WRAPPER' => '1',
+				'VSCODE_PID' => '24120',
 				'windir' => 'C:\WINDOWS',
 				'ZES_ENABLE_SYSMAN' => '1',
 			],

@@ -2,7 +2,7 @@
 
 // odsl-C:\Users\jorge\Desktop\Projects\laravel-api-kit\app\Http\Controllers\Api\V1\AuthController.php-PHPStan\BetterReflection\Reflection\ReflectionClass-App\Http\Controllers\Api\V1\AuthController
 return \PHPStan\Cache\CacheItem::__set_state(array(
-   'variableKey' => 'v2-6.65.0.9-8.3-33aeb05438c95a4afb635ec362d629313689f5f90105a3751b09a57fe946cc67',
+   'variableKey' => 'v2-6.65.0.9-8.3-5edcbf361c798a1c09488c2df4871cfb69b8205583a29e268cae64bba7bb90d0',
    'data' => 
   array (
     'locatedSource' => 
@@ -27,7 +27,7 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
     array (
     ),
     'startLine' => 23,
-    'endLine' => 147,
+    'endLine' => 163,
     'startColumn' => 1,
     'endColumn' => 1,
     'parentClassName' => 'App\\Http\\Controllers\\Api\\ApiController',
@@ -130,8 +130,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
             'attributes' => 
             array (
             ),
-            'startLine' => 43,
-            'endLine' => 43,
+            'startLine' => 48,
+            'endLine' => 48,
             'startColumn' => 27,
             'endColumn' => 47,
             'parameterIndex' => 0,
@@ -152,8 +152,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
         array (
         ),
         'docComment' => NULL,
-        'startLine' => 43,
-        'endLine' => 57,
+        'startLine' => 48,
+        'endLine' => 62,
         'startColumn' => 5,
         'endColumn' => 5,
         'couldThrow' => false,
@@ -191,8 +191,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
             'attributes' => 
             array (
             ),
-            'startLine' => 59,
-            'endLine' => 59,
+            'startLine' => 72,
+            'endLine' => 72,
             'startColumn' => 28,
             'endColumn' => 43,
             'parameterIndex' => 0,
@@ -213,8 +213,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
         array (
         ),
         'docComment' => NULL,
-        'startLine' => 59,
-        'endLine' => 66,
+        'startLine' => 72,
+        'endLine' => 82,
         'startColumn' => 5,
         'endColumn' => 5,
         'couldThrow' => false,
@@ -252,8 +252,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
             'attributes' => 
             array (
             ),
-            'startLine' => 68,
-            'endLine' => 68,
+            'startLine' => 84,
+            'endLine' => 84,
             'startColumn' => 24,
             'endColumn' => 39,
             'parameterIndex' => 0,
@@ -274,8 +274,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
         array (
         ),
         'docComment' => NULL,
-        'startLine' => 68,
-        'endLine' => 71,
+        'startLine' => 84,
+        'endLine' => 87,
         'startColumn' => 5,
         'endColumn' => 5,
         'couldThrow' => false,
@@ -313,8 +313,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
             'attributes' => 
             array (
             ),
-            'startLine' => 73,
-            'endLine' => 73,
+            'startLine' => 89,
+            'endLine' => 89,
             'startColumn' => 33,
             'endColumn' => 59,
             'parameterIndex' => 0,
@@ -335,8 +335,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
         array (
         ),
         'docComment' => NULL,
-        'startLine' => 73,
-        'endLine' => 87,
+        'startLine' => 89,
+        'endLine' => 103,
         'startColumn' => 5,
         'endColumn' => 5,
         'couldThrow' => false,
@@ -374,8 +374,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
             'attributes' => 
             array (
             ),
-            'startLine' => 89,
-            'endLine' => 89,
+            'startLine' => 105,
+            'endLine' => 105,
             'startColumn' => 45,
             'endColumn' => 78,
             'parameterIndex' => 0,
@@ -396,8 +396,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
         array (
         ),
         'docComment' => NULL,
-        'startLine' => 89,
-        'endLine' => 104,
+        'startLine' => 105,
+        'endLine' => 120,
         'startColumn' => 5,
         'endColumn' => 5,
         'couldThrow' => false,
@@ -435,8 +435,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
             'attributes' => 
             array (
             ),
-            'startLine' => 106,
-            'endLine' => 106,
+            'startLine' => 122,
+            'endLine' => 122,
             'startColumn' => 36,
             'endColumn' => 65,
             'parameterIndex' => 0,
@@ -457,8 +457,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
         array (
         ),
         'docComment' => NULL,
-        'startLine' => 106,
-        'endLine' => 117,
+        'startLine' => 122,
+        'endLine' => 133,
         'startColumn' => 5,
         'endColumn' => 5,
         'couldThrow' => false,
@@ -496,8 +496,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
             'attributes' => 
             array (
             ),
-            'startLine' => 119,
-            'endLine' => 119,
+            'startLine' => 135,
+            'endLine' => 135,
             'startColumn' => 35,
             'endColumn' => 63,
             'parameterIndex' => 0,
@@ -518,8 +518,8 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
         array (
         ),
         'docComment' => NULL,
-        'startLine' => 119,
-        'endLine' => 146,
+        'startLine' => 135,
+        'endLine' => 162,
         'startColumn' => 5,
         'endColumn' => 5,
         'couldThrow' => false,

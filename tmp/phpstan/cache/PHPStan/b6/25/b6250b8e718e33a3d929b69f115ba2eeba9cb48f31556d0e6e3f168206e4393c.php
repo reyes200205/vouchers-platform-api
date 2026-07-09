@@ -21,7 +21,7 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
     ),
     'C:\\Users\\jorge\\Desktop\\Projects\\laravel-api-kit\\app\\Http\\Controllers\\Api\\V1\\AuthController.php' => 
     array (
-      0 => '33aeb05438c95a4afb635ec362d629313689f5f90105a3751b09a57fe946cc67',
+      0 => '5edcbf361c798a1c09488c2df4871cfb69b8205583a29e268cae64bba7bb90d0',
       1 => 
       array (
         0 => 'app\\http\\controllers\\api\\v1\\authcontroller',

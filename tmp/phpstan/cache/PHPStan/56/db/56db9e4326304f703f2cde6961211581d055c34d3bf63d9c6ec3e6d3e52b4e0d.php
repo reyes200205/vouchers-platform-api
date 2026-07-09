@@ -343,7 +343,7 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
     ),
     1 => 
     array (
-      'C:\\Users\\jorge\\Desktop\\Projects\\laravel-api-kit\\app\\Http\\Controllers\\Api\\V1\\AuthController.php' => '33aeb05438c95a4afb635ec362d629313689f5f90105a3751b09a57fe946cc67',
+      'C:\\Users\\jorge\\Desktop\\Projects\\laravel-api-kit\\app\\Http\\Controllers\\Api\\V1\\AuthController.php' => '5edcbf361c798a1c09488c2df4871cfb69b8205583a29e268cae64bba7bb90d0',
     ),
   ),
 ));

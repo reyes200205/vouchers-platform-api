@@ -53,7 +53,7 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
     ),
     'C:\\Users\\jorge\\Desktop\\Projects\\laravel-api-kit\\database\\seeders\\UserSeeder.php' => 
     array (
-      0 => '134c0b6fa75b84d00e95b7b5638d8e2fb34b7d52b4f045732a23d23241f87ab1',
+      0 => '2abb36863ba46a8f18a4be2405554dd8921c03de5983a154cb12624d24cc43f3',
       1 => 
       array (
         0 => 'database\\seeders\\userseeder',

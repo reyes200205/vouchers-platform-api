@@ -20,7 +20,7 @@ return \PHPStan\Cache\CacheItem::__set_state(array(
     ),
     'C:\\Users\\jorge\\Desktop\\Projects\\laravel-api-kit\\routes\\api\\v1.php' => 
     array (
-      0 => '8362cc41740f356cb7687ff5ebc431f14add632ec82d0d6a88fb3d9a3e1ead43',
+      0 => 'd1f8b5c9a74d26ae7e07a2a3b4013012f363988d79b25fe6706b7455b8defc4b',
       1 => 
       array (
       ),
