@@ -26,6 +26,27 @@ Route::get('ping', function () {
     ]);
 })->name('api.v1.ping');
 
+
+/*
+|--------------------------------------------------------------------------
+*/
+
+
+
+/*
+|--------------------------------------------------------------------------
+| Routes for Branches
+*/
+
+
+
+
+
+
+
+
+
+
 // Public routes with auth rate limiter (5/min - brute force protection)
 Route::middleware('throttle:auth')->group(function (): void {
     Route::post('auth/register', [AuthController::class, 'register'])->name('api.v1.register');
