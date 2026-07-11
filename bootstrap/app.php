@@ -8,6 +8,7 @@ use App\Http\Middleware\LogApiRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -17,6 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->api(prepend: [
+            ForceJsonResponse::class,
+        ]);
+
         $middleware->alias([
             'force.json' => ForceJsonResponse::class,
             'log.api' => LogApiRequests::class,
@@ -24,5 +29,30 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->shouldRenderJsonWhen(function (Request $request, Throwable $e) {
+            if ($request->is('api/*')) {
+                return true;
+            }
+
+            return $request->expectsJson();
+        });
+
+        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, Request $request) {
+            if ($request->is('api/*')) {
+                $previous = $e->getPrevious();
+
+                if ($previous instanceof \Illuminate\Database\Eloquent\ModelNotFoundException) {
+                    $modelName = class_basename($previous->getModel());
+                    return response()->json([
+                        'success' => false,
+                        'message' => "{$modelName} not found",
+                    ], 404);
+                }
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Endpoint not found',
+                ], 404);
+            }
+        });
     })->create();

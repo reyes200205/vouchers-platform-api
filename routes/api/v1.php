@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Branches\BranchesController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -24,14 +25,28 @@ Route::get('ping', fn () => response()->json([
     'message' => 'pong',
 ]))->name('api.v1.ping');
 
+
 /*
 |--------------------------------------------------------------------------
 */
+
+
+
+
 
 /*
 |--------------------------------------------------------------------------
 | Routes for Branches
 */
+Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function (): void {
+    Route::get('/branches', [BranchesController::class, 'index'])->name('branch.index');
+    Route::get('/branches/{id}', [BranchesController::class, 'show'])->whereNumber('id')->name('branch.show');
+    Route::post('/branches', [BranchesController::class, 'store'])->name('branch.store');
+});
+
+
+
+
 
 Route::prefix('auth')->group(function (): void {
     // Public routes with auth rate limiter (5/min - brute force protection)

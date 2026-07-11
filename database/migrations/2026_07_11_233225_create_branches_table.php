@@ -17,9 +17,9 @@ return new class extends Migration
         Schema::create('branches', function (Blueprint $table): void {
             $table->id();
             $table->string('name');
-            $table->string('branch_code');
+            $table->string('branch_code')->nullable();
             $table->enum('branch_type', ['main_office', 'subsidiary_office'])->default('subsidiary_office');
-            $table->foreignId('manager_id')->constrained('employees')->cascadeOnDelete();
+            $table->foreignId('manager_id')->nullable()->constrained('employees')->nullOnDelete();
             $table->foreignId('address_id')->constrained()->cascadeOnDelete();
             $table->timestamps();
         });
