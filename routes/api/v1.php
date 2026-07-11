@@ -20,39 +20,24 @@ use Illuminate\Support\Facades\Route;
 | Routes for Test
 */
 
-Route::get('ping', function () {
-    return response()->json([
-        'message' => 'pong',
-    ]);
-})->name('api.v1.ping');
-
+Route::get('ping', fn () => response()->json([
+    'message' => 'pong',
+]))->name('api.v1.ping');
 
 /*
 |--------------------------------------------------------------------------
 */
-
-
 
 /*
 |--------------------------------------------------------------------------
 | Routes for Branches
 */
 
-
-
-
-
-
-
-
-
-
 // Public routes with auth rate limiter (5/min - brute force protection)
 Route::middleware('throttle:auth')->group(function (): void {
     Route::post('register', [AuthController::class, 'register'])->name('api.v1.register');
     Route::post('login', [AuthController::class, 'login'])->name('api.v1.login');
 });
-
 
 // Protected routes with authenticated rate limiter (120/min)
 Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function (): void {

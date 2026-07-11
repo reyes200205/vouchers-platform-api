@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -12,7 +14,7 @@ return new class extends Migration
     public function up(): void
     {
         // 1. Creamos la tabla branches
-        Schema::create('branches', function (Blueprint $table) {
+        Schema::create('branches', function (Blueprint $table): void {
             $table->id();
             $table->string('name');
             $table->string('branch_code');
@@ -22,7 +24,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::table('employees', function (Blueprint $table) {
+        Schema::table('employees', function (Blueprint $table): void {
             $table->foreign('branch_id')
                 ->references('id')
                 ->on('branches')

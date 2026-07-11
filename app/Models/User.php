@@ -45,6 +45,14 @@ final class User extends Authenticatable implements MustVerifyEmail
     use Notifiable;
 
     /**
+     * @return HasOne<Employee, $this>
+     */
+    public function employee(): HasOne
+    {
+        return $this->hasOne(Employee::class);
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -55,13 +63,5 @@ final class User extends Authenticatable implements MustVerifyEmail
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
-    }
-
-    /**
-     * @return HasOne<Employee, $this>
-     */
-    public function employee(): HasOne
-    {
-        return $this->hasOne(Employee::class);
     }
 }
