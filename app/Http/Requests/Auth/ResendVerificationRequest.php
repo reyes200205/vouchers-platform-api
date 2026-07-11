@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Requests\Api\V1;
+namespace App\Http\Requests\Auth;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-final class ForgotPasswordRequest extends FormRequest
+final class ResendVerificationRequest extends FormRequest
 {
     public function authorize(): bool
     {

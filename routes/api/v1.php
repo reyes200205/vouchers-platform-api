@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -49,8 +49,8 @@ Route::get('ping', function () {
 
 // Public routes with auth rate limiter (5/min - brute force protection)
 Route::middleware('throttle:auth')->group(function (): void {
-    Route::post('auth/register', [AuthController::class, 'register'])->name('api.v1.register');
-    Route::post('auth/login', [AuthController::class, 'login'])->name('api.v1.login');
+    Route::post('register', [AuthController::class, 'register'])->name('api.v1.register');
+    Route::post('login', [AuthController::class, 'login'])->name('api.v1.login');
 });
 
 

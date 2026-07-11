@@ -2,15 +2,15 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Api\V1;
+namespace App\Http\Controllers\Auth;
 
-use App\Http\Controllers\Api\ApiController;
-use App\Http\Requests\Api\V1\ForgotPasswordRequest;
-use App\Http\Requests\Api\V1\LoginRequest;
-use App\Http\Requests\Api\V1\RegisterRequest;
-use App\Http\Requests\Api\V1\ResendVerificationRequest;
-use App\Http\Requests\Api\V1\ResetPasswordRequest;
-use App\Http\Requests\Api\V1\VerifyEmailRequest;
+use App\Http\Controllers\ApiController;
+use App\Http\Requests\Auth\ForgotPasswordRequest;
+use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Auth\RegisterRequest;
+use App\Http\Requests\Auth\ResendVerificationRequest;
+use App\Http\Requests\Auth\ResetPasswordRequest;
+use App\Http\Requests\Auth\VerifyEmailRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Auth\Events\PasswordReset;
@@ -60,6 +60,7 @@ final class AuthController extends ApiController
             'token' => $token,
         ], 'Login successful');
     }
+
 
 
 
