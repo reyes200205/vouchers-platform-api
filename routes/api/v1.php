@@ -40,7 +40,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
 });
 
 Route::prefix('auth')->group(function (): void {
-    // Public routes with auth rate limiter (5/min - brute force protection)
+    // Public routes wr (5/min - brute force protection)
     Route::middleware('throttle:auth')->group(function (): void {
         Route::post('register', [AuthController::class, 'register'])->name('api.v1.register');
         Route::post('login', [AuthController::class, 'login'])->name('api.v1.login');
