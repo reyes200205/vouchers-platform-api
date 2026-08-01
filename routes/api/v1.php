@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Branches\BranchesController;
+use App\Http\Controllers\Employees\EmployeesController;
+use App\Http\Controllers\System\RolesController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -38,6 +40,42 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::get('/branches/{id}', [BranchesController::class, 'show'])->whereNumber('id')->name('branch.show');
     Route::post('/branches', [BranchesController::class, 'store'])->name('branch.store');
 });
+
+
+/*
+|--------------------------------------------------------------------------
+| Route for create employees
+|
+*/
+Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function (): void {
+    Route::get('employees', [EmployeesController::class, 'index'])->name('employee.index');
+    Route::post('employees', [EmployeesController::class, 'store'])->name('employee.store');
+
+});
+
+
+/*
+|--------------------------------------------------------------------------
+| Route for system roles
+|
+*/
+Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function (): void {
+    Route::get('system/roles', [RolesController::class, 'index'])->name('system.roles.index');    
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 Route::prefix('auth')->group(function (): void {
     // Public routes wr (5/min - brute force protection)

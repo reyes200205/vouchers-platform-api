@@ -19,7 +19,7 @@ return new class extends Migration
             $table->string('last_name');
             $table->string('full_name');
             $table->date('birth_date');
-            $table->string('gender');
+            $table->enum('gender', ['male', 'female', 'other']);
             $table->foreignId('address_id')->nullable()->constrained('addresses')->cascadeOnDelete();
             $table->timestamps();
         });
