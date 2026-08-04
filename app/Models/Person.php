@@ -4,45 +4,77 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\Gender;
 use Database\Factories\PersonFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'first_name',
+    'middle_name',
     'last_name',
-    'full_name',
-    'birth_date',
+    'second_last_name',
     'gender',
-    'address_id',
+    'birth_date',
+    'curp',
+    'rfc',
+    'home_phone',
+    'mobile_phone',
+    'email',
+    'street',
+    'external_number',
+    'neighborhood',
+    'city',
+    'state',
+    'postal_code',
+    'latitude',
+    'longitude',
+    'notes',
 ])]
-#[Table(name: 'people')]
 final class Person extends Model
 {
     /** @use HasFactory<PersonFactory> */
     use HasFactory;
 
     protected $casts = [
+        'gender' => Gender::class,
         'birth_date' => 'date',
+        'latitude' => 'decimal:7',
+        'longitude' => 'decimal:7',
     ];
 
     /**
-     * @return BelongsTo<Address, $this>
+     * @return HasOne<User, $this>
      */
-    public function address(): BelongsTo
+    public function user(): HasOne
     {
-        return $this->belongsTo(Address::class);
+        return $this->hasOne(User::class);
     }
 
     /**
-     * @return HasOne<Employee, $this>
+     * @return HasOne<Distributor, $this>
      */
-    public function employee(): HasOne
+    public function distributor(): HasOne
     {
-        return $this->hasOne(Employee::class);
+        return $this->hasOne(Distributor::class);
+    }
+
+    /**
+     * @return HasOne<Customer, $this>
+     */
+    public function customer(): HasOne
+    {
+        return $this->hasOne(Customer::class);
+    }
+
+    /**
+     * @return HasMany<Application, $this>
+     */
+    public function applications(): HasMany
+    {
+        return $this->hasMany(Application::class, 'applicant_person_id');
     }
 }
