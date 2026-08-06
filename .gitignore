@@ -27,8 +27,7 @@ Thumbs.db
 /backlog/
 
 # Claude Code settings
-/.claude/
-CLAUDE.md
+
 
 # SQLite databases
 database/*.sqlite
