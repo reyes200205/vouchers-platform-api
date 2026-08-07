@@ -1,113 +1,193 @@
-# CLAUDE.md — Guía maestra del proyecto Mis Vales
+# CLAUDE.md
 
-Este archivo es el contexto persistente que Claude Code carga automáticamente. Define **cómo pensar, cómo diseñar y qué nunca hacer** en este proyecto. Las reglas de negocio detalladas viven en `BUSINESS_RULES.md`, el glosario en `TERMINOLOGY.md`, la arquitectura en `ARCHITECTURE.md` y el protocolo de razonamiento en `AI_CONTEXT.md`. Este documento los conecta.
+Documento técnico base del proyecto Mis vales.
 
----
+## Filosofía del sistema
 
-## 1. Qué es Mis Vales
+- La regla de negocio vive en configuración o dominio, nunca en un valor fijo si cambia por negocio.
+- El motor financiero es la fuente de verdad para cálculos, pagos, recargos, seguros, puntos, bonificaciones y conciliación.
+- Cada cambio financiero debe ser auditable, rastreable y explicable.
+- Los documentos fuente mandan sobre ejemplos aislados; los ejemplos sirven para validar la interpretación.
+- Si una decisión depende de fecha, corte, producto, sucursal, distribuidora, rol o estado, debe modelarse explícitamente.
+- Si una regla afecta crédito activo, la regla debe considerar el estado actual, no solo el alta original.
 
-Mis Vales administra el crédito que las **distribuidoras** otorgan a sus **clientes finales** a través de **vales** (líneas de crédito individuales). Periódicamente corre un **corte** (proceso global que calcula pagos y puntos de todas las distribuidoras), y por cada corte se genera, para cada distribuidora, una **Relación**: el documento de cobro con su referencia de pago única, sus vales, comisiones, recargos y total a pagar. Los pagos de las distribuidoras se **concilian** contra el banco usando esa referencia, y según el comportamiento de pago (anticipado/puntual/fuera de tiempo) se generan **puntos** o **recargos**. Ver `TERMINOLOGY.md` para las distinciones exactas — especialmente Relación vs. Corte, que es la más fácil de confundir en este dominio.
+## Visión funcional
 
-## 2. Stack y versiones
+Mis vales es un sistema tipo bancario para prestar productos o vales en efectivo a distribuidoras. El negocio se sostiene sobre relaciones, corte de pagos, conciliación bancaria, autorizaciones, control de crédito y trazabilidad operativa.
 
-- **Backend:** Laravel 12, PHP 8.4.
-- **Frontend:** Angular (standalone components, sin NgModules nuevos).
-- **Base de datos:** MySQL/MariaDB.
-- **Auth:** Laravel Sanctum (SPA + tokens API).
-- **Testing:** Pest.
-- **Calidad estática:** PHPStan (nivel máximo alcanzable de forma incremental).
+La intención del sistema no es solo registrar movimientos, sino decidir correctamente quién puede recibir crédito, cuánto se le presta, cuándo paga, qué se le cobra, qué pasa si paga antes o tarde, cómo se concilia ese pago y cómo se deja evidencia de cada cambio.
 
-## 3. Principios de arquitectura (resumen — detalle en ARCHITECTURE.md)
+## Arquitectura
 
-```
-Request HTTP
-   → Route
-   → Form Request (validación)
-   → Controller (delgado, solo orquesta)
-   → Service / Action (lógica de negocio)
-   → Model / Eloquent (persistencia)
-   → Policy (autorización)
-   → API Resource (transformación de salida)
-   → Response
-```
+- Presentación: Angular para captura, consulta, tablas, corte, seguimiento operativo y pantallas por rol.
+- API: Laravel 12 como capa de aplicación, validación, auth, orquestación, políticas y entrega de recursos.
+- Dominio: servicios y motores de negocio para créditos, relaciones, conciliaciones, auditoría, reglas configurables y reportes.
+- Persistencia: MySQL con integridad, trazabilidad y datos normalizados.
+- Infraestructura: servidor para imágenes y evidencia documental.
+- Observabilidad: logging estructurado, errores controlados y eventos de negocio visibles.
 
-Reglas duras:
+## Flujos principales
 
-- **Controllers delgados.** Un controller nunca contiene lógica de negocio, cálculos financieros ni queries complejas. Su trabajo es: validar (delegado a Form Request), llamar a un Service/Action, devolver un Resource.
-- **Nunca lógica de negocio en Blade ni en el frontend.** Los cálculos de relaciones, cortes, comisiones y conciliaciones viven en el backend, en Services/Actions testeados.
-- **Nunca `DB::table()` si existe un Model.** Usa Eloquent salvo reportes agregados muy específicos, y en ese caso documenta el porqué en un comentario.
-- **Nunca autorización manual dispersa (`if ($user->role == 'admin')` repetido).** Usa Policies y Gates centralizados.
-- **Nunca perder auditoría ni historial.** Ver reglas de `SoftDeletes` y logs en `BUSINESS_RULES.md` y `DATABASE_RULES.md` (Sprint 2).
-- **Siempre tipar.** Parámetros, retornos y propiedades con tipos explícitos (PHP 8.4). Evitar `mixed` salvo que sea inevitable.
-- **Siempre validar con Form Requests**, nunca validar a mano dentro del controller.
-- **Siempre devolver API Resources**, nunca arrays crudos (`return ['ok' => true]` está prohibido).
+### Autorizaciones
 
-## 4. Cómo pensar antes de escribir código
+- Solicitud de cambio o alta.
+- Validación por rol y alcance.
+- Aprobación o rechazo con motivo.
+- Emisión del efecto autorizado.
+- Registro de fecha, hora, usuario, dispositivo y evidencia.
 
-Antes de generar cualquier código para este proyecto, Claude debe seguir el protocolo de `AI_CONTEXT.md`. En resumen:
+### Créditos
 
-1. Identificar qué entidad(es) de negocio están involucradas (consultar `TERMINOLOGY.md`).
-2. Verificar si existe una regla de negocio aplicable en `BUSINESS_RULES.md`.
-3. Ubicar la capa arquitectónica correcta (`ARCHITECTURE.md`).
-4. Diseñar el contrato de la API si aplica (`skills/api-design/skill.md`).
-5. Escribir el código siguiendo `skills/laravel/skill.md`.
-6. Nunca inventar una regla de negocio que no esté documentada — si falta información, se debe señalar explícitamente en vez de asumir un comportamiento financiero.
+- Disponibilidad inicial.
+- Consumo por vale o relación.
+- Incremento o ajuste de línea.
+- Control de topes y reglas del 50% cuando aplique.
+- Bloqueo operativo por mora o incumplimiento.
 
-## 5. Cómo construir un módulo nuevo
+### Relaciones
 
-Para un módulo nuevo (ej. "conciliaciones"), el orden de construcción es:
+- Corte configurable.
+- Cálculo de deuda, comisión, seguro, puntos y recargos.
+- Generación de referencia bancaria única.
+- Estado de cuenta con trazabilidad por distribuidora.
 
-1. Modelo(s) Eloquent + migración.
-2. Policy del recurso.
-3. Form Requests (Store/Update).
-4. Service o Action con la lógica de negocio.
-5. Controller (delgado) + rutas.
-6. API Resource(s) de salida.
-7. Eventos/Jobs/Notifications si el flujo lo requiere.
-8. Tests (Pest) del Service/Action y del endpoint.
-9. Documentación del endpoint según `API_GUIDELINES` (Sprint 2) / `skills/api-design/skill.md`.
+### Conciliaciones
 
-## 6. Cómo generar Angular
+- Recepción de archivo bancario.
+- Cruce por referencia, monto, fecha y forma de pago.
+- Match automático contra la relación.
+- Conciliación manual cuando exista error o referencia mal capturada.
+- Evidencia y autorización para ajustes manuales.
 
-- Standalone components, sin módulos legacy.
-- Separación por `core/`, `shared/`, `features/`.
-- Un componente "smart" por página que orquesta servicios; componentes "dumb" reciben datos por `@Input()`.
-- Los cálculos financieros **nunca** se replican en el frontend; el frontend consume el resultado que ya calculó el backend.
-- Detalle completo en `ANGULAR_GUIDELINES.md` (Sprint 2).
+### Auditoría
 
-## 7. Cómo revisar código
+- Todo cambio sensible debe registrar actor, antes, después, fecha, hora, motivo y origen.
+- Si un dato cambia con vales activos, debe quedar claro si la versión histórica se conserva o si la regla nueva aplica a futuro.
 
-Antes de dar por terminada una tarea, Claude debe verificar (checklist mínimo hasta que exista la skill `code-review` en Sprint 2):
+### Nuevo distribuidor
 
-- [ ] ¿El controller quedó delgado?
-- [ ] ¿Hay una Policy protegiendo el recurso?
-- [ ] ¿La validación está en un Form Request?
-- [ ] ¿La respuesta usa un API Resource?
-- [ ] ¿Existe algún N+1 evidente (falta `with()`/eager loading)?
-- [ ] ¿Los nombres de variables/métodos reflejan el dominio de `TERMINOLOGY.md`?
-- [ ] ¿Se agregó al menos un test?
+- Captura inicial por coordinador.
+- Verificación física por verificador.
+- Correcciones auditadas si hubo captura incorrecta.
+- Validación final por gerente general o gerente de sucursal.
+- Asignación de límite de crédito y credenciales.
 
-## 8. Qué nunca hacer
+### Vale y crédito
 
-- Nunca devolver arrays crudos como respuesta de API.
-- Nunca poner queries SQL o lógica financiera en las vistas/Blade/Angular.
-- Nunca omitir la Policy de un recurso sensible (créditos, pagos, conciliaciones).
-- Nunca eliminar físicamente registros históricos de relaciones, cortes o pagos.
-- Nunca asumir una regla de negocio no documentada: preguntar o señalarlo explícitamente.
-- Nunca mezclar terminología (ver `TERMINOLOGY.md`) — por ejemplo, no llamar "pago" a una "relación".
+- Primer vale: pre-vale.
+- Vales subsecuentes: vale digital.
+- El primer vale no debe superar el 50% del crédito disponible si así lo dicta la regla.
+- Un cliente no debe poder registrarse con otra distribuidora si la CURP ya existe y la regla lo bloquea.
 
-## 9. Relación con las skills
+### Cambio y transferencia
 
-| Situación | Skill a activar |
-|---|---|
-| Empezar a trabajar en el proyecto / duda sobre el dominio | `project-context` |
-| Escribir/modificar código Laravel | `laravel` |
-| Diseñar o revisar un endpoint | `api-design` |
-| (Sprint 2) Revisar base de datos | `database` |
-| (Sprint 2) Revisar seguridad | `security-review` |
-| (Sprint 2) Revisar calidad general | `code-review` |
-| (Sprint 2) Preparar commit/PR | `git` |
+- Cambio de distribuidora sujeto a autorización y reglas de saldo.
+- Cambio de sucursal sujeto al alcance del rol.
+- El gerente general puede ver todo el universo, pero el gerente de sucursal solo su ámbito.
 
-## 10. Estado de este documento
+## Roles y alcance
 
-Este `CLAUDE.md` corresponde al **Sprint 1**. Se ampliará en sprints posteriores con las secciones específicas de `LARAVEL_GUIDELINES.md`, `ANGULAR_GUIDELINES.md`, `SECURITY_GUIDELINES.md`, `DATABASE_RULES.md`, `CODE_STYLE.md` y `GIT_GUIDELINES.md`, que hoy solo existen resumidas dentro de este archivo.
+- Gerente general: ve y autoriza todo el sistema, incluyendo sucursales y movimientos globales.
+- Gerente de sucursal: administra su sucursal y lo que opera dentro de ella.
+- Coordinador: primer filtro de captura y seguimiento; puede tener muchas distribuidoras.
+- Administrador: ve todo, pero no escribe ni autoriza; revisa historial, movimientos y logs.
+- Distribuidora: consume el sistema en su flujo operativo.
+- Verificador: valida la información capturada y deja evidencia de visita.
+- Cajera: ejecuta operaciones de sucursal y procesos de conciliación y corrección con autorización.
+
+## Convenciones Laravel
+
+- Controladores delgados.
+- Reglas en Form Requests, Services, Actions o Domain Classes.
+- Consultas complejas aisladas y testeadas.
+- Nombres explícitos, orientados a intención de negocio.
+- Eventos, jobs y notifications para efectos secundarios.
+- Cualquier operación que cambie estado financiero debe pasar por una capa de dominio, no por el controller directo.
+
+## Convenciones Angular
+
+- Formularios reactivos para flujos operativos.
+- Componentes por responsabilidad, no por pantalla gigante.
+- El frontend consume reglas, no las redefine.
+- Estados de carga, error y vacío siempre visibles.
+- Las apps deben respetar el tipo de dispositivo previsto por rol: tablet, teléfono o web de escritorio.
+
+## Convenciones MySQL
+
+- Columnas y tablas en singular o plural consistente, sin ambigüedad.
+- Claves foráneas, índices y constraints donde protejan el dominio.
+- Los montos monetarios deben tener precisión definida.
+- Toda relación crítica debe poder reconstruirse por llaves y referencias.
+- Los catálogos configurables deben permitir versionado o historial cuando la regla lo requiera.
+
+## Naming
+
+- Usar nombres de intención: RelationCalculator, CreditAvailabilityService, ConciliationMatch.
+- Evitar siglas internas salvo que sean estándar del dominio.
+- Los nombres de archivo y carpeta deben coincidir con el concepto del negocio.
+- Los nombres de roles, movimientos y flujos deben ser legibles por negocio, no solo por tecnología.
+
+## Estructura de carpetas
+
+- `skills/`: conocimiento operativo por dominio.
+- `architecture/`: decisiones arquitectónicas, diagramas y flujos.
+- `prompts/`: prompts internos para tareas repetibles y decisiones de diseño.
+- `templates/`: esqueletos para módulos, documentos y entregables.
+- `commands/`: secuencias internas para tareas recurrentes.
+
+## Reglas financieras clave
+
+- El cálculo de relaciones debe considerar producto, plazo, comisión, seguro, bonificación, puntos, recargos y fecha.
+- Todo porcentaje, umbral, categoría y fecha de corte debe ser configurable.
+- El monto a pagar debe ser explicable paso a paso.
+- Las categorías de distribuidora pueden cambiar la comisión o el trato financiero.
+- La conciliación bancaria se hace por referencia única y evidencia de pago.
+- Los puntos deben poder convertirse a valor económico bajo regla configurable.
+- Si una distribuidora entra en mora, se deben activar reglas de contención o restricción.
+
+## Manejo de errores
+
+- Los errores deben indicar si falló validación, autorización, configuración, cálculo o conciliación.
+- Los errores de negocio deben ser comprensibles para operación y para auditoría.
+- Un error de referencia, corte o folio debe dejar evidencia para conciliación posterior.
+
+## Logging
+
+- Registrar movimientos sensibles con contexto suficiente para reconstrucción.
+- Guardar usuario, rol, sucursal, dispositivo, hora y origen cuando aplique.
+- No registrar secretos ni información sensible en texto plano si no es indispensable.
+
+## Seguridad
+
+- Segregación estricta por rol y sucursal.
+- El administrador observa, pero no ejecuta acciones que cambian estado.
+- Los datos personales sensibles deben tener visibilidad controlada.
+- La evidencia y las autorizaciones deben quedar protegidas contra alteración.
+
+## Testing
+
+- Cada regla financiera debe tener pruebas de escenario feliz, borde y error.
+- Las reglas de autorizaciones deben probar alcance por rol y por sucursal.
+- Las reglas de conciliación deben probar coincidencia, mismatch, duplicado y ajuste manual.
+- Las pruebas deben cubrir cambios de configuración sin romper el cálculo histórico.
+
+## Checklist antes de hacer commit
+
+- Revisar que no exista hardcode de reglas financieras.
+- Confirmar que el cambio esté cubierto por pruebas.
+- Confirmar que no se rompió la trazabilidad de auditoría.
+- Revisar naming, contratos API y dependencias entre capas.
+- Verificar logs, validaciones y permisos.
+- Confirmar que la regla nueva no contradice el comportamiento histórico de vales activos.
+
+## Cómo usar las skills
+
+Antes de responder o implementar, identificar la skill principal y luego combinar la secundaria si el flujo cruza más de un dominio. Para cambios de negocio complejos, pensar en este orden: arquitectura -> modelo -> migración -> policies -> requests -> resources -> services -> tests -> Angular -> API -> documentación.
+
+## Preguntas abiertas de negocio
+
+- Si un parámetro cambia con vales activos, ¿se versiona por vigencia o se recalcula todo?
+- ¿Un usuario puede tener más de un rol a la vez?
+- ¿El administrador puede exportar reportes o solo consultar?
+- ¿Cómo consume saldo el cliente si su interfaz es limitada o no existe aún?
+- ¿El folio del pre-vale expira si no se presenta a la sucursal?
