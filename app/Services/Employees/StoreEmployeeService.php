@@ -25,7 +25,7 @@ final class StoreEmployeeService
      *     employee_code: string,
      *     position: string,
      *     status: string,
-     *     role: string
+     *     role: int
      * } $data
      */
     public function execute(array $data): Employee
@@ -41,8 +41,9 @@ final class StoreEmployeeService
                 'password' => Hash::make($randomPassword),
             ]);
 
-            // Assign the validated role from the database
-            $user->assignRole($data['role']);
+            // Assign the validated role from the database by ID
+            $role = Role::findById($data['role'], 'web');
+            $user->assignRole($role);
 
             // 2. Create person record
             $person = Person::create([

@@ -7,18 +7,22 @@ namespace App\Http\Controllers\Employees;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Employees\StoreEmployeeRequest;
 use App\Http\Resources\EmployeeResource;
-use App\Models\Employee;
+use App\Services\Employees\ListEmployeesService;
 use App\Services\Employees\StoreEmployeeService;
+use Auth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 final class EmployeesController extends ApiController
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, ListEmployeesService $service): JsonResponse
     {
-        $employees = Employee::query()
-            ->paginate($request->integer('per_page', 15))
-            ->appends($request->query());
+        $user = Auth::user();
+
+        $employees = $service->execute($user, [
+            'branch_id' => $request->has('branch_id') ? $request->integer('branch_id') : null,
+            'per_page' => $request->integer('per_page', 15),
+        ])->appends($request->query());
 
         return $this->success(
             EmployeeResource::collection($employees)->response()->getData(true)
@@ -30,7 +34,7 @@ final class EmployeesController extends ApiController
         $employee = $service->execute($request->validated());
 
         return $this->success(
-            new EmployeeResource($employee)
+            new EmployeeResource($employee->load(['user', 'person', 'branch']))
         );
     }
 }

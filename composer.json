@@ -17,6 +17,7 @@
         "spatie/laravel-query-builder": "^7.0"
     },
     "require-dev": {
+        "barryvdh/laravel-ide-helper": "^3.7",
         "driftingly/rector-laravel": "^2.0",
         "fakerphp/faker": "^1.23",
         "larastan/larastan": "^3.7",

@@ -26,9 +26,12 @@ final class Person extends Model
     /** @use HasFactory<PersonFactory> */
     use HasFactory;
 
-    protected $casts = [
-        'birth_date' => 'date',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'birth_date' => 'date:Y-m-d',
+        ];
+    }
 
     /**
      * @return BelongsTo<Address, $this>

@@ -45,7 +45,7 @@ final class StoreEmployeeRequest extends FormRequest
             'employee_code' => ['required', 'string', 'max:255', 'unique:employees,employee_code'],
             'position' => ['required', 'string', 'max:255'],
             'status' => ['required', 'string', 'in:active,inactive'],
-            'role' => ['required', 'string', 'exists:roles,name'],
+            'role' => ['required', 'integer', 'exists:roles,id'],
         ];
     }
 }
