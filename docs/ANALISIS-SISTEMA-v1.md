@@ -43,12 +43,12 @@ Spatie Permission). Los roles detectados son:
 
 | Rol (code)          | Función dentro del sistema                                                                 |
 |---------------------|----------------------------------------------------------------------------------------------|
-| `administrator`      | Control total del sistema: configuración global (`point_settings`), catálogos, usuarios.     |
-| `general_manager`    | Aprueba/rechaza solicitudes de distribuidoras, incrementos de crédito, decisiones de alto nivel (`manager_decision_logs`). |
-| `branch_manager`     | Administra una sucursal: configuración (`branch_settings`), supervisión de cortes y empleados de su sucursal. |
+| `administrator`      | Consulta global de solo lectura: estadísticas, entradas/salidas, autorizaciones, bitácoras y cualquier dato auditable; no registra, modifica ni autoriza. |
+| `general_manager`    | Administra productos y planes de vales, distribuidoras de todas las sucursales, incrementos de crédito y decisiones de alto nivel (`manager_decision_logs`). |
+| `branch_manager`     | Administra una sucursal: configuración (`branch_settings`), supervisión de cortes y autorización de aperturas de línea de crédito. |
 | `coordinator`        | Supervisa distribuidoras de su zona/sucursal: revisa solicitudes, aprueba transferencias de clientes entre distribuidoras. |
 | `verifier`           | Realiza la verificación física/domiciliaria de solicitudes (visita, fotos, geolocalización) — tabla `application_verifications`. |
-| `cashier`            | Captura pagos de clientes (`customer_payments.collected_by_user_id`), maneja caja en sucursal. |
+| `cashier`            | Captura pagos de clientes (`customer_payments.collected_by_user_id`), maneja caja, solicita cambios de datos de cliente y realiza conciliaciones manuales. |
 | `distributor`        | Usuario asociado 1 a 1 con el registro `distributors`; emite vales, cobra a clientes, reporta pagos a la empresa. |
 
 Adicionalmente existen conceptos de **cliente final** (`customers`) que probablemente no
@@ -95,8 +95,8 @@ por la distribuidora/sucursal.
   de quincenas, comisión de la empresa, seguro, interés quincenal, monto de recargo por
   atraso, método de dispersión).
 - **`point_settings`**: configuración global **singleton** del sistema de puntos (factor
-  divisor, multiplicador, valor en MXN de cada punto, % de penalización), editable solo
-  por `administrator`.
+  divisor, multiplicador, valor en MXN de cada punto, % de penalización). El administrador
+  solo la consulta; falta confirmar qué rol puede modificarla.
 - **`bank_accounts`**: cuentas bancarias polimórficas por `owner_type`
   (PERSONA/DISTRIBUIDORA/EMPRESA) + `owner_id`.
 
@@ -229,6 +229,35 @@ flowchart TD
 
 ---
 
+## 4.1 Reglas recibidas en reuniones (pendientes de confirmación)
+
+Estas reglas orientan la primera implementación. Se deben representar como capacidades
+configurables por rol y no como condiciones fijas en controladores, porque el dueño del
+negocio puede reasignar responsabilidades.
+
+- La distribuidora asume la responsabilidad del pago ante la empresa; los cortes,
+  conciliaciones y saldos deben conservar esa trazabilidad.
+- Una distribuidora pertenece a una sucursal. Cada sucursal concentra coordinadores,
+  verificadores, cajeros y distribuidoras.
+- Coordinador y verificador operan una aplicación web adaptada a tableta; el verificador
+  puede realizar las tareas de captura del coordinador, sin que la relación inversa esté
+  confirmada.
+- El primer vale de un cliente es un **pre-vale**. Si la línea disponible de la
+  distribuidora está totalmente disponible, su importe no puede superar el 50% de esa
+  línea. Después de cada incremento de límite se vuelve a aplicar el 50%, con una
+  tolerancia mencionada de +/- $500 que aún requiere definición exacta.
+- Los vales posteriores son vales digitales. Sus cálculos deben partir de porcentajes del
+  producto/categoría y congelar los importes resultantes en el vale.
+- El gerente de sucursal autoriza aperturas de cuenta de crédito; el gerente general
+  puede autorizar operaciones entre sucursales, incrementos de crédito y transferencias.
+- La cajera solicita autorización para modificar datos de cliente y puede hacer
+  conciliaciones manuales.
+- Un cliente puede transferirse a otra distribuidora: la receptora acepta, se notifica al
+  coordinador de origen y éste autoriza antes de ejecutar el cambio.
+- El administrador es exclusivamente de lectura global.
+
+---
+
 ## 5. Funcionalidades / módulos que probablemente se deberán construir
 
 Esta lista es una **lluvia de ideas basada en el esquema**, para discutir antes de picar
@@ -244,8 +273,9 @@ código de endpoints (según lo solicitado). No es definitiva.
 ### Catálogos (CRUD administrables)
 - Sucursales (`branches`) + configuración (`branch_settings`) con bitácora de cambios.
 - Categorías de distribuidor (`distributor_categories`).
-- Productos financieros (`financial_products`).
-- Configuración global de puntos (`point_settings`, singleton, solo admin).
+- Productos financieros (`financial_products`), habilitados por gerente general y usados
+  como base de los cálculos porcentuales de los vales.
+- Configuración global de puntos (`point_settings`, singleton; rol editor por confirmar).
 - Cuentas bancarias (`bank_accounts`) de personas/distribuidoras/empresa.
 
 ### Onboarding / solicitudes
@@ -312,18 +342,21 @@ código de endpoints (según lo solicitado). No es definitiva.
    `Person`, `User`, `Branch`, `Employee` y `Address` (y sus factories), así como
    `AuthController`, `BranchesController`, `StoreBranchService`/`StoreBranchRequest`,
    `UserSeeder` y el test `BranchTest`, están escritos contra un esquema de ejemplo (con
-   `email`/`password`, `employees`, `addresses`, `manager_id`, `branch_code`, etc.) que
+  `email`/`password`, `employees`, `addresses`, `manager_id`, `branch_code`, etc.) que
    **no existe** en las migraciones reales. Se actualizaron los modelos `Person`, `User`
    y `Branch` para reflejar el esquema real (y sus factories); se eliminaron `Employee` y
-   `Address` (no tienen tabla). Los controladores/servicios/`UserSeeder`/tests de ejemplo
-   quedarán rotos hasta que se reconstruyan en la fase de endpoints — se documenta aquí
-   para que no sea sorpresa.
+  `Address` (no tienen tabla). El flujo de login ya se alineó a `username`/
+  `password_hash`; continúan pendientes `BranchesController`, sus servicios/requests,
+  `UserSeeder` y el test de sucursales.
 2. **Doble sistema de roles** (ver sección 2): decidir si se usa `roles`/`user_role`
-   propio, Spatie Permission, o ambos con propósitos distintos (rol de negocio vs.
-   permisos finos).
+  propio, Spatie Permission, o ambos con propósitos distintos (rol de negocio vs.
+  permisos finos). La primera API usa temporalmente la tabla propia y una matriz de
+  capacidades configurable en `config/business-authorization.php`; Spatie no participa
+  en la autorización de endpoints nuevos.
 3. **Autenticación**: Sanctum + `HasApiTokens` asume login tradicional; aquí el login es
-   por `username`/`password_hash`. Falta definir el flujo exacto (¿tokens personales?
-   ¿un token por canal (WEB/VPN_WEB/MOVIL)? ¿requiere VPN para ciertos usuarios?).
+  por `username`/`password_hash`. El login, logout y perfil ya emiten tokens personales;
+  falta definir el alcance por canal (WEB/VPN_WEB/MOVIL) y el cumplimiento de
+  `requires_vpn`.
 4. **`customers` sin tabla `users`**: los clientes finales no parecen tener acceso al
    sistema (no hay FK de `customers` a `users`). Confirmar si en algún momento tendrán
    portal propio (app móvil) o todo se gestiona vía distribuidora/sucursal.
@@ -342,8 +375,11 @@ código de endpoints (según lo solicitado). No es definitiva.
 2. Incorporar el contexto adicional (documento de requerimientos oficiales) que se
    compartirá para producir la **v2** de este análisis, con mayor detalle y alcance de
    funcionalidades.
-3. Definir el esquema de autenticación/autorización final antes de tocar `AuthController`.
-4. Diseñar los endpoints módulo por módulo (catálogos → onboarding → distribuidoras/
+3. Confirmar la fórmula de pre-vale, la tolerancia de $500 y el evento que determina que
+  una línea estuvo completamente disponible.
+4. Confirmar la secuencia exacta y los actores de aceptación/autorización de transferencia
+  de cliente, incluido el canal de notificación al coordinador de origen.
+5. Diseñar los endpoints módulo por módulo (catálogos → onboarding → distribuidoras/
    clientes → vales → cortes/conciliación → puntos/score → auditoría).
 
 ---

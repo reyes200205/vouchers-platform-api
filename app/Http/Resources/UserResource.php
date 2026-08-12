@@ -20,11 +20,23 @@ final class UserResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'name' => $this->name,
-            'email' => $this->email,
-            'role' => $this->getRoleNames(),
-            'permissions' => $this->getAllPermissions()->pluck('name'),
-            'email_verified_at' => $this->email_verified_at?->toIso8601String(),
+            'username' => $this->username,
+            'is_active' => $this->is_active,
+            'requires_vpn' => $this->requires_vpn,
+            'login_channel' => $this->login_channel?->value,
+            'person' => $this->whenLoaded('person', fn () => [
+                'id' => $this->person?->id,
+                'first_name' => $this->person?->first_name,
+                'last_name' => $this->person?->last_name,
+            ]),
+            'roles' => $this->whenLoaded('businessRoles', fn () => $this->businessRoles
+                ->filter(fn ($role) => $role->pivot->revoked_at === null)
+                ->map(fn ($role) => [
+                    'code' => $role->code,
+                    'name' => $role->name,
+                    'branch_id' => $role->pivot->branch_id,
+                    'is_primary' => (bool) $role->pivot->is_primary,
+                ])->values()),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

@@ -8,7 +8,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * @property string $email
+ * @property string $username
  * @property string $password
  */
 final class LoginRequest extends FormRequest
@@ -24,7 +24,7 @@ final class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email'],
+            'username' => ['required', 'string', 'max:100'],
             'password' => ['required', 'string'],
         ];
     }

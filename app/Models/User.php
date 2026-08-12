@@ -109,6 +109,21 @@ final class User extends Authenticatable
         return 'password_hash';
     }
 
+    public function hasBusinessAbility(string $ability): bool
+    {
+        $abilities = config('business-authorization.abilities', []);
+        $allowedRoleCodes = $abilities[$ability] ?? [];
+
+        if ($allowedRoleCodes === []) {
+            return false;
+        }
+
+        return $this->businessRoles()
+            ->wherePivotNull('revoked_at')
+            ->whereIn('roles.code', $allowedRoleCodes)
+            ->exists();
+    }
+
     /**
      * Get the attributes that should be cast.
      *
