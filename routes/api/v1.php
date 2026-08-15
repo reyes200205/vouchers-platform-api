@@ -3,12 +3,19 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\BranchManager\CustomerChangeRequestController;
+use App\Http\Controllers\Cashier\CustomerController as CashierCustomerController;
 use App\Http\Controllers\Checker\VerificadorController;
 use App\Http\Controllers\BranchManager\BranchSettingController;
 use App\Http\Controllers\Coordinator\CoordinadorController;
+use App\Http\Controllers\Coordinator\CustomerController;
+use App\Http\Controllers\Coordinator\CustomerTransferController;
+use App\Http\Controllers\Distributor\CustomerTransferController as DistributorCustomerTransferController;
+use App\Http\Controllers\Employees\EmployeesController;
 use App\Http\Controllers\GeneralManager\ApplicationDecisionController;
 use App\Http\Controllers\GeneralManager\BranchController;
 use App\Http\Controllers\GeneralManager\FinancialProductController;
+use App\Http\Controllers\System\RolesController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -67,6 +74,27 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:applications.assign-verifier,application')->patch('/applications/{application}/verifier', [CoordinadorController::class, 'assignVerifier'])->name('applications.assign-verifier');
     Route::middleware('business.ability:applications.verify,application')->post('/applications/{application}/verification', [VerificadorController::class, 'verify'])->name('applications.verify');
     Route::middleware('business.ability:applications.decide,application')->post('/applications/{application}/decision', [ApplicationDecisionController::class, 'decide'])->name('applications.decide');
+
+    Route::middleware('business.ability:customers.view')->group(function (): void {
+        Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
+        Route::get('/customers/{customer}', [CustomerController::class, 'show'])->middleware('business.ability:customers.view,customer')->name('customers.show');
+    });
+
+    Route::middleware('business.ability:customers.create')->post('/customers', [CustomerController::class, 'store'])->name('customers.store');
+    Route::middleware('business.ability:customers.verify,customer')->patch('/customers/{customer}/verify', [CashierCustomerController::class, 'verify'])->name('customers.verify');
+    Route::middleware('business.ability:customers.update.request,customer')->post('/customers/{customer}/change-requests', [CashierCustomerController::class, 'storeChangeRequest'])->name('customers.change-requests.store');
+
+    Route::middleware('business.ability:customers.update.approve')->get('/customer-change-requests', [CustomerChangeRequestController::class, 'index'])->name('customer-change-requests.index');
+    Route::middleware('business.ability:customers.update.approve,customerChangeRequest')->post('/customer-change-requests/{customerChangeRequest}/decision', [CustomerChangeRequestController::class, 'decide'])->name('customer-change-requests.decide');
+
+    Route::middleware('business.ability:customers.transfer.view')->group(function (): void {
+        Route::get('/customer-transfer-requests', [CustomerTransferController::class, 'index'])->name('customer-transfer-requests.index');
+        Route::get('/distributor/customer-transfer-requests', [DistributorCustomerTransferController::class, 'index'])->name('distributor.customer-transfer-requests.index');
+    });
+
+    Route::middleware('business.ability:customers.transfer.request,customer')->post('/customers/{customer}/transfer-requests', [DistributorCustomerTransferController::class, 'store'])->name('customers.transfer-requests.store');
+    Route::middleware('business.ability:customers.transfer.cancel,customerTransferRequest')->post('/customer-transfer-requests/{customerTransferRequest}/cancel', [DistributorCustomerTransferController::class, 'cancel'])->name('customer-transfer-requests.cancel');
+    Route::middleware('business.ability:customers.transfer.decide,customerTransferRequest')->post('/customer-transfer-requests/{customerTransferRequest}/decision', [CustomerTransferController::class, 'decide'])->name('customer-transfer-requests.decide');
 });
 
 

@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\CustomerStatus;
+use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -13,9 +16,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'person_id',
+    'branch_id',
     'customer_code',
     'status',
     'notes',
+    'verified_by_user_id',
+    'verified_at',
     'id_front_photo',
     'id_back_photo',
     'id_selfie_photo',
@@ -26,8 +32,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 final class Customer extends Model
 {
+    /** @use HasFactory<CustomerFactory> */
+    use HasFactory;
     protected $casts = [
         'status' => CustomerStatus::class,
+        'verified_at' => 'datetime',
     ];
 
     /**
@@ -36,6 +45,22 @@ final class Customer extends Model
     public function person(): BelongsTo
     {
         return $this->belongsTo(Person::class);
+    }
+
+    /**
+     * @return BelongsTo<Branch, $this>
+     */
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function verifiedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'verified_by_user_id');
     }
 
     /**
@@ -84,5 +109,52 @@ final class Customer extends Model
     public function transferRequests(): HasMany
     {
         return $this->hasMany(CustomerTransferRequest::class);
+    }
+
+    /**
+     * @return HasMany<CustomerChangeRequest, $this>
+     */
+    public function changeRequests(): HasMany
+    {
+        return $this->hasMany(CustomerChangeRequest::class);
+    }
+
+    /**
+     * Clientes de una sucursal.
+     *
+     * @param  Builder<Customer>  $query
+     */
+    public function scopeOfBranch(Builder $query, int $branchId): Builder
+    {
+        return $query->where('branch_id', $branchId);
+    }
+
+    /**
+     * Clientes vinculados a una distribuidora con relacion activa.
+     *
+     * @param  Builder<Customer>  $query
+     */
+    public function scopeOfDistributor(Builder $query, int $distributorId): Builder
+    {
+        return $query->whereHas('customerDistributors', function (Builder $q) use ($distributorId): void {
+            $q->where('distributor_id', $distributorId)
+                ->where('relationship_status', 'ACTIVA');
+        });
+    }
+
+    /**
+     * @param  Builder<Customer>  $query
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('status', CustomerStatus::ACTIVO);
+    }
+
+    /**
+     * @param  Builder<Customer>  $query
+     */
+    public function scopeVerified(Builder $query): Builder
+    {
+        return $query->whereNotNull('verified_at');
     }
 }

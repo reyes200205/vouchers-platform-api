@@ -15,21 +15,15 @@ return new class extends Migration
             $table->unsignedBigInteger('destination_distributor_id');
             $table->unsignedBigInteger('requested_by_user_id');
             $table->unsignedBigInteger('coordinator_user_id')->nullable();
-            $table->unsignedBigInteger('confirmed_by_user_id')->nullable();
 
             $table->enum('status', [
                 'PENDIENTE_COORDINADOR',
-                'APROBADA_CODIGO_EMITIDO',
+                'APROBADA',
                 'RECHAZADA',
                 'CANCELADA',
                 'EJECUTADA',
-                'EXPIRADA',
             ])->default('PENDIENTE_COORDINADOR');
 
-            $table->string('confirmation_code', 32)->nullable();
-            $table->timestamp('code_generated_at')->nullable();
-            $table->timestamp('code_expires_at')->nullable();
-            $table->timestamp('confirmed_at')->nullable();
             $table->timestamp('executed_at')->nullable();
 
             $table->text('request_reason')->nullable();
@@ -44,12 +38,10 @@ return new class extends Migration
             $table->foreign('destination_distributor_id')->references('id')->on('distributors');
             $table->foreign('requested_by_user_id')->references('id')->on('users');
             $table->foreign('coordinator_user_id')->references('id')->on('users');
-            $table->foreign('confirmed_by_user_id')->references('id')->on('users');
 
             $table->index(['destination_distributor_id', 'status'], 'customer_transfer_destination_status_idx');
             $table->index(['source_distributor_id', 'status'], 'customer_transfer_source_status_idx');
             $table->index(['customer_id', 'status'], 'customer_transfer_customer_status_idx');
-            $table->index(['status', 'code_expires_at'], 'customer_transfer_status_expiration_idx');
         });
     }
 

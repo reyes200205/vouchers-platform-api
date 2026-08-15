@@ -1,0 +1,63 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers\BranchManager;
+
+use App\Http\Controllers\ApiController;
+use App\Http\Requests\Customers\DecideCustomerChangeRequest;
+use App\Http\Resources\CustomerChangeRequestResource;
+use App\Models\CustomerChangeRequest;
+use App\Models\User;
+use App\Services\Audit\AuditLogger;
+use App\Services\Customers\ApproveCustomerChangeService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+final class CustomerChangeRequestController extends ApiController
+{
+    public function index(Request $request): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $requests = CustomerChangeRequest::query()
+            ->with(['customer.person'])
+            ->when(! $user->hasGlobalBusinessRole(), function ($query) use ($user): void {
+                $query->whereHas('customer', fn ($q) => $q->whereIn('branch_id', $user->activeBusinessBranchIds()));
+            })
+            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
+            ->latest('id')
+            ->paginate($request->integer('per_page', 15))
+            ->appends($request->query());
+
+        return $this->success(CustomerChangeRequestResource::collection($requests));
+    }
+
+    public function decide(DecideCustomerChangeRequest $request, CustomerChangeRequest $customerChangeRequest, ApproveCustomerChangeService $service, AuditLogger $audit): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        if (! $user->hasBusinessAbility('customers.update.approve', $customerChangeRequest->customer->branch_id)) {
+            return $this->forbidden();
+        }
+
+        $changeRequest = $service->execute($user, $customerChangeRequest, $request->validated());
+
+        $audit->record(
+            $request,
+            'CUSTOMER_CHANGE_RESOLVED',
+            'customers',
+            'Solicitud de cambio de datos resuelta: ' . $changeRequest->status->value . '.',
+            $changeRequest->customer->branch_id,
+            [
+                'customer_id' => $changeRequest->customer_id,
+                'change_request_id' => $changeRequest->id,
+                'decision' => $changeRequest->status->value,
+            ]
+        );
+
+        return $this->success(new CustomerChangeRequestResource($changeRequest->load('customer')));
+    }
+}
