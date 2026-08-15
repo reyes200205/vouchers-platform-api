@@ -20,13 +20,11 @@ final class BranchResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'code' => $this->code,
             'name' => $this->name,
-            'branch_code' => $this->branch_code,
-            'branch_type' => $this->branch_type,
-            'manager_id' => $this->manager_id,
-            'address_id' => $this->address_id,
-            'manager' => $this->whenLoaded('manager'),
-            'address' => $this->whenLoaded('address'),
+            'address' => $this->address,
+            'phone' => $this->phone,
+            'is_active' => $this->is_active,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

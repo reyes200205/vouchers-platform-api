@@ -8,42 +8,80 @@ use Database\Factories\BranchFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
+    'code',
     'name',
-    'branch_code',
-    'branch_type',
-    'manager_id',
-    'address_id',
+    'address',
+    'phone',
+    'is_active',
 ])]
 final class Branch extends Model
 {
     /** @use HasFactory<BranchFactory> */
     use HasFactory;
+    use SoftDeletes;
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
 
     /**
-     * @return BelongsTo<Employee, $this>
+     * @return HasMany<UserRole, $this>
      */
-    public function manager(): BelongsTo
+    public function userRoles(): HasMany
     {
-        return $this->belongsTo(Employee::class, 'manager_id');
+        return $this->hasMany(UserRole::class);
     }
 
     /**
-     * @return BelongsTo<Address, $this>
+     * @return HasOne<BranchSetting, $this>
      */
-    public function address(): BelongsTo
+    public function setting(): HasOne
     {
-        return $this->belongsTo(Address::class);
+        return $this->hasOne(BranchSetting::class);
     }
 
     /**
-     * @return HasMany<Employee, $this>
+     * @return HasMany<BranchSettingsLog, $this>
      */
-    public function employees(): HasMany
+    public function settingsLogs(): HasMany
     {
-        return $this->hasMany(Employee::class);
+        return $this->hasMany(BranchSettingsLog::class);
+    }
+
+    /**
+     * @return HasMany<Application, $this>
+     */
+    public function applications(): HasMany
+    {
+        return $this->hasMany(Application::class);
+    }
+
+    /**
+     * @return HasMany<Distributor, $this>
+     */
+    public function distributors(): HasMany
+    {
+        return $this->hasMany(Distributor::class);
+    }
+
+    /**
+     * @return HasMany<Voucher, $this>
+     */
+    public function vouchers(): HasMany
+    {
+        return $this->hasMany(Voucher::class);
+    }
+
+    /**
+     * @return HasMany<Cutoff, $this>
+     */
+    public function cutoffs(): HasMany
+    {
+        return $this->hasMany(Cutoff::class);
     }
 }

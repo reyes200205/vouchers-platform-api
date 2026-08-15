@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Models\Person;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -27,21 +28,23 @@ final class UserFactory extends Factory
     public function definition(): array
     {
         return [
-            'name' => fake()->name(),
-            'email' => fake()->unique()->safeEmail(),
-            'email_verified_at' => now(),
-            'password' => self::$password ??= Hash::make('password'),
+            'person_id' => Person::factory(),
+            'username' => fake()->unique()->userName(),
+            'password_hash' => self::$password ??= Hash::make('password'),
+            'is_active' => true,
+            'requires_vpn' => false,
+            'login_channel' => 'WEB',
             'remember_token' => Str::random(10),
         ];
     }
 
     /**
-     * Indicate that the model's email address should be unverified.
+     * Indicate that the user is inactive.
      */
-    public function unverified(): static
+    public function inactive(): static
     {
         return $this->state(fn (array $attributes): array => [
-            'email_verified_at' => null,
+            'is_active' => false,
         ]);
     }
 }
