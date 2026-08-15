@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\FinancialProducts;
+namespace App\Http\Controllers\GeneralManager;
 
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\FinancialProducts\StoreFinancialProductRequest;

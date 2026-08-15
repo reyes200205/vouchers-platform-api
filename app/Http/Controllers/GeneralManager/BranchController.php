@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Branches;
+namespace App\Http\Controllers\GeneralManager;
 
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Branches\StoreBranchRequest;
@@ -10,10 +10,10 @@ use App\Http\Requests\Branches\UpdateBranchRequest;
 use App\Http\Resources\BranchResource;
 use App\Models\Branch;
 use App\Services\Audit\AuditLogger;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
-final class BranchesController extends ApiController
+final class BranchController extends ApiController
 {
     public function index(Request $request): JsonResponse
     {

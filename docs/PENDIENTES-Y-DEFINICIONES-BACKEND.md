@@ -30,6 +30,35 @@ reglas respondidas aquí se convierten en contratos de API, validaciones y prueb
 - No borrar ni reescribir migraciones existentes. Los cambios de esquema se agregan como
   migraciones nuevas y reversibles.
 
+### Organización de controladores por rol
+
+Los controladores se agrupan por el actor principal que inicia la operación. Esta
+organización no reemplaza la autorización: las rutas continúan protegidas por capacidades
+en `business-authorization.php` y alcance de sucursal en `business.ability`.
+
+| Directorio | Responsabilidad actual |
+|---|---|
+| `GeneralManager` | Catálogo de productos, administración de sucursales y decisión final de solicitudes. |
+| `BranchManager` | Configuración financiera y bitácora de su sucursal. |
+| `Coordinator` | Consulta, captura y asignación de verificador para solicitudes. |
+| `Checker` | Verificación de campo de solicitudes; corresponde al rol de negocio `verifier`. |
+| `Distributor` | Reservado para emisión de vales, cartera y transferencias iniciadas por distribuidora. |
+| `Cashier` | Reservado para cobros, validación documental y conciliación. |
+| `Administrator` | Reservado para consultas globales y auditoría de sólo lectura. |
+| `Auth` | Acceso transversal: inicio de sesión, cierre de sesión y usuario actual. |
+
+La decisión final de una solicitud vive en `GeneralManager` porque ése es el responsable
+global del proceso, pero también puede ejecutarla el gerente de sucursal cuando la
+capacidad `applications.decide` y el alcance de la sucursal se lo permiten. De la misma
+forma, las consultas de sucursal y productos pueden atender a roles de sólo lectura aunque
+el controlador esté agrupado bajo el responsable de administrarlos.
+
+La aprobación de una solicitud garantiza que exista el rol de negocio `distributor` antes
+de asignarlo al usuario recién creado. Esto evita que el onboarding dependa del seeder
+antiguo de Spatie. El rol `administrator` tiene alcance global únicamente sobre las
+capacidades de consulta que la matriz le concede; no obtiene capacidades de escritura por
+estar listado como global.
+
 ## 2. Reparto de trabajo recomendado
 
 ### Bloque A: clientes, transferencias y vales

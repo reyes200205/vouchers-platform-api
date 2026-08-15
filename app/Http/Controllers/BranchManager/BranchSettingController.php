@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Branches;
+namespace App\Http\Controllers\BranchManager;
 
 use App\Enums\BranchSettingsLogEventType;
 use App\Http\Controllers\ApiController;

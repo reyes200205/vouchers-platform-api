@@ -1,10 +1,11 @@
 <?php
 
-namespace App\Http\Controllers;
+declare(strict_types=1);
 
-use Illuminate\Http\Request;
+namespace App\Http\Controllers\Distributor;
 
-class DistribuidorController extends Controller
+use App\Http\Controllers\ApiController;
+
+final class DistribuidorController extends ApiController
 {
-    //
 }

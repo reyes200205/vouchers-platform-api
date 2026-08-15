@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 return [
-    'global_role_codes' => ['general_manager'],
+    'global_role_codes' => ['administrator', 'general_manager'],
 
     'abilities' => [
         'platform.view' => ['administrator', 'general_manager'],

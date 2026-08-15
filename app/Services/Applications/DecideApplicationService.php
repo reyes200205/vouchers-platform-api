@@ -74,7 +74,10 @@ final class DecideApplicationService
                 ]
             );
 
-            $role = Role::query()->where('code', 'distributor')->where('is_active', true)->firstOrFail();
+            $role = Role::query()->firstOrCreate(
+                ['code' => 'distributor'],
+                ['name' => 'Distribuidora', 'description' => 'Usuario operativo asociado a una distribuidora.', 'is_active' => true]
+            );
             $user->businessRoles()->syncWithoutDetaching([
                 $role->id => [
                     'branch_id' => $application->branch_id,
