@@ -2,118 +2,61 @@
 
 declare(strict_types=1);
 
-use App\Models\Employee;
-use App\Models\Person;
+use App\Models\Branch;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
 
-describe('Branch Creation', function (): void {
-    it('creates a branch successfully with valid flat address and manager', function (): void {
-        $user = User::factory()->create();
-        Sanctum::actingAs($user);
+function actingAsBusinessRole(User $user, string $roleCode): void
+{
+    $role = Role::query()->create([
+        'code' => $roleCode,
+        'name' => str($roleCode)->replace('_', ' ')->title(),
+    ]);
 
-        $person = Person::create([
-            'first_name' => 'John',
-            'last_name' => 'Doe',
-            'full_name' => 'John Doe',
-            'birth_date' => '1990-01-01',
-            'gender' => 'male',
-        ]);
+    $user->businessRoles()->attach($role, [
+        'assigned_at' => now(),
+        'is_primary' => true,
+    ]);
 
-        $employee = Employee::create([
-            'user_id' => $user->id,
-            'person_id' => $person->id,
-            'employee_code' => 'EMP-001',
-            'position' => 'Manager',
-            'status' => 'active',
-        ]);
+    Sanctum::actingAs($user);
+}
 
-        $response = $this->postJson('/api/v1/branches', [
-            'name' => 'Branch Test Office',
-            'branch_code' => 'BR-001',
-            'branch_type' => 'main_office',
-            'manager_id' => $employee->id,
-            'country' => 'Mexico',
-            'state' => 'Nuevo Leon',
-            'city' => 'Monterrey',
+describe('Branches', function (): void {
+    it('allows a general manager to create a branch and configure its cutoff settings', function (): void {
+        $manager = User::factory()->create();
+        actingAsBusinessRole($manager, 'general_manager');
+
+        $branch = $this->postJson('/api/v1/branches', [
+            'code' => 'MTY-01',
+            'name' => 'Sucursal Monterrey',
             'address' => 'Av. Constitucion 123',
-            'postal_code' => '64000',
-        ]);
+            'phone' => '8180000000',
+        ])->assertCreated()->json('data');
 
-        $response->assertStatus(200)
-            ->assertJson([
-                'success' => true,
-                'message' => 'Success',
-            ]);
+        $this->patchJson("/api/v1/branches/{$branch['id']}/settings", [
+            'cutoff_day' => 15,
+            'cutoff_time' => '17:30',
+            'payment_frequency_days' => 14,
+            'default_credit_limit' => '10000.00',
+            'biweekly_interest_percentage' => '5.0000',
+        ])->assertOk()->assertJsonPath('data.cutoff_day', 15);
 
-        $this->assertDatabaseHas('addresses', [
-            'country' => 'Mexico',
-            'state' => 'Nuevo Leon',
-            'city' => 'Monterrey',
-            'address' => 'Av. Constitucion 123',
-            'postal_code' => '64000',
-        ]);
-
-        $this->assertDatabaseHas('branches', [
-            'name' => 'Branch Test Office',
-            'branch_code' => 'BR-001',
-            'branch_type' => 'main_office',
-            'manager_id' => $employee->id,
+        $this->assertDatabaseHas('branch_settings_logs', [
+            'branch_id' => $branch['id'],
+            'updated_by_user_id' => $manager->id,
         ]);
     });
 
-    it('creates a branch successfully without branch_code and manager_id (auto-generates code)', function (): void {
-        $user = User::factory()->create();
-        Sanctum::actingAs($user);
+    it('allows an administrator to view but not modify a branch', function (): void {
+        $administrator = User::factory()->create();
+        actingAsBusinessRole($administrator, 'administrator');
+        $branch = Branch::factory()->create();
 
-        $response = $this->postJson('/api/v1/branches', [
-            'name' => 'Branch Auto-Gen Office',
-            'branch_type' => 'subsidiary_office',
-            'country' => 'Mexico',
-            'state' => 'Coahuila',
-            'city' => 'Torreon',
-            'address' => 'Av Guadalupana calle educacion 110',
-            'postal_code' => '27108',
-        ]);
-
-        $response->assertStatus(200)
-            ->assertJson([
-                'success' => true,
-                'message' => 'Success',
-            ]);
-
-        $this->assertDatabaseHas('addresses', [
-            'country' => 'Mexico',
-            'state' => 'Coahuila',
-            'city' => 'Torreon',
-            'address' => 'Av Guadalupana calle educacion 110',
-            'postal_code' => '27108',
-        ]);
-
-        // Verify the branch was created in DB and has an auto-generated code starting with BR-
-        $this->assertDatabaseHas('branches', [
-            'name' => 'Branch Auto-Gen Office',
-            'branch_type' => 'subsidiary_office',
-            'manager_id' => null,
-        ]);
-
-        $branch = \App\Models\Branch::where('name', 'Branch Auto-Gen Office')->first();
-        expect($branch->branch_code)->toStartWith('BR-');
-    });
-
-    it('fails validation when address fields are missing', function (): void {
-        $user = User::factory()->create();
-        Sanctum::actingAs($user);
-
-        $response = $this->postJson('/api/v1/branches', [
-            'name' => 'Branch Test Office',
-            'branch_code' => 'BR-001',
-            'branch_type' => 'main_office',
-        ]);
-
-        $response->assertStatus(422);
+        $this->getJson("/api/v1/branches/{$branch->id}")->assertOk();
+        $this->patchJson("/api/v1/branches/{$branch->id}", ['name' => 'No permitido'])->assertForbidden();
     });
 });

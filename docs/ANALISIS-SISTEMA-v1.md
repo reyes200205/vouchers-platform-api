@@ -256,6 +256,29 @@ negocio puede reasignar responsabilidades.
   coordinador de origen y éste autoriza antes de ejecutar el cambio.
 - El administrador es exclusivamente de lectura global.
 
+### Confirmaciones posteriores
+
+- El pre-vale se detecta por la ausencia de vales previos del cliente. Su monto máximo es
+  el 50% de la línea disponible más una tolerancia de $500. La regla vuelve a activarse
+  después de cada aumento de límite; los vales digitales posteriores pueden usar la línea
+  disponible completa.
+- La línea disponible se descuenta al aprobar/activar el vale y se recupera con los pagos
+  aplicados al corte de la distribuidora. La deuda del cliente suma principal, comisión,
+  seguro e interés de todas las quincenas; la utilidad de la distribuidora es una cesión de
+  la empresa y se descuenta de su entero de corte.
+- La distribuidora destino inicia una previa transferencia. El coordinador resuelve la
+  solicitud y su aprobación ejecuta el cambio sin código; sólo quien la inició puede
+  cancelarla. Los clientes con morosidad no pueden solicitar nuevos vales.
+- El coordinador crea solicitudes de distribuidora, el verificador sólo revisa en campo y
+  el gerente decide. Al aprobar se crea automáticamente la distribuidora y su cuenta con
+  una credencial de un solo uso que no se expone en APIs administrativas.
+- El cliente se crea activo pero pendiente de verificación documental al momento de su
+  primer pre-vale. Cambios de identidad, contacto o evidencias requieren aprobación del
+  gerente de sucursal.
+- La cajera concilia el estado de cuenta simulado por referencia de pago única. Los cierres
+  y reprocesos de corte corresponden al gerente de sucursal; queda pendiente definir la
+  segunda autorización cuando la conciliación manual presente diferencias.
+
 ---
 
 ## 5. Funcionalidades / módulos que probablemente se deberán construir

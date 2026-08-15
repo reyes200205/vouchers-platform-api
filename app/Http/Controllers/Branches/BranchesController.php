@@ -6,20 +6,15 @@ namespace App\Http\Controllers\Branches;
 
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Branches\StoreBranchRequest;
+use App\Http\Requests\Branches\UpdateBranchRequest;
 use App\Http\Resources\BranchResource;
 use App\Models\Branch;
-use App\Services\Branches\StoreBranchService;
+use App\Services\Audit\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 final class BranchesController extends ApiController
 {
-    /**
-     * Branch.index.
-     *
-     * @response array{success: true, message: string, data: array{data: \App\Http\Resources\BranchResource[], links: array<string, mixed>, meta: array<string, mixed>}}
-     */
-
     public function index(Request $request): JsonResponse
     {
         $branches = Branch::query()
@@ -31,22 +26,28 @@ final class BranchesController extends ApiController
         );
     }
 
-    public function show(int $id): JsonResponse
+    public function show(Branch $branch): JsonResponse
     {
-        $branch = Branch::findOrFail($id);
-
-        return $this->success(
-            new BranchResource($branch)
-        );
+        return $this->success(new BranchResource($branch));
     }
 
-
-    public function store(StoreBranchRequest $request, StoreBranchService $service): JsonResponse
+    public function store(StoreBranchRequest $request, AuditLogger $audit): JsonResponse
     {
-        $branch = $service->execute($request->validated());
+        $branch = Branch::query()->create($request->validated());
+        $audit->record($request, 'BRANCH_CREATED', 'branches', 'Sucursal creada.', $branch->id);
 
-        return $this->success(
-            new BranchResource($branch)
-        );
+        return $this->created(new BranchResource($branch));
+    }
+
+    public function update(UpdateBranchRequest $request, Branch $branch, AuditLogger $audit): JsonResponse
+    {
+        $before = $branch->only(array_keys($request->validated()));
+        $branch->update($request->validated());
+        $audit->record($request, 'BRANCH_UPDATED', 'branches', 'Sucursal actualizada.', $branch->id, [
+            'before' => $before,
+            'after' => $branch->fresh()->only(array_keys($request->validated())),
+        ]);
+
+        return $this->success(new BranchResource($branch->fresh()));
     }
 }

@@ -109,7 +109,7 @@ final class User extends Authenticatable
         return 'password_hash';
     }
 
-    public function hasBusinessAbility(string $ability): bool
+    public function hasBusinessAbility(string $ability, ?int $branchId = null): bool
     {
         $abilities = config('business-authorization.abilities', []);
         $allowedRoleCodes = $abilities[$ability] ?? [];
@@ -118,10 +118,46 @@ final class User extends Authenticatable
             return false;
         }
 
+        $roles = $this->businessRoles()
+            ->wherePivotNull('revoked_at')
+            ->whereIn('roles.code', $allowedRoleCodes);
+
+        if ($branchId === null) {
+            return $roles->exists();
+        }
+
+        $globalRoleCodes = array_intersect($allowedRoleCodes, config('business-authorization.global_role_codes', []));
+
+        return $roles->where(function ($query) use ($branchId, $globalRoleCodes): void {
+            $query->where('user_role.branch_id', $branchId);
+
+            if ($globalRoleCodes !== []) {
+                $query->orWhereIn('roles.code', $globalRoleCodes);
+            }
+        })->exists();
+    }
+
+    public function hasGlobalBusinessRole(): bool
+    {
         return $this->businessRoles()
             ->wherePivotNull('revoked_at')
-            ->whereIn('roles.code', $allowedRoleCodes)
+            ->whereIn('roles.code', config('business-authorization.global_role_codes', []))
             ->exists();
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function activeBusinessBranchIds(): array
+    {
+        return $this->businessRoles()
+            ->wherePivotNull('revoked_at')
+            ->whereNotNull('user_role.branch_id')
+            ->pluck('user_role.branch_id')
+            ->map(static fn (mixed $branchId): int => (int) $branchId)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

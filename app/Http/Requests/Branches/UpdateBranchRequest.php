@@ -6,13 +6,9 @@ namespace App\Http\Requests\Branches;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
-/**
- * @property string $name
- * @property string $address
- * @property string|null $phone
- */
-final class StoreBranchRequest extends FormRequest
+final class UpdateBranchRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -25,8 +21,8 @@ final class StoreBranchRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'code' => ['required', 'string', 'max:30', 'unique:branches,code'],
-            'name' => ['required', 'string', 'max:150'],
+            'code' => ['sometimes', 'string', 'max:30', Rule::unique('branches', 'code')->ignore($this->route('branch'))],
+            'name' => ['sometimes', 'string', 'max:150'],
             'address' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
             'is_active' => ['sometimes', 'boolean'],

@@ -51,12 +51,15 @@ return new class extends Migration
             // Distancia calculada entre el domicilio y la verificación
             $table->decimal('distance_meters', 10, 2)->nullable();
 
-            // Timestamps manuales (como en el resto de tus tablas)
-            $table->dateTime('created_at')
-                ->default(DB::raw('CURRENT_TIMESTAMP'));
+            if (DB::getDriverName() === 'sqlite') {
+                $table->timestamps();
+            } else {
+                $table->dateTime('created_at')
+                    ->default(DB::raw('CURRENT_TIMESTAMP'));
 
-            $table->dateTime('updated_at')
-                ->default(DB::raw('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'));
+                $table->dateTime('updated_at')
+                    ->default(DB::raw('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'));
+            }
 
             // Índices y únicos
             $table->unique('application_id');
