@@ -15,7 +15,9 @@ use App\Http\Controllers\Distributor\CustomerTransferController as DistributorCu
 use App\Http\Controllers\Employees\EmployeesController;
 use App\Http\Controllers\GeneralManager\ApplicationDecisionController;
 use App\Http\Controllers\GeneralManager\BranchController;
+use App\Http\Controllers\GeneralManager\DistributorCategoryController;
 use App\Http\Controllers\GeneralManager\FinancialProductController;
+use App\Http\Controllers\GeneralManager\PointSettingController;
 use App\Http\Controllers\System\RolesController;
 use Illuminate\Support\Facades\Route;
 
@@ -69,6 +71,19 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
         Route::post('/financial-products', [FinancialProductController::class, 'store'])->name('financial-products.store');
         Route::patch('/financial-products/{financialProduct}', [FinancialProductController::class, 'update'])->name('financial-products.update');
     });
+
+    Route::middleware('business.ability:categories.view')->group(function (): void {
+        Route::get('/distributor-categories', [DistributorCategoryController::class, 'index'])->name('distributor-categories.index');
+        Route::get('/distributor-categories/{distributorCategory}', [DistributorCategoryController::class, 'show'])->name('distributor-categories.show');
+    });
+
+    Route::middleware('business.ability:categories.manage')->group(function (): void {
+        Route::post('/distributor-categories', [DistributorCategoryController::class, 'store'])->name('distributor-categories.store');
+        Route::patch('/distributor-categories/{distributorCategory}', [DistributorCategoryController::class, 'update'])->name('distributor-categories.update');
+    });
+
+    Route::middleware('business.ability:point-settings.view')->get('/point-settings', [PointSettingController::class, 'show'])->name('point-settings.show');
+    Route::middleware('business.ability:point-settings.manage')->patch('/point-settings', [PointSettingController::class, 'update'])->name('point-settings.update');
 
     Route::middleware('business.ability:applications.view')->get('/applications', [CoordinadorController::class, 'index'])->name('applications.index');
     Route::post('/applications', [CoordinadorController::class, 'store'])->name('applications.store');

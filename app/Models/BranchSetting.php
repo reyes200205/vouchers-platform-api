@@ -24,6 +24,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'minimum_score_increase_percentage',
     'category_settings_json',
     'financial_product_settings_json',
+    'voucher_amount_step',
+    'pre_vale_max_percentage',
+    'pre_vale_tolerance_amount',
+    'point_value_mxn',
     'updated_by_user_id',
 ])]
 final class BranchSetting extends Model
@@ -38,6 +42,9 @@ final class BranchSetting extends Model
         'minimum_score_increase_percentage' => 'decimal:2',
         'category_settings_json' => 'array',
         'financial_product_settings_json' => 'array',
+        'pre_vale_max_percentage' => 'decimal:2',
+        'pre_vale_tolerance_amount' => 'decimal:2',
+        'point_value_mxn' => 'decimal:2',
     ];
 
     /**
