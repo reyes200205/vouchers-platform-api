@@ -5,19 +5,32 @@ declare(strict_types=1);
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\BranchManager\CustomerChangeRequestController;
 use App\Http\Controllers\Cashier\CustomerController as CashierCustomerController;
+use App\Http\Controllers\Cashier\PaymentController as CashierPaymentController;
+use App\Http\Controllers\Cashier\ReconciliationController as CashierReconciliationController;
+use App\Http\Controllers\Cashier\VoucherController as CashierVoucherController;
 use App\Http\Controllers\Checker\VerificadorController;
 use App\Http\Controllers\BranchManager\BranchSettingController;
+use App\Http\Controllers\BranchManager\CutoffController as BranchManagerCutoffController;
 use App\Http\Controllers\Coordinator\CoordinadorController;
+use App\Http\Controllers\Coordinator\CreditIncreaseController as CoordinatorCreditIncreaseController;
 use App\Http\Controllers\Coordinator\CustomerController;
+use App\Http\Controllers\Coordinator\PaymentController as CoordinatorPaymentController;
 use App\Http\Controllers\Coordinator\CustomerTransferController;
+use App\Http\Controllers\Coordinator\VoucherController as CoordinatorVoucherController;
 use App\Http\Controllers\Distributor\CustomerController as DistributorCustomerController;
 use App\Http\Controllers\Distributor\CustomerTransferController as DistributorCustomerTransferController;
+use App\Http\Controllers\Distributor\PointController as DistributorPointController;
+use App\Http\Controllers\Distributor\VoucherController as DistributorVoucherController;
 use App\Http\Controllers\Employees\EmployeesController;
 use App\Http\Controllers\GeneralManager\ApplicationDecisionController;
 use App\Http\Controllers\GeneralManager\BranchController;
+use App\Http\Controllers\GeneralManager\CreditIncreaseController as GeneralManagerCreditIncreaseController;
+use App\Http\Controllers\GeneralManager\CutoffController as GeneralManagerCutoffController;
 use App\Http\Controllers\GeneralManager\DistributorCategoryController;
 use App\Http\Controllers\GeneralManager\FinancialProductController;
 use App\Http\Controllers\GeneralManager\PointSettingController;
+use App\Http\Controllers\GeneralManager\PointController as GeneralManagerPointController;
+use App\Http\Controllers\GeneralManager\ReconciliationController as GeneralManagerReconciliationController;
 use App\Http\Controllers\System\RolesController;
 use Illuminate\Support\Facades\Route;
 
@@ -111,6 +124,43 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:customers.transfer.request,customer')->post('/customers/{customer}/transfer-requests', [DistributorCustomerTransferController::class, 'store'])->name('customers.transfer-requests.store');
     Route::middleware('business.ability:customers.transfer.cancel,customerTransferRequest')->post('/customer-transfer-requests/{customerTransferRequest}/cancel', [DistributorCustomerTransferController::class, 'cancel'])->name('customer-transfer-requests.cancel');
     Route::middleware('business.ability:customers.transfer.decide,customerTransferRequest')->post('/customer-transfer-requests/{customerTransferRequest}/decision', [CustomerTransferController::class, 'decide'])->name('customer-transfer-requests.decide');
+
+    Route::middleware('business.ability:vouchers.view')->group(function (): void {
+        Route::get('/vouchers', [CoordinatorVoucherController::class, 'index'])->name('vouchers.index');
+        Route::get('/vouchers/{voucher}', [CoordinatorVoucherController::class, 'show'])->name('vouchers.show');
+        Route::get('/distributor/vouchers', [DistributorVoucherController::class, 'index'])->name('distributor.vouchers.index');
+    });
+
+    Route::middleware('business.ability:vouchers.pre-issue')->post('/vouchers', [DistributorVoucherController::class, 'store'])->name('vouchers.pre-issue');
+    Route::middleware('business.ability:vouchers.approve,voucherRequest')->post('/voucher-requests/{voucherRequest}/approve', [CoordinatorVoucherController::class, 'approve'])->name('vouchers.approve');
+    Route::middleware('business.ability:vouchers.disburse,voucher')->post('/vouchers/{voucher}/disburse', [CashierVoucherController::class, 'disburse'])->name('vouchers.disburse');
+
+    Route::middleware('business.ability:credit-increase.view')->get('/credit-increase-requests', [GeneralManagerCreditIncreaseController::class, 'index'])->name('credit-increase-requests.index');
+    Route::middleware('business.ability:credit-increase.request')->post('/credit-increase-requests', [CoordinatorCreditIncreaseController::class, 'store'])->name('credit-increase-requests.store');
+    Route::middleware('business.ability:credit-increase.pre-authorize,creditIncreaseRequest')->post('/credit-increase-requests/{creditIncreaseRequest}/pre-authorize', [CoordinatorCreditIncreaseController::class, 'preAuthorize'])->name('credit-increase-requests.pre-authorize');
+    Route::middleware('business.ability:credit-increase.decide,creditIncreaseRequest')->post('/credit-increase-requests/{creditIncreaseRequest}/decision', [GeneralManagerCreditIncreaseController::class, 'decide'])->name('credit-increase-requests.decide');
+
+    Route::middleware('business.ability:payments.view')->get('/customer-payments', [CoordinatorPaymentController::class, 'index'])->name('customer-payments.index');
+    Route::middleware('business.ability:payments.view,voucher')->get('/vouchers/{voucher}/payments', [CoordinatorPaymentController::class, 'voucherPayments'])->name('vouchers.payments.index');
+    Route::middleware('business.ability:payments.create')->post('/customer-payments', [CashierPaymentController::class, 'store'])->name('customer-payments.store');
+    Route::middleware('business.ability:payments.reverse,customerPayment')->post('/customer-payments/{customerPayment}/reverse', [CashierPaymentController::class, 'reverse'])->name('customer-payments.reverse');
+
+    Route::middleware('business.ability:cutoffs.view')->get('/cutoffs', [BranchManagerCutoffController::class, 'index'])->name('cutoffs.index');
+    Route::middleware('business.ability:cutoffs.view,cutoff')->get('/cutoffs/{cutoff}', [BranchManagerCutoffController::class, 'show'])->name('cutoffs.show');
+    Route::middleware('business.ability:cutoffs.manage,branch')->post('/branches/{branch}/cutoffs/generate', [BranchManagerCutoffController::class, 'generate'])->name('cutoffs.generate');
+    Route::middleware('business.ability:cutoffs.manage,cutoff')->post('/cutoffs/{cutoff}/reprocess', [GeneralManagerCutoffController::class, 'reprocess'])->name('cutoffs.reprocess');
+
+    Route::middleware('business.ability:reconciliations.import,branch')->post('/branches/{branch}/reconciliations/import', [CashierReconciliationController::class, 'import'])->name('reconciliations.import');
+    Route::middleware('business.ability:reconciliations.view')->get('/reconciliations/bank-transactions', [CashierReconciliationController::class, 'bankTransactions'])->name('reconciliations.bank-transactions');
+    Route::middleware('business.ability:reconciliations.view')->get('/reconciliations', [CashierReconciliationController::class, 'reconciliations'])->name('reconciliations.index');
+    Route::middleware('business.ability:reconciliations.manual,bankTransaction')->post('/reconciliations/bank-transactions/{bankTransaction}/manual-match', [GeneralManagerReconciliationController::class, 'manualMatch'])->name('reconciliations.manual-match');
+    Route::middleware('business.ability:reconciliations.verify,reconciliation')->post('/reconciliations/{reconciliation}/verify', [GeneralManagerReconciliationController::class, 'verify'])->name('reconciliations.verify');
+
+    Route::middleware('business.ability:points.redeem.request,distributor')->post('/distributors/{distributor}/points/redeem', [DistributorPointController::class, 'redeem'])->name('points.redeem.request');
+    Route::middleware('business.ability:points.view,distributor')->get('/distributors/{distributor}/points/redemptions', [DistributorPointController::class, 'myRedemptions'])->name('points.redemptions.mine');
+    Route::middleware('business.ability:points.view')->get('/point-redemptions', [GeneralManagerPointController::class, 'index'])->name('point-redemptions.index');
+    Route::middleware('business.ability:points.redeem.decide,pointRedemption')->post('/point-redemptions/{pointRedemption}/decision', [GeneralManagerPointController::class, 'decide'])->name('point-redemptions.decide');
+    Route::middleware('business.ability:points.category,distributor')->patch('/distributors/{distributor}/category', [GeneralManagerPointController::class, 'updateCategory'])->name('distributors.category.update');
 });
 
 

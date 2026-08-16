@@ -145,6 +145,14 @@ final class User extends Authenticatable
             ->exists();
     }
 
+    public function isGeneralManager(): bool
+    {
+        return $this->businessRoles()
+            ->wherePivotNull('revoked_at')
+            ->where('roles.code', 'general_manager')
+            ->exists();
+    }
+
     /**
      * @return list<int>
      */
