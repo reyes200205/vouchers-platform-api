@@ -25,7 +25,7 @@ return [
         'vouchers.pre-issue' => ['general_manager', 'branch_manager', 'coordinator', 'verifier'],
         'vouchers.issue' => ['general_manager', 'branch_manager', 'coordinator', 'verifier'],
         'customers.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator', 'cashier', 'distributor'],
-        'customers.create' => ['coordinator'],
+        'customers.create' => ['distributor'],
         'customers.manage' => ['general_manager', 'branch_manager'],
         'customers.update.request' => ['cashier'],
         'customers.update.approve' => ['branch_manager', 'general_manager'],

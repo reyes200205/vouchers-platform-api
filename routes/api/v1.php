@@ -10,6 +10,7 @@ use App\Http\Controllers\BranchManager\BranchSettingController;
 use App\Http\Controllers\Coordinator\CoordinadorController;
 use App\Http\Controllers\Coordinator\CustomerController;
 use App\Http\Controllers\Coordinator\CustomerTransferController;
+use App\Http\Controllers\Distributor\CustomerController as DistributorCustomerController;
 use App\Http\Controllers\Distributor\CustomerTransferController as DistributorCustomerTransferController;
 use App\Http\Controllers\Employees\EmployeesController;
 use App\Http\Controllers\GeneralManager\ApplicationDecisionController;
@@ -80,7 +81,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
         Route::get('/customers/{customer}', [CustomerController::class, 'show'])->middleware('business.ability:customers.view,customer')->name('customers.show');
     });
 
-    Route::middleware('business.ability:customers.create')->post('/customers', [CustomerController::class, 'store'])->name('customers.store');
+    Route::middleware('business.ability:customers.create')->post('/customers', [DistributorCustomerController::class, 'store'])->name('customers.store');
     Route::middleware('business.ability:customers.verify,customer')->patch('/customers/{customer}/verify', [CashierCustomerController::class, 'verify'])->name('customers.verify');
     Route::middleware('business.ability:customers.update.request,customer')->post('/customers/{customer}/change-requests', [CashierCustomerController::class, 'storeChangeRequest'])->name('customers.change-requests.store');
 

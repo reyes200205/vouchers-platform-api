@@ -5,12 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Coordinator;
 
 use App\Http\Controllers\ApiController;
-use App\Http\Requests\Customers\StoreCustomerRequest;
 use App\Http\Resources\CustomerResource;
 use App\Models\Customer;
 use App\Models\User;
-use App\Services\Audit\AuditLogger;
-use App\Services\Customers\StoreCustomerService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -38,29 +35,5 @@ final class CustomerController extends ApiController
     public function show(Request $request, Customer $customer): JsonResponse
     {
         return $this->success(new CustomerResource($customer->load(['person', 'branch', 'distributors.person'])));
-    }
-
-    public function store(StoreCustomerRequest $request, StoreCustomerService $service, AuditLogger $audit): JsonResponse
-    {
-        /** @var User $user */
-        $user = $request->user();
-        $data = $request->validated();
-
-        if (! $user->hasBusinessAbility('customers.create', $data['branch_id'])) {
-            return $this->forbidden();
-        }
-
-        $customer = $service->execute($user, $data);
-
-        $audit->record(
-            $request,
-            'CUSTOMER_CREATED',
-            'customers',
-            'Cliente creado y enviado a verificacion.',
-            $customer->branch_id,
-            ['customer_id' => $customer->id, 'customer_code' => $customer->customer_code]
-        );
-
-        return $this->created(new CustomerResource($customer->load(['person', 'branch', 'distributors.person'])));
     }
 }

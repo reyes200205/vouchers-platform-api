@@ -10,7 +10,6 @@ use App\Http\Requests\Customers\VerifyCustomerRequest;
 use App\Http\Resources\CustomerChangeRequestResource;
 use App\Http\Resources\CustomerResource;
 use App\Models\Customer;
-use App\Models\CustomerChangeRequest;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Customers\RequestCustomerChangeService;

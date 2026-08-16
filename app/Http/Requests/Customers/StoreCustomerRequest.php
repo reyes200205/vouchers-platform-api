@@ -20,8 +20,6 @@ final class StoreCustomerRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
-            'distributor_id' => ['required', 'integer', 'exists:distributors,id'],
             'person' => ['required', 'array'],
             'person.first_name' => ['required', 'string', 'max:100'],
             'person.middle_name' => ['nullable', 'string', 'max:100'],
@@ -31,8 +29,8 @@ final class StoreCustomerRequest extends FormRequest
             'person.birth_date' => ['nullable', 'date'],
             'person.curp' => ['required', 'string', 'size:18', 'unique:people,curp'],
             'person.rfc' => ['nullable', 'string', 'max:13', 'unique:people,rfc'],
-            'person.home_phone' => ['nullable', 'string', 'max:30'],
-            'person.mobile_phone' => ['nullable', 'string', 'max:30'],
+            'person.home_phone' => ['nullable', 'string', 'max:20'],
+            'person.mobile_phone' => ['nullable', 'string', 'max:20'],
             'person.email' => ['nullable', 'email', 'max:150'],
             'person.street' => ['nullable', 'string', 'max:150'],
             'person.external_number' => ['nullable', 'string', 'max:30'],

@@ -41,11 +41,9 @@ function signInAsDistributor(User $user, Distributor $distributor): void
     Sanctum::actingAs($user);
 }
 
-function customerPayload(Branch $branch, Distributor $distributor): array
+function customerPayload(): array
 {
     return [
-        'branch_id' => $branch->id,
-        'distributor_id' => $distributor->id,
         'person' => [
             'first_name' => 'Juan',
             'last_name' => 'Perez',
@@ -63,13 +61,13 @@ function customerPayload(Branch $branch, Distributor $distributor): array
 }
 
 describe('Customer lifecycle', function (): void {
-    it('allows a coordinator to create a customer pending verification', function (): void {
+    it('allows a distributor to create a customer pending verification', function (): void {
         $branch = Branch::factory()->create();
         $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
-        $coordinator = User::factory()->create();
-        signInWithBusinessRole($coordinator, 'coordinator', $branch);
+        $distributorUser = User::factory()->create();
+        signInAsDistributor($distributorUser, $distributor);
 
-        $response = $this->postJson('/api/v1/customers', customerPayload($branch, $distributor))
+        $response = $this->postJson('/api/v1/customers', customerPayload())
             ->assertCreated()
             ->assertJsonPath('data.status', 'EN_VERIFICACION')
             ->assertJsonPath('data.verified_at', null);
@@ -86,6 +84,16 @@ describe('Customer lifecycle', function (): void {
             'distributor_id' => $distributor->id,
             'relationship_status' => 'ACTIVA',
         ]);
+    });
+
+    it('forbids a coordinator from creating customers', function (): void {
+        $branch = Branch::factory()->create();
+        $coordinator = User::factory()->create();
+        signInWithBusinessRole($coordinator, 'coordinator', $branch);
+
+        $this->postJson('/api/v1/customers', customerPayload())->assertForbidden();
+
+        $this->assertDatabaseCount('customers', 0);
     });
 
     it('allows a cashier to verify a customer', function (): void {
