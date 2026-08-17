@@ -6,6 +6,7 @@ namespace App\Enums;
 
 enum ReconciliationStatus: string
 {
+    case PENDIENTE_VERIFICACION = 'PENDIENTE_VERIFICACION';
     case CONCILIADA = 'CONCILIADA';
     case CON_DIFERENCIA = 'CON_DIFERENCIA';
     case RECHAZADA = 'RECHAZADA';

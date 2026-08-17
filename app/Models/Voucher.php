@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\VoucherStatus;
+use Database\Factories\VoucherFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -16,10 +18,13 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'distributor_id',
     'customer_id',
     'financial_product_id',
+    'voucher_request_id',
     'branch_id',
     'created_by_user_id',
     'approved_by_user_id',
+    'disbursed_by_user_id',
     'status',
+    'is_pre_vale',
     'amount',
     'company_commission_percentage_snapshot',
     'company_commission_amount',
@@ -35,6 +40,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'payments_made',
     'current_balance',
     'transfer_reference',
+    'authorized_number',
     'issued_at',
     'transferred_at',
     'payment_due_date',
@@ -47,8 +53,12 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 ])]
 final class Voucher extends Model
 {
+    /** @use HasFactory<VoucherFactory> */
+    use HasFactory;
+
     protected $casts = [
         'status' => VoucherStatus::class,
+        'is_pre_vale' => 'boolean',
         'amount' => 'decimal:2',
         'company_commission_percentage_snapshot' => 'decimal:4',
         'company_commission_amount' => 'decimal:2',
@@ -116,6 +126,22 @@ final class Voucher extends Model
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by_user_id');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function disbursedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'disbursed_by_user_id');
+    }
+
+    /**
+     * @return BelongsTo<VoucherRequest, $this>
+     */
+    public function voucherRequest(): BelongsTo
+    {
+        return $this->belongsTo(VoucherRequest::class);
     }
 
     /**

@@ -34,6 +34,10 @@ final class BranchSettingResource extends JsonResource
             'minimum_score_increase_percentage' => $this->minimum_score_increase_percentage,
             'category_settings' => $this->category_settings_json,
             'financial_product_settings' => $this->financial_product_settings_json,
+            'voucher_amount_step' => $this->voucher_amount_step,
+            'pre_vale_max_percentage' => $this->pre_vale_max_percentage,
+            'pre_vale_tolerance_amount' => $this->pre_vale_tolerance_amount,
+            'point_value_mxn' => $this->point_value_mxn,
             'updated_by_user_id' => $this->updated_by_user_id,
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

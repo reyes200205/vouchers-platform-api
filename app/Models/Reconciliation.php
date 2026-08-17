@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'distributor_payment_id',
     'bank_transaction_id',
     'reconciled_by_user_id',
+    'verified_by_user_id',
+    'verified_at',
     'reconciled_at',
     'reconciled_amount',
     'amount_difference',
@@ -25,6 +27,7 @@ final class Reconciliation extends Model
 
     protected $casts = [
         'reconciled_at' => 'datetime',
+        'verified_at' => 'datetime',
         'reconciled_amount' => 'decimal:2',
         'amount_difference' => 'decimal:2',
         'status' => ReconciliationStatus::class,

@@ -19,7 +19,7 @@ final class BranchSettingController extends ApiController
 {
     public function show(Branch $branch): JsonResponse
     {
-        $setting = BranchSetting::query()->firstOrCreate(['branch_id' => $branch->id]);
+        $setting = BranchSetting::query()->firstOrCreate(['branch_id' => $branch->id])->refresh();
 
         return $this->success(new BranchSettingResource($setting));
     }
@@ -27,7 +27,7 @@ final class BranchSettingController extends ApiController
     public function update(UpdateBranchSettingRequest $request, Branch $branch, AuditLogger $audit): JsonResponse
     {
         $setting = DB::transaction(function () use ($request, $branch): BranchSetting {
-            $setting = BranchSetting::query()->firstOrCreate(['branch_id' => $branch->id]);
+            $setting = BranchSetting::query()->firstOrCreate(['branch_id' => $branch->id])->refresh();
             $before = $setting->only(array_keys($request->validated()));
             $setting->fill($request->validated());
             $setting->updated_by_user_id = $request->user()->id;

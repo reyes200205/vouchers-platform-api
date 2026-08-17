@@ -30,6 +30,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'is_external',
     'activated_at',
     'deactivated_at',
+    'prevale_required_after_credit_increase_at',
 ])]
 final class Distributor extends Model
 {
@@ -45,6 +46,7 @@ final class Distributor extends Model
         'is_external' => 'boolean',
         'activated_at' => 'datetime',
         'deactivated_at' => 'datetime',
+        'prevale_required_after_credit_increase_at' => 'datetime',
     ];
 
     /**

@@ -139,6 +139,11 @@ final class User extends Authenticatable
             && in_array($this->role->code, config('business-authorization.global_role_codes', []), true);
     }
 
+    public function isGeneralManager(): bool
+    {
+        return $this->role?->code === 'general_manager';
+    }
+
     /**
      * @return list<int>
      */

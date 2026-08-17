@@ -6,7 +6,9 @@ namespace App\Models;
 
 use App\Enums\CutoffStatus;
 use App\Enums\CutoffType;
+use Database\Factories\CutoffFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -20,10 +22,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'executed_at',
     'keep_date_on_holiday',
     'status',
+    'config_snapshot_json',
     'notes',
 ])]
 final class Cutoff extends Model
 {
+    /** @use HasFactory<CutoffFactory> */
+    use HasFactory;
+
     protected $casts = [
         'cutoff_type' => CutoffType::class,
         'status' => CutoffStatus::class,
