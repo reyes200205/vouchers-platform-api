@@ -20,7 +20,7 @@ final class AuthController extends ApiController
     public function login(LoginRequest $request, AuditLogger $audit): JsonResponse
     {
         $user = User::query()
-            ->with(['person', 'role', 'branch'])
+            ->with(['person', 'businessRoles'])
             ->where('username', $request->username)
             ->first();
 
@@ -38,7 +38,7 @@ final class AuthController extends ApiController
         // AuditLogger lee el actor desde $request->user(), que aun no esta resuelto
         // en esta request publica (el token recien se emitio arriba).
         auth()->setUser($user);
-        $audit->record($request, 'LOGIN', 'auth', 'Inicio de sesion exitoso.', $user->branch_id, ['user_id' => $user->id]);
+        $audit->record($request, 'LOGIN', 'auth', 'Inicio de sesion exitoso.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
 
         return $this->success([
             'user' => new UserResource($user),
@@ -55,7 +55,7 @@ final class AuthController extends ApiController
 
         $token?->delete();
 
-        $audit->record($request, 'LOGOUT', 'auth', 'Cierre de sesion.', $user->branch_id, ['user_id' => $user->id]);
+        $audit->record($request, 'LOGOUT', 'auth', 'Cierre de sesion.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
 
         return $this->success(message: 'Logged out successfully');
     }
@@ -66,7 +66,7 @@ final class AuthController extends ApiController
         $user = $request->user();
 
         return $this->success(new UserResource(
-            $user->loadMissing(['person', 'role', 'branch'])
+            $user->loadMissing(['person', 'businessRoles'])
         ));
     }
 }

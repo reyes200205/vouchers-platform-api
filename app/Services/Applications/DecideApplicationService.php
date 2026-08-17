@@ -11,7 +11,7 @@ use App\Models\Application;
 use App\Models\Distributor;
 use App\Models\DistributorActivation;
 use App\Models\ManagerDecisionLog;
-use App\Models\Role;
+use Spatie\Permission\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -63,11 +63,6 @@ final class DecideApplicationService
                 'activated_at' => now(),
             ]);
 
-            $role = Role::query()->firstOrCreate(
-                ['code' => 'distributor'],
-                ['name' => 'Distribuidora', 'description' => 'Usuario operativo asociado a una distribuidora.', 'is_active' => true]
-            );
-
             $activationToken = Str::random(48);
             $username = $this->uniqueUsername($application);
             $user = User::query()->firstOrCreate(
@@ -75,15 +70,16 @@ final class DecideApplicationService
                 [
                     'username' => $username,
                     'password_hash' => Hash::make($activationToken),
-                    'role_id' => $role->id,
-                    'branch_id' => $application->branch_id,
                     'is_active' => true,
                 ]
             );
 
-            if ($user->wasRecentlyCreated === false) {
-                $user->update(['role_id' => $role->id, 'branch_id' => $application->branch_id]);
-            }
+            $role = Role::findOrCreate('distributor', 'web');
+            $user->businessRoles()->attach($role, [
+                'branch_id' => $application->branch_id,
+                'assigned_at' => now(),
+                'is_primary' => true,
+            ]);
 
             DistributorActivation::query()->updateOrCreate(
                 ['user_id' => $user->id],

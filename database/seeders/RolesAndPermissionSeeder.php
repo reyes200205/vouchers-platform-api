@@ -10,7 +10,9 @@ use Illuminate\Database\Seeder;
 final class RolesAndPermissionSeeder extends Seeder
 {
     /**
-     * Catalogo de roles de negocio (tabla propia `roles`, sin Spatie).
+     * Catalogo de roles de negocio (tabla `roles` de Spatie Permission).
+     * `name` es el identificador usado por hasRole()/hasBusinessAbility() y debe
+     * coincidir con los codigos usados en config/business-authorization.php.
      */
     public function run(): void
     {
@@ -24,10 +26,10 @@ final class RolesAndPermissionSeeder extends Seeder
             'distributor' => 'Distribuidora',
         ];
 
-        foreach ($roles as $code => $name) {
+        foreach ($roles as $code => $label) {
             Role::query()->firstOrCreate(
-                ['code' => $code],
-                ['name' => $name, 'is_active' => true]
+                ['name' => $code, 'guard_name' => 'web'],
+                ['code' => $code, 'description' => $label, 'is_active' => true]
             );
         }
     }

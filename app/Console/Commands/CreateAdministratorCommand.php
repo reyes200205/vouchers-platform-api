@@ -24,8 +24,8 @@ final class CreateAdministratorCommand extends Command
         $password = $this->option('password') ?: Str::random(16);
 
         $role = Role::query()->firstOrCreate(
-            ['code' => 'administrator'],
-            ['name' => 'Administrador', 'is_active' => true]
+            ['name' => 'administrator', 'guard_name' => 'web'],
+            ['code' => 'administrator', 'description' => 'Administrador', 'is_active' => true]
         );
 
         $existing = User::query()->where('username', $username)->first();
@@ -42,13 +42,17 @@ final class CreateAdministratorCommand extends Command
                 'last_name' => 'Sistema',
             ]);
 
-            User::query()->create([
+            $user = User::query()->create([
                 'person_id' => $person->id,
                 'username' => $username,
                 'password_hash' => Hash::make($password),
-                'role_id' => $role->id,
-                'branch_id' => null,
                 'is_active' => true,
+            ]);
+
+            $user->businessRoles()->attach($role, [
+                'branch_id' => null,
+                'assigned_at' => now(),
+                'is_primary' => true,
             ]);
         });
 

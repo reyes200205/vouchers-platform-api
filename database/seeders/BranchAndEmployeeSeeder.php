@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
-use App\Models\Address;
 use App\Models\Branch;
-use App\Models\Employee;
 use App\Models\Person;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -24,119 +22,87 @@ final class BranchAndEmployeeSeeder extends Seeder
         // 1. Create Sucursal Matriz (Headquarters) & General Manager
         // -------------------------------------------------------------
 
-        // Create Address for Matriz
-        $matrizAddress = Address::create([
-            'country' => 'Mexico',
-            'state' => 'Nuevo Leon',
-            'city' => 'Monterrey',
-            'address' => 'Av. Constitucion 123, Centro',
-            'postal_code' => '64000',
-        ]);
-
-        // Find or create User for General Manager
-        $gmUser = User::query()->firstOrCreate(
-            ['email' => 'generalmanager@example.com'],
-            [
-                'name' => 'Gerente General',
-                'password' => Hash::make('password'),
-                'email_verified_at' => now(),
-            ]
-        );
-
-        // Assign General Manager role
-        $gmRole = Role::findOrCreate('general_manager', 'web');
-        $gmUser->assignRole($gmRole);
-
-        // Create Person record for General Manager
-        $gmPerson = Person::create([
-            'first_name' => 'Gerente',
-            'last_name' => 'General',
-            'full_name' => 'Gerente General',
-            'birth_date' => '1985-05-10',
-            'gender' => 'male',
-            'address_id' => $matrizAddress->id,
-        ]);
-
-        // Create Employee record (branch_id will be filled after branch creation)
-        $gmEmployee = Employee::create([
-            'user_id' => $gmUser->id,
-            'person_id' => $gmPerson->id,
-            'branch_id' => null,
-            'employee_code' => 'EMP-001',
-            'position' => 'General Manager',
-            'status' => 'active',
-        ]);
-
         // Create Branch (Sucursal Matriz)
         $matrizBranch = Branch::create([
             'name' => 'Sucursal Matriz',
-            'branch_code' => 'BR-MATRIZ',
-            'branch_type' => 'main_office',
-            'manager_id' => $gmEmployee->id,
-            'address_id' => $matrizAddress->id,
+            'code' => 'BR-MATRIZ',
+            'address' => 'Av. Constitucion 123, Centro, Monterrey, NL, 64000',
+            'phone' => '8112345678',
+            'is_active' => true,
         ]);
 
-        // Update employee branch_id
-        $gmEmployee->update(['branch_id' => $matrizBranch->id]);
+        // Create/Find Person record for General Manager
+        $gmPerson = Person::query()->firstOrCreate(
+            ['email' => 'generalmanager@example.com'],
+            [
+                'first_name' => 'Gerente',
+                'last_name' => 'General',
+                'gender' => 'M',
+                'birth_date' => '1985-05-10',
+                'street' => 'Av. Constitucion',
+                'external_number' => '123',
+                'city' => 'Monterrey',
+                'state' => 'Nuevo Leon',
+                'postal_code' => '64000',
+            ]
+        );
+
+        // Find or create User for General Manager matching username
+        $gmUser = User::query()->firstOrCreate(
+            ['username' => 'generalmanager'],
+            [
+                'person_id' => $gmPerson->id,
+                'password_hash' => Hash::make('password'),
+                'is_active' => true,
+            ]
+        );
+
+        // Assign General Manager role globally using Spatie
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId(null);
+        $gmUser->assignRole('general_manager');
 
 
         // -------------------------------------------------------------
         // 2. Create Sucursal Secundaria & Branch Manager
         // -------------------------------------------------------------
 
-        // Create Address for Subsidiary Office
-        $subsidiaryAddress = Address::create([
-            'country' => 'Mexico',
-            'state' => 'CDMX',
-            'city' => 'CDMX',
-            'address' => 'Paseo de la Reforma 456, Juarez',
-            'postal_code' => '06600',
-        ]);
-
-        // Find or create User for Branch Manager
-        $bmUser = User::query()->firstOrCreate(
-            ['email' => 'branch.manager@example.com'],
-            [
-                'name' => 'Gerente Sucursal',
-                'password' => Hash::make('password'),
-                'email_verified_at' => now(),
-            ]
-        );
-
-        // Assign Branch Manager role
-        $bmRole = Role::findOrCreate('branch_manager', 'web');
-        $bmUser->assignRole($bmRole);
-
-        // Create Person record for Branch Manager
-        $bmPerson = Person::create([
-            'first_name' => 'Gerente',
-            'last_name' => 'Sucursal',
-            'full_name' => 'Gerente Sucursal',
-            'birth_date' => '1990-08-20',
-            'gender' => 'female',
-            'address_id' => $subsidiaryAddress->id,
-        ]);
-
-        // Create Employee record
-        $bmEmployee = Employee::create([
-            'user_id' => $bmUser->id,
-            'person_id' => $bmPerson->id,
-            'branch_id' => null,
-            'employee_code' => 'EMP-002',
-            'position' => 'Branch Manager',
-            'status' => 'active',
-        ]);
-
         // Create Branch (Sucursal Secundaria)
         $subsidiaryBranch = Branch::create([
             'name' => 'Sucursal Secundaria',
-            'branch_code' => 'BR-SECUNDARIA',
-            'branch_type' => 'subsidiary_office',
-            'manager_id' => $bmEmployee->id,
-            'address_id' => $subsidiaryAddress->id,
+            'code' => 'BR-SECUNDARIA',
+            'address' => 'Paseo de la Reforma 456, Juarez, CDMX, 06600',
+            'phone' => '5512345678',
+            'is_active' => true,
         ]);
 
-        // Update employee branch_id
-        $bmEmployee->update(['branch_id' => $subsidiaryBranch->id]);
+        // Create/Find Person record for Branch Manager
+        $bmPerson = Person::query()->firstOrCreate(
+            ['email' => 'branch.manager@example.com'],
+            [
+                'first_name' => 'Gerente',
+                'last_name' => 'Sucursal',
+                'gender' => 'F',
+                'birth_date' => '1990-08-20',
+                'street' => 'Paseo de la Reforma',
+                'external_number' => '456',
+                'city' => 'CDMX',
+                'state' => 'CDMX',
+                'postal_code' => '06600',
+            ]
+        );
+
+        // Find or create User for Branch Manager matching username
+        $bmUser = User::query()->firstOrCreate(
+            ['username' => 'branch.manager'],
+            [
+                'person_id' => $bmPerson->id,
+                'password_hash' => Hash::make('password'),
+                'is_active' => true,
+            ]
+        );
+
+        // Assign Branch Manager role scoped to the branch using Spatie Teams
+        app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($subsidiaryBranch->id);
+        $bmUser->assignRole('branch_manager');
     }
 }

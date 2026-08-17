@@ -26,7 +26,7 @@ describe('Login', function (): void {
                 'success',
                 'message',
                 'data' => [
-                    'user' => ['id', 'username', 'role', 'branch_id'],
+                    'user' => ['id', 'username', 'roles'],
                     'token',
                 ],
             ])
@@ -71,11 +71,14 @@ describe('Login', function (): void {
 
     it('returns the role code so the frontend can route by role', function (): void {
         $branch = Branch::factory()->create();
-        $role = Role::query()->firstOrCreate(['code' => 'branch_manager'], ['name' => 'Gerente de Sucursal']);
+        $role = Role::query()->firstOrCreate(['code' => 'branch_manager'], ['name' => 'branch_manager']);
         $user = User::factory()->create([
             'password_hash' => bcrypt('password123'),
-            'role_id' => $role->id,
+        ]);
+        $user->businessRoles()->attach($role, [
             'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
         ]);
 
         $response = $this->postJson('/api/v1/auth/login', [
@@ -87,8 +90,9 @@ describe('Login', function (): void {
             ->assertJson([
                 'data' => [
                     'user' => [
-                        'role' => ['code' => 'branch_manager'],
-                        'branch_id' => $branch->id,
+                        'roles' => [
+                            ['code' => 'branch_manager', 'branch_id' => $branch->id],
+                        ],
                     ],
                 ],
             ]);
@@ -155,7 +159,7 @@ describe('Me', function (): void {
             ->assertJsonStructure([
                 'success',
                 'message',
-                'data' => ['id', 'username', 'role', 'branch_id'],
+                'data' => ['id', 'username', 'roles'],
             ])
             ->assertJson([
                 'success' => true,

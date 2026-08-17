@@ -10,22 +10,22 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
 
 /**
  * Usuario del sistema (1 a 1 con Person). Autenticacion por username/password_hash.
- * Cada usuario tiene exactamente un rol de negocio (role_id) y, opcionalmente, una sucursal.
  */
 #[Fillable([
     'person_id',
     'username',
     'password_hash',
-    'role_id',
-    'branch_id',
     'is_active',
     'requires_vpn',
     'login_channel',
@@ -40,8 +40,11 @@ final class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasApiTokens;
     use HasFactory;
+    use HasRoles;
     use Notifiable;
     use SoftDeletes;
+
+    protected $guard_name = 'web';
 
     /**
      * @return BelongsTo<Person, $this>
@@ -52,23 +55,19 @@ final class User extends Authenticatable
     }
 
     /**
-     * Rol de negocio asignado (tabla propia `roles`).
+     * Roles de negocio asignados (vía tabla pivot de Spatie `model_has_roles`).
      *
-     * @return BelongsTo<Role, $this>
+     * @return MorphToMany
      */
-    public function role(): BelongsTo
+    public function businessRoles(): MorphToMany
     {
-        return $this->belongsTo(Role::class);
-    }
-
-    /**
-     * Sucursal a la que pertenece el usuario (nula para roles globales).
-     *
-     * @return BelongsTo<Branch, $this>
-     */
-    public function branch(): BelongsTo
-    {
-        return $this->belongsTo(Branch::class);
+        return $this->morphToMany(
+            \Spatie\Permission\Models\Role::class,
+            'model',
+            'model_has_roles',
+            'model_id',
+            'role_id'
+        )->withPivot(['branch_id', 'assigned_at', 'revoked_at', 'is_primary']);
     }
 
     /**
@@ -116,32 +115,48 @@ final class User extends Authenticatable
         $abilities = config('business-authorization.abilities', []);
         $allowedRoleCodes = $abilities[$ability] ?? [];
 
-        if ($allowedRoleCodes === [] || $this->role === null || ! in_array($this->role->code, $allowedRoleCodes, true)) {
+        if ($allowedRoleCodes === []) {
             return false;
         }
 
-        if ($branchId === null) {
-            return true;
-        }
-
-        if ($this->branch_id === $branchId) {
-            return true;
-        }
-
         $globalRoleCodes = config('business-authorization.global_role_codes', []);
+        $allowedGlobalRoles = array_intersect($allowedRoleCodes, $globalRoleCodes);
 
-        return in_array($this->role->code, $globalRoleCodes, true);
+        $query = $this->businessRoles()->whereIn('roles.name', $allowedRoleCodes);
+
+        if ($branchId !== null) {
+            return $query->where(function ($q) use ($branchId, $allowedGlobalRoles) {
+                $q->where('model_has_roles.branch_id', $branchId);
+                if ($allowedGlobalRoles !== []) {
+                    $q->orWhere(function ($sq) use ($allowedGlobalRoles) {
+                        $sq->whereNull('model_has_roles.branch_id')
+                           ->whereIn('roles.name', $allowedGlobalRoles);
+                    });
+                }
+            })->exists();
+        }
+
+        return $query->exists();
     }
 
     public function hasGlobalBusinessRole(): bool
     {
-        return $this->role !== null
-            && in_array($this->role->code, config('business-authorization.global_role_codes', []), true);
+        $registrar = app(\Spatie\Permission\PermissionRegistrar::class);
+        $originalTeamId = $registrar->getPermissionsTeamId();
+        $registrar->setPermissionsTeamId(null);
+        $hasGlobal = $this->hasAnyRole(config('business-authorization.global_role_codes', []));
+        $registrar->setPermissionsTeamId($originalTeamId);
+        return $hasGlobal;
     }
 
     public function isGeneralManager(): bool
     {
-        return $this->role?->code === 'general_manager';
+        $registrar = app(\Spatie\Permission\PermissionRegistrar::class);
+        $originalTeamId = $registrar->getPermissionsTeamId();
+        $registrar->setPermissionsTeamId(null);
+        $isGm = $this->hasRole('general_manager');
+        $registrar->setPermissionsTeamId($originalTeamId);
+        return $isGm;
     }
 
     /**
@@ -149,7 +164,13 @@ final class User extends Authenticatable
      */
     public function activeBusinessBranchIds(): array
     {
-        return $this->branch_id === null ? [] : [$this->branch_id];
+        return $this->businessRoles()
+            ->whereNotNull('model_has_roles.branch_id')
+            ->pluck('model_has_roles.branch_id')
+            ->map(static fn (mixed $branchId): int => (int) $branchId)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

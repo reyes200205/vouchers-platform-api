@@ -13,8 +13,6 @@ return new class extends Migration
             $table->unsignedBigInteger('person_id');
             $table->string('username', 80)->unique();
             $table->string('password_hash', 255);
-            $table->unsignedBigInteger('role_id');
-            $table->unsignedBigInteger('branch_id')->nullable();
             $table->boolean('is_active')->default(true);
             $table->boolean('requires_vpn')->default(false);
             $table->enum('login_channel', ['WEB', 'VPN_WEB', 'MOVIL'])->default('WEB');
@@ -26,8 +24,6 @@ return new class extends Migration
 
             $table->foreign('person_id')->references('id')->on('people');
             $table->unique('person_id');
-            $table->foreign('role_id')->references('id')->on('roles')->restrictOnDelete();
-            $table->foreign('branch_id')->references('id')->on('branches')->nullOnDelete();
         });
     }
 

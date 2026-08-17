@@ -29,8 +29,7 @@ final class StoreEmployeeService
      * } $data
      */
     // NOTA: este servicio sigue roto de forma preexistente porque `App\Models\Employee`
-    // y la tabla `employees` no existen en el proyecto. Fuera de alcance de esta tarea
-    // (solo se corrigio la asignacion de rol para no depender de Spatie).
+    // y la tabla `employees` no existen en el proyecto. Fuera de alcance de esta tarea.
     public function execute(array $data): Employee
     {
         return DB::transaction(static function () use ($data): Employee {
@@ -43,8 +42,12 @@ final class StoreEmployeeService
                 'name' => $fullName,
                 'email' => $data['email'],
                 'password' => Hash::make($randomPassword),
-                'role_id' => $role->id,
+            ]);
+
+            $user->businessRoles()->attach($role, [
                 'branch_id' => $data['branch_id'],
+                'assigned_at' => now(),
+                'is_primary' => true,
             ]);
 
             // 2. Create person record

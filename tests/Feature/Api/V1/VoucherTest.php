@@ -23,17 +23,22 @@ uses(RefreshDatabase::class);
 function signInBusinessRole(User $user, string $roleCode, Branch $branch): void
 {
     $role = Role::query()->firstOrCreate(['code' => $roleCode], ['name' => $roleCode]);
-    $user->update(['role_id' => $role->id, 'branch_id' => $branch->id]);
+    $user->businessRoles()->attach($role, [
+        'branch_id' => $branch->id,
+        'assigned_at' => now(),
+        'is_primary' => true,
+    ]);
     Sanctum::actingAs($user);
 }
 
 function signInDistributor(User $user, Distributor $distributor): void
 {
     $role = Role::query()->firstOrCreate(['code' => 'distributor'], ['name' => 'distributor']);
-    $user->update([
-        'person_id' => $distributor->person_id,
-        'role_id' => $role->id,
+    $user->update(['person_id' => $distributor->person_id]);
+    $user->businessRoles()->attach($role, [
         'branch_id' => $distributor->branch_id,
+        'assigned_at' => now(),
+        'is_primary' => true,
     ]);
     Sanctum::actingAs($user);
 }

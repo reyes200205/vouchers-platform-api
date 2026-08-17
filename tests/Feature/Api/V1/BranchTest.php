@@ -12,12 +12,15 @@ uses(RefreshDatabase::class);
 
 function actingAsBusinessRole(User $user, string $roleCode): void
 {
-    $role = Role::query()->create([
-        'code' => $roleCode,
-        'name' => str($roleCode)->replace('_', ' ')->title(),
-    ]);
+    $role = Role::query()->firstOrCreate(
+        ['name' => $roleCode, 'guard_name' => 'web'],
+        ['code' => $roleCode]
+    );
 
-    $user->update(['role_id' => $role->id]);
+    $user->businessRoles()->attach($role, [
+        'assigned_at' => now(),
+        'is_primary' => true,
+    ]);
 
     Sanctum::actingAs($user);
 }

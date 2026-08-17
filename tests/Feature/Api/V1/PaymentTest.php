@@ -19,7 +19,11 @@ uses(RefreshDatabase::class);
 function paymentSignInBusinessRole(User $user, string $roleCode, Branch $branch): void
 {
     $role = Role::query()->firstOrCreate(['code' => $roleCode], ['name' => $roleCode]);
-    $user->update(['role_id' => $role->id, 'branch_id' => $branch->id]);
+    $user->businessRoles()->attach($role, [
+        'branch_id' => $branch->id,
+        'assigned_at' => now(),
+        'is_primary' => true,
+    ]);
     Sanctum::actingAs($user);
 }
 
@@ -203,8 +207,11 @@ describe('Customer payments', function (): void {
         $role = Role::query()->firstOrCreate(['code' => 'distributor'], ['name' => 'distributor']);
         $distributorUser = User::factory()->create([
             'person_id' => $distributor->person_id,
-            'role_id' => $role->id,
+        ]);
+        $distributorUser->businessRoles()->attach($role, [
             'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
         ]);
         Sanctum::actingAs($distributorUser);
 

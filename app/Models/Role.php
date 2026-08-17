@@ -4,33 +4,35 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Permission\Models\Role as SpatieRole;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * Catálogo de roles de negocio (independiente de Spatie Permission).
+ * Modelo de Rol compatible con Spatie Permission y el sistema legacy.
  */
-#[Fillable([
-    'code',
-    'name',
-    'description',
-    'is_active',
-])]
-final class Role extends Model
+final class Role extends SpatieRole
 {
     use SoftDeletes;
+
+    protected $fillable = [
+        'name',
+        'guard_name',
+        'branch_id',
+        'code',
+        'description',
+        'is_active',
+    ];
 
     protected $casts = [
         'is_active' => 'boolean',
     ];
 
-    /**
-     * @return HasMany<User, $this>
-     */
-    public function users(): HasMany
+    protected static function booted(): void
     {
-        return $this->hasMany(User::class);
+        static::saving(static function (self $role): void {
+            if (empty($role->code)) {
+                $role->code = $role->name;
+            }
+        });
     }
 }

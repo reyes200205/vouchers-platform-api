@@ -20,8 +20,8 @@ final class GeneralManagerController extends ApiController
     public function store(StoreGeneralManagerRequest $request, AuditLogger $audit): JsonResponse
     {
         $role = Role::query()->firstOrCreate(
-            ['code' => 'general_manager'],
-            ['name' => 'Gerente General', 'is_active' => true]
+            ['name' => 'general_manager', 'guard_name' => 'web'],
+            ['code' => 'general_manager', 'description' => 'Gerente General', 'is_active' => true]
         );
 
         $user = DB::transaction(function () use ($request, $role): User {
@@ -30,20 +30,26 @@ final class GeneralManagerController extends ApiController
                 'last_name' => $request->last_name,
             ]);
 
-            return User::query()->create([
+            $user = User::query()->create([
                 'person_id' => $person->id,
                 'username' => $request->username,
                 'password_hash' => Hash::make($request->password),
-                'role_id' => $role->id,
-                'branch_id' => null,
                 'is_active' => true,
             ]);
+
+            $user->businessRoles()->attach($role, [
+                'branch_id' => null,
+                'assigned_at' => now(),
+                'is_primary' => true,
+            ]);
+
+            return $user;
         });
 
         $audit->record($request, 'GENERAL_MANAGER_CREATED', 'users', 'Gerente general creado.', null, ['user_id' => $user->id]);
 
         return $this->created(
-            new UserResource($user->load(['person', 'role', 'branch'])),
+            new UserResource($user->load(['person', 'businessRoles'])),
             'Gerente general creado exitosamente'
         );
     }
