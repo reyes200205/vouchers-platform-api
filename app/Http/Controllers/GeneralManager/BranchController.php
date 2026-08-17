@@ -18,8 +18,15 @@ final class BranchController extends ApiController
 {
     public function index(Request $request): JsonResponse
     {
-        $branches = Branch::query()
-            ->paginate($request->integer('per_page', 15))
+        $user = $request->user();
+        $query = Branch::query();
+
+        if ($user && ! $user->hasGlobalBusinessRole()) {
+            $branchIds = $user->activeBusinessBranchIds();
+            $query->whereIn('id', $branchIds);
+        }
+
+        $branches = $query->paginate($request->integer('per_page', 15))
             ->appends($request->query());
 
         return $this->success(
@@ -49,14 +56,27 @@ final class BranchController extends ApiController
 
     public function store(StoreBranchRequest $request, AuditLogger $audit): JsonResponse
     {
-        $branch = Branch::query()->create($request->safe()->except('manager_user_id'));
+        $data = $request->safe()->except('manager_user_id');
+
+        if (!isset($data['code']) || empty($data['code'])) {
+            $slug = \Illuminate\Support\Str::slug($request->name);
+            $code = 'BR-' . strtoupper($slug);
+
+            $originalCode = $code;
+            $counter = 1;
+            while (Branch::where('code', $code)->exists()) {
+                $code = $originalCode . '-' . $counter;
+                $counter++;
+            }
+            $data['code'] = $code;
+        }
+
+        $branch = Branch::query()->create($data);
 
         if ($request->filled('manager_user_id')) {
             $manager = User::findOrFail($request->manager_user_id);
-            if ($manager->hasRole('branch_manager')) {
-                app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($branch->id);
-                $manager->assignRole('branch_manager');
-            }
+            app(\Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($branch->id);
+            $manager->assignRole('branch_manager');
         }
 
         $audit->record($request, 'BRANCH_CREATED', 'branches', 'Sucursal creada.', $branch->id);
@@ -81,9 +101,7 @@ final class BranchController extends ApiController
 
             if ($managerUserId) {
                 $manager = User::findOrFail($managerUserId);
-                if ($manager->hasRole('branch_manager')) {
-                    $manager->assignRole('branch_manager');
-                }
+                $manager->assignRole('branch_manager');
             }
         }
 

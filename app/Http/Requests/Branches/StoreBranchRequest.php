@@ -25,7 +25,7 @@ final class StoreBranchRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'code' => ['required', 'string', 'max:30', 'unique:branches,code'],
+            'code' => ['nullable', 'string', 'max:30', 'unique:branches,code'],
             'name' => ['required', 'string', 'max:150'],
             'address' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
