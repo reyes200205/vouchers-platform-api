@@ -7,6 +7,7 @@ return [
 
     'abilities' => [
         'platform.view' => ['administrator', 'general_manager'],
+        'users.manage' => ['administrator'],
         'branches.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator', 'verifier', 'cashier'],
         'branches.manage' => ['general_manager'],
         'branch-settings.view' => ['administrator', 'general_manager', 'branch_manager'],

@@ -6,7 +6,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -28,19 +27,10 @@ final class Role extends Model
     ];
 
     /**
-     * @return BelongsToMany<User, $this>
+     * @return HasMany<User, $this>
      */
-    public function users(): BelongsToMany
+    public function users(): HasMany
     {
-        return $this->belongsToMany(User::class, 'user_role')
-            ->withPivot(['branch_id', 'assigned_at', 'revoked_at', 'is_primary']);
-    }
-
-    /**
-     * @return HasMany<UserRole, $this>
-     */
-    public function userRoles(): HasMany
-    {
-        return $this->hasMany(UserRole::class);
+        return $this->hasMany(User::class);
     }
 }

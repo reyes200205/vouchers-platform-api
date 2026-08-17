@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Database\Factories;
 
 use App\Models\Person;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -31,6 +32,11 @@ final class UserFactory extends Factory
             'person_id' => Person::factory(),
             'username' => fake()->unique()->userName(),
             'password_hash' => self::$password ??= Hash::make('password'),
+            'role_id' => fn (): int => Role::query()->firstOrCreate(
+                ['code' => 'cashier'],
+                ['name' => 'Cajera', 'is_active' => true]
+            )->id,
+            'branch_id' => null,
             'is_active' => true,
             'requires_vpn' => false,
             'login_channel' => 'WEB',

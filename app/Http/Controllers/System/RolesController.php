@@ -6,7 +6,7 @@ namespace App\Http\Controllers\System;
 
 use App\Http\Controllers\ApiController;
 use App\Http\Resources\RoleResource;
-use Spatie\Permission\Models\Role;
+use App\Models\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

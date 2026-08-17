@@ -6,11 +6,11 @@ namespace App\Services\Employees;
 
 use App\Models\Employee;
 use App\Models\Person;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Spatie\Permission\Models\Role;
 
 final class StoreEmployeeService
 {
@@ -28,22 +28,24 @@ final class StoreEmployeeService
      *     role: int
      * } $data
      */
+    // NOTA: este servicio sigue roto de forma preexistente porque `App\Models\Employee`
+    // y la tabla `employees` no existen en el proyecto. Fuera de alcance de esta tarea
+    // (solo se corrigio la asignacion de rol para no depender de Spatie).
     public function execute(array $data): Employee
     {
         return DB::transaction(static function () use ($data): Employee {
             $fullName = trim($data['first_name'] . ' ' . $data['last_name']);
             $randomPassword = Str::random(16);
+            $role = Role::query()->findOrFail($data['role']);
 
             // 1. Create user with a random password
             $user = User::create([
                 'name' => $fullName,
                 'email' => $data['email'],
                 'password' => Hash::make($randomPassword),
+                'role_id' => $role->id,
+                'branch_id' => $data['branch_id'],
             ]);
-
-            // Assign the validated role from the database by ID
-            $role = Role::findById($data['role'], 'web');
-            $user->assignRole($role);
 
             // 2. Create person record
             $person = Person::create([

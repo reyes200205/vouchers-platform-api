@@ -10,24 +10,26 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Spatie\Permission\Traits\HasRoles;
 
 /**
  * Usuario del sistema (1 a 1 con Person). Autenticacion por username/password_hash.
+ * Cada usuario tiene exactamente un rol de negocio (role_id) y, opcionalmente, una sucursal.
  */
 #[Fillable([
     'person_id',
     'username',
     'password_hash',
+    'role_id',
+    'branch_id',
     'is_active',
     'requires_vpn',
     'login_channel',
+    'last_login_at',
 ])]
 #[Hidden([
     'password_hash',
@@ -38,7 +40,6 @@ final class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasApiTokens;
     use HasFactory;
-    use HasRoles;
     use Notifiable;
     use SoftDeletes;
 
@@ -51,22 +52,23 @@ final class User extends Authenticatable
     }
 
     /**
-     * Roles de negocio asignados (tabla propia `roles` via pivote `user_role`).
+     * Rol de negocio asignado (tabla propia `roles`).
      *
-     * @return BelongsToMany<Role, $this>
+     * @return BelongsTo<Role, $this>
      */
-    public function businessRoles(): BelongsToMany
+    public function role(): BelongsTo
     {
-        return $this->belongsToMany(Role::class, 'user_role')
-            ->withPivot(['branch_id', 'assigned_at', 'revoked_at', 'is_primary']);
+        return $this->belongsTo(Role::class);
     }
 
     /**
-     * @return HasMany<UserRole, $this>
+     * Sucursal a la que pertenece el usuario (nula para roles globales).
+     *
+     * @return BelongsTo<Branch, $this>
      */
-    public function userRoles(): HasMany
+    public function branch(): BelongsTo
     {
-        return $this->hasMany(UserRole::class);
+        return $this->belongsTo(Branch::class);
     }
 
     /**
@@ -114,35 +116,27 @@ final class User extends Authenticatable
         $abilities = config('business-authorization.abilities', []);
         $allowedRoleCodes = $abilities[$ability] ?? [];
 
-        if ($allowedRoleCodes === []) {
+        if ($allowedRoleCodes === [] || $this->role === null || ! in_array($this->role->code, $allowedRoleCodes, true)) {
             return false;
         }
 
-        $roles = $this->businessRoles()
-            ->wherePivotNull('revoked_at')
-            ->whereIn('roles.code', $allowedRoleCodes);
-
         if ($branchId === null) {
-            return $roles->exists();
+            return true;
         }
 
-        $globalRoleCodes = array_intersect($allowedRoleCodes, config('business-authorization.global_role_codes', []));
+        if ($this->branch_id === $branchId) {
+            return true;
+        }
 
-        return $roles->where(function ($query) use ($branchId, $globalRoleCodes): void {
-            $query->where('user_role.branch_id', $branchId);
+        $globalRoleCodes = config('business-authorization.global_role_codes', []);
 
-            if ($globalRoleCodes !== []) {
-                $query->orWhereIn('roles.code', $globalRoleCodes);
-            }
-        })->exists();
+        return in_array($this->role->code, $globalRoleCodes, true);
     }
 
     public function hasGlobalBusinessRole(): bool
     {
-        return $this->businessRoles()
-            ->wherePivotNull('revoked_at')
-            ->whereIn('roles.code', config('business-authorization.global_role_codes', []))
-            ->exists();
+        return $this->role !== null
+            && in_array($this->role->code, config('business-authorization.global_role_codes', []), true);
     }
 
     /**
@@ -150,14 +144,7 @@ final class User extends Authenticatable
      */
     public function activeBusinessBranchIds(): array
     {
-        return $this->businessRoles()
-            ->wherePivotNull('revoked_at')
-            ->whereNotNull('user_role.branch_id')
-            ->pluck('user_role.branch_id')
-            ->map(static fn (mixed $branchId): int => (int) $branchId)
-            ->unique()
-            ->values()
-            ->all();
+        return $this->branch_id === null ? [] : [$this->branch_id];
     }
 
     /**

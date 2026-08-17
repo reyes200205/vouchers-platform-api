@@ -14,11 +14,7 @@ uses(RefreshDatabase::class);
 function signInWithRole(User $user, string $roleCode, Branch $branch): void
 {
     $role = Role::query()->firstOrCreate(['code' => $roleCode], ['name' => $roleCode]);
-    $user->businessRoles()->attach($role, [
-        'branch_id' => $branch->id,
-        'assigned_at' => now(),
-        'is_primary' => true,
-    ]);
+    $user->update(['role_id' => $role->id, 'branch_id' => $branch->id]);
     Sanctum::actingAs($user);
 }
 

@@ -16,10 +16,12 @@ final class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // UserSeeder y BranchAndEmployeeSeeder quedan fuera del seeding automatico:
+        // dependen de modelos/columnas que no existen en el esquema real (Employee,
+        // Address, users.name/email/password). El primer administrador se crea con
+        // el comando `php artisan app:create-admin`.
         $this->call([
             RolesAndPermissionSeeder::class,
-            UserSeeder::class,
-            BranchAndEmployeeSeeder::class,
         ]);
     }
 }

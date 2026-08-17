@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Administrator\GeneralManagerController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\BranchManager\CustomerChangeRequestController;
 use App\Http\Controllers\Cashier\CustomerController as CashierCustomerController;
@@ -47,6 +48,10 @@ Route::get('ping', fn () => response()->json([
 | Routes for
 */
 Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function (): void {
+    Route::middleware('business.ability:users.manage')->group(function (): void {
+        Route::post('/general-managers', [GeneralManagerController::class, 'store'])->name('general-managers.store');
+    });
+
     Route::middleware('business.ability:branches.view')->group(function (): void {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');
         Route::get('/branches/{branch}', [BranchController::class, 'show'])->middleware('business.ability:branches.view,branch')->name('branches.show');
@@ -119,20 +124,6 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
 Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function (): void {
     Route::get('system/roles', [RolesController::class, 'index'])->name('system.roles.index');
 });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 Route::prefix('auth')->group(function (): void {
     // Public routes (5/min - brute force protection)

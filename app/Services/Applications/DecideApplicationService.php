@@ -63,6 +63,11 @@ final class DecideApplicationService
                 'activated_at' => now(),
             ]);
 
+            $role = Role::query()->firstOrCreate(
+                ['code' => 'distributor'],
+                ['name' => 'Distribuidora', 'description' => 'Usuario operativo asociado a una distribuidora.', 'is_active' => true]
+            );
+
             $activationToken = Str::random(48);
             $username = $this->uniqueUsername($application);
             $user = User::query()->firstOrCreate(
@@ -70,21 +75,15 @@ final class DecideApplicationService
                 [
                     'username' => $username,
                     'password_hash' => Hash::make($activationToken),
+                    'role_id' => $role->id,
+                    'branch_id' => $application->branch_id,
                     'is_active' => true,
                 ]
             );
 
-            $role = Role::query()->firstOrCreate(
-                ['code' => 'distributor'],
-                ['name' => 'Distribuidora', 'description' => 'Usuario operativo asociado a una distribuidora.', 'is_active' => true]
-            );
-            $user->businessRoles()->syncWithoutDetaching([
-                $role->id => [
-                    'branch_id' => $application->branch_id,
-                    'assigned_at' => now(),
-                    'is_primary' => true,
-                ],
-            ]);
+            if ($user->wasRecentlyCreated === false) {
+                $user->update(['role_id' => $role->id, 'branch_id' => $application->branch_id]);
+            }
 
             DistributorActivation::query()->updateOrCreate(
                 ['user_id' => $user->id],

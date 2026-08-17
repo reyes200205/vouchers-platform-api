@@ -29,14 +29,17 @@ final class UserResource extends JsonResource
                 'first_name' => $this->person?->first_name,
                 'last_name' => $this->person?->last_name,
             ]),
-            'roles' => $this->whenLoaded('businessRoles', fn () => $this->businessRoles
-                ->filter(fn ($role) => $role->pivot->revoked_at === null)
-                ->map(fn ($role) => [
-                    'code' => $role->code,
-                    'name' => $role->name,
-                    'branch_id' => $role->pivot->branch_id,
-                    'is_primary' => (bool) $role->pivot->is_primary,
-                ])->values()),
+            'role' => $this->whenLoaded('role', fn () => $this->role ? [
+                'code' => $this->role->code,
+                'name' => $this->role->name,
+            ] : null),
+            'branch_id' => $this->branch_id,
+            'branch' => $this->whenLoaded('branch', fn () => $this->branch ? [
+                'id' => $this->branch->id,
+                'code' => $this->branch->code,
+                'name' => $this->branch->name,
+            ] : null),
+            'last_login_at' => $this->last_login_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

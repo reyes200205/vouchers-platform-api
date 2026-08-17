@@ -2,17 +2,18 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Requests\Auth;
+namespace App\Http\Requests\Users;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
+ * @property string $first_name
+ * @property string $last_name
  * @property string $username
  * @property string $password
- * @property string|null $channel
  */
-final class LoginRequest extends FormRequest
+final class StoreGeneralManagerRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -25,9 +26,10 @@ final class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'username' => ['required', 'string', 'max:100'],
-            'password' => ['required', 'string'],
-            'channel' => ['nullable', 'string', 'in:WEB,VPN_WEB,MOVIL'],
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name' => ['required', 'string', 'max:100'],
+            'username' => ['required', 'string', 'max:80', 'unique:users,username'],
+            'password' => ['required', 'string', 'min:8'],
         ];
     }
 }

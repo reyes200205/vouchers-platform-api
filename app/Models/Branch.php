@@ -30,11 +30,11 @@ final class Branch extends Model
     ];
 
     /**
-     * @return HasMany<UserRole, $this>
+     * @return HasMany<User, $this>
      */
-    public function userRoles(): HasMany
+    public function users(): HasMany
     {
-        return $this->hasMany(UserRole::class);
+        return $this->hasMany(User::class);
     }
 
     /**

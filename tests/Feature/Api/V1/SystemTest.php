@@ -25,8 +25,10 @@ describe('System Roles', function (): void {
                     'data' => [
                         '*' => [
                             'id',
+                            'code',
                             'name',
-                            'guard_name',
+                            'description',
+                            'is_active',
                         ]
                     ],
                     'links',

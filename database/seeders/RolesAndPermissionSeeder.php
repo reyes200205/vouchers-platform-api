@@ -4,57 +4,31 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Models\Role;
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
-use Spatie\Permission\PermissionRegistrar;
 
 final class RolesAndPermissionSeeder extends Seeder
 {
     /**
-     * Run the database seeds.
+     * Catalogo de roles de negocio (tabla propia `roles`, sin Spatie).
      */
     public function run(): void
     {
-        // Reset cached roles and permissions
-        app()->make(PermissionRegistrar::class)->forgetCachedPermissions();
-
-        // 2. create roles
         $roles = [
-            'general_manager',
-            'branch_manager',
-            'coordinator',
-            'verifier',
-            'cashier',
-            'distributor',
-            'administrator',
+            'administrator' => 'Administrador',
+            'general_manager' => 'Gerente General',
+            'branch_manager' => 'Gerente de Sucursal',
+            'coordinator' => 'Coordinador',
+            'verifier' => 'Verificador',
+            'cashier' => 'Cajera',
+            'distributor' => 'Distribuidora',
         ];
 
-        foreach ($roles as $roleName) {
-            Role::findOrCreate($roleName, 'web');
+        foreach ($roles as $code => $name) {
+            Role::query()->firstOrCreate(
+                ['code' => $code],
+                ['name' => $name, 'is_active' => true]
+            );
         }
-
-        // 3. create permissions
-        $permissions = [
-            'branches_view',
-            'branches_create',
-            'branches_update',
-            'branches_delete',
-        ];
-
-        foreach ($permissions as $permissionName) {
-            Permission::findOrCreate($permissionName, 'web');
-        }
-
-        app()->make(PermissionRegistrar::class)->forgetCachedPermissions();
-
-        // 4. Assign permissions to roles
-        $generalManager = Role::findByName('general_manager', 'web');
-        $generalManager->syncPermissions([
-            'branches_view',
-            'branches_create',
-            'branches_update',
-            'branches_delete',
-        ]);
     }
 }

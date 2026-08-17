@@ -28,7 +28,7 @@ final class AuditLogger
             'event_type' => $eventType,
             'user_id' => $user?->id,
             'user_name' => $user?->username,
-            'user_role' => $user?->businessRoles()->wherePivotNull('revoked_at')->value('roles.code'),
+            'user_role' => $user?->role?->code,
             'branch_id' => $branchId,
             'module' => $module,
             'description' => $description,

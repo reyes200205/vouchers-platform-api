@@ -1,0 +1,28 @@
+Categorias:
+Cobre 3%
+Plata 6%
+Oro 10%
+Ejemplo del comportamiento: (pago anticipado, pago puntual, pago fuera de tiempo)
+8 Quincenas Prestamo $15,000
+10% comisión
+$100 de seguro (varia segun la cantidad)
+5% por quincena
+6% (PLATA) del costo del producto (ganancia distribuidora) / las quincenas = 112.5
+300 Comisión por no pago
+15,000 + 1,500 + 100 + 6,000 = 22,600
+22,600 / 8 = Pago Quincenal - comisión * o sin comisión (se suma multa a la deudo total)
+Solo para pagos anticipados
+Total de productos otorgados en el corte / 1,200 (redondeo siempre el piso) resultado * 3 total de
+puntos
+1 pts = $2
+Pagos fuera de tiempo, se elimina el 20% del total de puntos
+Notificaciones. A la distribuidora: Cuando un vale sea feriado, cuando el corte este listo, cuando el corte de puntos
+este listo, cuando su limite de credito haya sido autorizado e incrementado. Verificador: Cuando una presolicitud este terminada
+Coordinador: Cuando un verificador halla evaluado una de sus solicitudes, cuando un cliente final
+cambie a moroso y el aurotice la solicitud. Gerente: Cuando una solicitud haya sido verificada, cuando termine un corte de pagos y de puntos. Cajera: Cuando una distribuidora haya sido deshabilitada o este en cuenta morosa, Cuando un clientefinal cambie de estado a moroso. Reportes. Distribuidoras Morosas y saldos
+Saldo de cortes
+Saldo de puntos x distribuidora al corte
+Presolicitudes pendientes y validadas
+Pagos de distribuidoras. Conciliación
+En las relaciones de pago se les genera una linea de referencia unica por cada corte, con esta linea
+Se hace la conciliación de que distribuidora pago, que dia y que total.

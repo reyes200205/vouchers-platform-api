@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Spatie\Permission\Models\Role;
 
 /**
  * @mixin Role
@@ -20,8 +20,10 @@ final class RoleResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'code' => $this->code,
             'name' => $this->name,
-            'guard_name' => $this->guard_name,
+            'description' => $this->description,
+            'is_active' => $this->is_active,
         ];
     }
 }

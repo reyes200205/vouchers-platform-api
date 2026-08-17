@@ -17,10 +17,7 @@ function actingAsBusinessRole(User $user, string $roleCode): void
         'name' => str($roleCode)->replace('_', ' ')->title(),
     ]);
 
-    $user->businessRoles()->attach($role, [
-        'assigned_at' => now(),
-        'is_primary' => true,
-    ]);
+    $user->update(['role_id' => $role->id]);
 
     Sanctum::actingAs($user);
 }
