@@ -37,6 +37,21 @@ final class UserResource extends JsonResource
                     'branch_id' => $role->pivot->branch_id,
                     'is_primary' => (bool) $role->pivot->is_primary,
                 ])->values()),
+            'permissions' => $this->whenLoaded('businessRoles', function () {
+                $abilities = config('business-authorization.abilities', []);
+                $userRoleNames = $this->businessRoles
+                    ->filter(fn ($role) => $role->pivot->revoked_at === null)
+                    ->pluck('name')
+                    ->toArray();
+
+                $userAbilities = [];
+                foreach ($abilities as $ability => $roles) {
+                    if (array_intersect($roles, $userRoleNames) !== []) {
+                        $userAbilities[] = $ability;
+                    }
+                }
+                return $userAbilities;
+            }),
             'last_login_at' => $this->last_login_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
