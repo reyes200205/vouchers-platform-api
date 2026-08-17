@@ -22,6 +22,9 @@ final class AuthController extends ApiController
         $user = User::query()
             ->with(['person', 'businessRoles'])
             ->where('username', $request->username)
+            ->orWhereHas('person', function ($query) use ($request) {
+                $query->where('email', $request->username);
+            })
             ->first();
 
         if (! $user || ! $user->is_active || ! Hash::check($request->password, $user->getAuthPassword())) {

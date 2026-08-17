@@ -22,6 +22,8 @@ final class DatabaseSeeder extends Seeder
         // el comando `php artisan app:create-admin`.
         $this->call([
             RolesAndPermissionSeeder::class,
+            UserSeeder::class,
+            BranchAndEmployeeSeeder::class,
         ]);
     }
 }
