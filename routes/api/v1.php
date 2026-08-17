@@ -27,8 +27,10 @@ use App\Http\Controllers\GeneralManager\ApplicationDecisionController;
 use App\Http\Controllers\GeneralManager\BranchController;
 use App\Http\Controllers\GeneralManager\CreditIncreaseController as GeneralManagerCreditIncreaseController;
 use App\Http\Controllers\GeneralManager\CutoffController as GeneralManagerCutoffController;
+use App\Http\Controllers\GeneralManager\DashboardController;
 use App\Http\Controllers\GeneralManager\DistributorCategoryController;
 use App\Http\Controllers\GeneralManager\FinancialProductController;
+use App\Http\Controllers\GeneralManager\InboxController;
 use App\Http\Controllers\GeneralManager\PointSettingController;
 use App\Http\Controllers\GeneralManager\PointController as GeneralManagerPointController;
 use App\Http\Controllers\GeneralManager\ReconciliationController as GeneralManagerReconciliationController;
@@ -70,6 +72,10 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:branches.manage')->group(function (): void {
         Route::get('/branches/available-managers', [BranchController::class, 'availableManagers'])->name('branches.available-managers');
     });
+
+    Route::middleware('business.ability:inbox.view')->get('/general/inbox', [InboxController::class, 'index'])->name('general.inbox');
+
+    Route::middleware('business.ability:platform.view')->get('/stats/dashboard', [DashboardController::class, 'index'])->name('stats.dashboard');
 
     Route::middleware('business.ability:branches.view')->group(function (): void {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');
