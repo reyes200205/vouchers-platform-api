@@ -67,6 +67,10 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
         Route::post('/general-managers', [GeneralManagerController::class, 'store'])->name('general-managers.store');
     });
 
+    Route::middleware('business.ability:branches.manage')->group(function (): void {
+        Route::get('/branches/available-managers', [BranchController::class, 'availableManagers'])->name('branches.available-managers');
+    });
+
     Route::middleware('business.ability:branches.view')->group(function (): void {
         Route::get('/branches', [BranchController::class, 'index'])->name('branches.index');
         Route::get('/branches/{branch}', [BranchController::class, 'show'])->middleware('business.ability:branches.view,branch')->name('branches.show');

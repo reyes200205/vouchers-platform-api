@@ -26,6 +26,7 @@ final class UpdateBranchRequest extends FormRequest
             'address' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
             'is_active' => ['sometimes', 'boolean'],
+            'manager_user_id' => ['nullable', 'integer', 'exists:users,id'],
         ];
     }
 }

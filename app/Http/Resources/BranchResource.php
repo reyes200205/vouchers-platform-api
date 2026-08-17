@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Models\Branch;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -18,6 +19,22 @@ final class BranchResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $manager = null;
+        $registrar = app(\Spatie\Permission\PermissionRegistrar::class);
+        $originalTeamId = $registrar->getPermissionsTeamId();
+        $registrar->setPermissionsTeamId($this->id);
+
+        $managerUser = User::role('branch_manager')->first();
+        if ($managerUser) {
+            $managerUser->loadMissing('person');
+            $manager = [
+                'id' => $managerUser->id,
+                'username' => $managerUser->username,
+                'name' => $managerUser->person ? trim($managerUser->person->first_name . ' ' . $managerUser->person->last_name) : $managerUser->username,
+            ];
+        }
+        $registrar->setPermissionsTeamId($originalTeamId);
+
         return [
             'id' => $this->id,
             'code' => $this->code,
@@ -25,6 +42,7 @@ final class BranchResource extends JsonResource
             'address' => $this->address,
             'phone' => $this->phone,
             'is_active' => $this->is_active,
+            'manager' => $manager,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
