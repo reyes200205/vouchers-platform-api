@@ -21,9 +21,10 @@ final class DatabaseSeeder extends Seeder
         // Address, users.name/email/password). El primer administrador se crea con
         // el comando `php artisan app:create-admin`.
         $this->call([
-            RolesAndPermissionSeeder::class,
-            UserSeeder::class,
-            BranchAndEmployeeSeeder::class,
+            // RolesAndPermissionSeeder::class,
+            // UserSeeder::class,
+            // BranchAndEmployeeSeeder::class,
+            AlessandroDemoSeeder::class,
         ]);
     }
 }
