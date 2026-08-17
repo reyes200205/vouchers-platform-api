@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Models\Branch;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -24,13 +25,15 @@ final class BranchResource extends JsonResource
         $originalTeamId = $registrar->getPermissionsTeamId();
         $registrar->setPermissionsTeamId($this->id);
 
-        $managerUser = User::role('branch_manager')->first();
+        $managerUser = Role::where('name', 'branch_manager')->where('guard_name', 'web')->exists()
+            ? User::role('branch_manager')->first()
+            : null;
         if ($managerUser) {
             $managerUser->loadMissing('person');
             $manager = [
                 'id' => $managerUser->id,
                 'username' => $managerUser->username,
-                'name' => $managerUser->person ? trim($managerUser->person->first_name . ' ' . $managerUser->person->last_name) : $managerUser->username,
+                'name' => $managerUser->person ? trim($managerUser->person->first_name.' '.$managerUser->person->last_name) : $managerUser->username,
             ];
         }
         $registrar->setPermissionsTeamId($originalTeamId);
