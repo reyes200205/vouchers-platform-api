@@ -11,7 +11,7 @@ use App\Models\Application;
 use App\Models\Distributor;
 use App\Models\DistributorActivation;
 use App\Models\ManagerDecisionLog;
-use App\Models\Role;
+use Spatie\Permission\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -74,16 +74,11 @@ final class DecideApplicationService
                 ]
             );
 
-            $role = Role::query()->firstOrCreate(
-                ['code' => 'distributor'],
-                ['name' => 'Distribuidora', 'description' => 'Usuario operativo asociado a una distribuidora.', 'is_active' => true]
-            );
-            $user->businessRoles()->syncWithoutDetaching([
-                $role->id => [
-                    'branch_id' => $application->branch_id,
-                    'assigned_at' => now(),
-                    'is_primary' => true,
-                ],
+            $role = Role::findOrCreate('distributor', 'web');
+            $user->businessRoles()->attach($role, [
+                'branch_id' => $application->branch_id,
+                'assigned_at' => now(),
+                'is_primary' => true,
             ]);
 
             DistributorActivation::query()->updateOrCreate(
