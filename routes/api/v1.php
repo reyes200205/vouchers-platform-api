@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Administrator\GeneralManagerController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\BranchManager\BranchSettingController;
 use App\Http\Controllers\BranchManager\CustomerChangeRequestController;
+use App\Http\Controllers\BranchManager\CutoffController as BranchManagerCutoffController;
 use App\Http\Controllers\Cashier\CustomerController as CashierCustomerController;
 use App\Http\Controllers\Cashier\PaymentController as CashierPaymentController;
 use App\Http\Controllers\Cashier\ReconciliationController as CashierReconciliationController;
 use App\Http\Controllers\Cashier\VoucherController as CashierVoucherController;
 use App\Http\Controllers\Checker\VerificadorController;
-use App\Http\Controllers\BranchManager\BranchSettingController;
-use App\Http\Controllers\BranchManager\CutoffController as BranchManagerCutoffController;
 use App\Http\Controllers\Coordinator\CoordinadorController;
 use App\Http\Controllers\Coordinator\CreditIncreaseController as CoordinatorCreditIncreaseController;
 use App\Http\Controllers\Coordinator\CustomerController;
-use App\Http\Controllers\Coordinator\PaymentController as CoordinatorPaymentController;
 use App\Http\Controllers\Coordinator\CustomerTransferController;
+use App\Http\Controllers\Coordinator\PaymentController as CoordinatorPaymentController;
 use App\Http\Controllers\Coordinator\VoucherController as CoordinatorVoucherController;
 use App\Http\Controllers\Distributor\CustomerController as DistributorCustomerController;
 use App\Http\Controllers\Distributor\CustomerTransferController as DistributorCustomerTransferController;
@@ -31,9 +31,10 @@ use App\Http\Controllers\GeneralManager\DashboardController;
 use App\Http\Controllers\GeneralManager\DistributorCategoryController;
 use App\Http\Controllers\GeneralManager\FinancialProductController;
 use App\Http\Controllers\GeneralManager\InboxController;
-use App\Http\Controllers\GeneralManager\PointSettingController;
 use App\Http\Controllers\GeneralManager\PointController as GeneralManagerPointController;
+use App\Http\Controllers\GeneralManager\PointSettingController;
 use App\Http\Controllers\GeneralManager\ReconciliationController as GeneralManagerReconciliationController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\System\RolesController;
 use Illuminate\Support\Facades\Route;
 
@@ -176,8 +177,10 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:points.view')->get('/point-redemptions', [GeneralManagerPointController::class, 'index'])->name('point-redemptions.index');
     Route::middleware('business.ability:points.redeem.decide,pointRedemption')->post('/point-redemptions/{pointRedemption}/decision', [GeneralManagerPointController::class, 'decide'])->name('point-redemptions.decide');
     Route::middleware('business.ability:points.category,distributor')->patch('/distributors/{distributor}/category', [GeneralManagerPointController::class, 'updateCategory'])->name('distributors.category.update');
-});
 
+    Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
+    Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -189,7 +192,6 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::post('employees', [EmployeesController::class, 'store'])->name('employee.store');
 
 });
-
 
 /*
 |--------------------------------------------------------------------------

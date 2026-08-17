@@ -10,10 +10,12 @@ use App\Http\Requests\Applications\StoreApplicationRequest;
 use App\Models\Application;
 use App\Models\Person;
 use App\Models\User;
+use App\Notifications\ApplicationAssignedToVerifierNotification;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 
 final class CoordinadorController extends ApiController
 {
@@ -81,6 +83,13 @@ final class CoordinadorController extends ApiController
         $application->update(['assigned_verifier_id' => $data['verifier_user_id'], 'reviewed_at' => now()]);
         $audit->record($request, 'APPLICATION_VERIFIER_ASSIGNED', 'applications', 'Verificador asignado a solicitud.', $application->branch_id, ['application_id' => $application->id]);
 
-        return $this->success($application->fresh());
+        $application = $application->fresh() ?? $application;
+        $verifier = User::query()->find($data['verifier_user_id']);
+
+        if ($verifier !== null) {
+            Notification::send($verifier, new ApplicationAssignedToVerifierNotification($application));
+        }
+
+        return $this->success($application);
     }
 }
