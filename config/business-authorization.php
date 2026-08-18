@@ -15,7 +15,7 @@ return [
         'branches.manage' => ['general_manager'],
         'branch-settings.view' => ['administrator', 'general_manager', 'branch_manager'],
         'branch-settings.manage' => ['general_manager', 'branch_manager'],
-        'products.view' => ['administrator', 'general_manager', 'branch_manager'],
+        'products.view' => ['administrator', 'general_manager', 'branch_manager', 'distributor'],
         'products.manage' => ['general_manager', 'branch_manager'],
         'categories.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator'],
         'categories.manage' => ['general_manager', 'branch_manager'],
