@@ -43,15 +43,28 @@ final class UserResource extends JsonResource
                 'city' => $this->person?->city,
                 'state' => $this->person?->state,
                 'postal_code' => $this->person?->postal_code,
+                'email' => $this->person?->email,
             ]),
-            'roles' => $this->whenLoaded('businessRoles', fn () => $this->businessRoles
-                ->filter(fn ($role) => $role->pivot->revoked_at === null)
-                ->map(fn ($role) => [
-                    'code' => $role->code,
-                    'name' => $role->name,
-                    'branch_id' => $role->pivot->branch_id,
-                    'is_primary' => (bool) $role->pivot->is_primary,
-                ])->values()),
+            'roles' => $this->whenLoaded('businessRoles', function () {
+                $branchIds = $this->businessRoles
+                    ->pluck('pivot.branch_id')
+                    ->filter()
+                    ->unique();
+
+                $branches = $branchIds->isNotEmpty()
+                    ? \App\Models\Branch::whereIn('id', $branchIds)->get()->keyBy('id')
+                    : collect();
+
+                return $this->businessRoles
+                    ->filter(fn ($role) => $role->pivot->revoked_at === null)
+                    ->map(fn ($role) => [
+                        'code' => $role->code,
+                        'name' => $role->name,
+                        'branch_id' => $role->pivot->branch_id,
+                        'branch_name' => $role->pivot->branch_id ? ($branches->get($role->pivot->branch_id)?->name ?? null) : null,
+                        'is_primary' => (bool) $role->pivot->is_primary,
+                    ])->values();
+            }),
             'permissions' => $this->whenLoaded('businessRoles', function () {
                 $abilities = config('business-authorization.abilities', []);
                 $userRoleNames = $this->businessRoles

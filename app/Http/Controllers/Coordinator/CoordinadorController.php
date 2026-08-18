@@ -58,14 +58,11 @@ final class CoordinadorController extends ApiController
                 'status' => ApplicationStatus::EN_REVISION,
                 'initial_category_code' => $data['initial_category_code'] ?? 'COPPER',
                 'family_data_json' => $data['family_data'] ?? null,
-                'external_affiliations_json' => $data['external_affiliations'] ?? null,
                 'vehicles_json' => $data['vehicles'] ?? null,
                 'requested_credit_limit' => $data['requested_credit_limit'] ?? null,
                 'id_front_path' => $data['id_front_path'] ?? null,
                 'id_back_path' => $data['id_back_path'] ?? null,
                 'proof_of_address_path' => $data['proof_of_address_path'] ?? null,
-                'credit_bureau_report_path' => $data['credit_bureau_report_path'] ?? null,
-                'credit_bureau_result' => $data['credit_bureau_result'] ?? null,
                 'house_photos_complete' => $data['house_photos_complete'] ?? false,
                 'taken_at' => now(),
                 'submitted_at' => now(),
@@ -80,15 +77,25 @@ final class CoordinadorController extends ApiController
     public function assignVerifier(Request $request, Application $application, AuditLogger $audit): JsonResponse
     {
         $data = $request->validate(['verifier_user_id' => ['required', 'integer', 'exists:users,id']]);
+
+        /** @var User $verifier */
+        $verifier = User::query()->findOrFail($data['verifier_user_id']);
+
+        $belongsToApplicationBranch = $verifier->businessRoles()
+            ->where('roles.name', 'verifier')
+            ->whereNull('model_has_roles.revoked_at')
+            ->where('model_has_roles.branch_id', $application->branch_id)
+            ->exists();
+
+        if (! $belongsToApplicationBranch) {
+            return $this->error('El verificador debe pertenecer a la misma sucursal de la solicitud.', 422);
+        }
+
         $application->update(['assigned_verifier_id' => $data['verifier_user_id'], 'reviewed_at' => now()]);
         $audit->record($request, 'APPLICATION_VERIFIER_ASSIGNED', 'applications', 'Verificador asignado a solicitud.', $application->branch_id, ['application_id' => $application->id]);
 
         $application = $application->fresh() ?? $application;
-        $verifier = User::query()->find($data['verifier_user_id']);
-
-        if ($verifier !== null) {
-            Notification::send($verifier, new ApplicationAssignedToVerifierNotification($application));
-        }
+        Notification::send($verifier, new ApplicationAssignedToVerifierNotification($application));
 
         return $this->success($application);
     }
