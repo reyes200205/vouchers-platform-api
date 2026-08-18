@@ -11,7 +11,7 @@ use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
 
-function signInWithRole(User $user, string $roleCode, Branch $branch): void
+function attachRole(User $user, string $roleCode, Branch $branch): void
 {
     $role = Role::query()->firstOrCreate(['code' => $roleCode], ['name' => $roleCode]);
     $user->businessRoles()->attach($role, [
@@ -19,6 +19,11 @@ function signInWithRole(User $user, string $roleCode, Branch $branch): void
         'assigned_at' => now(),
         'is_primary' => true,
     ]);
+}
+
+function signInWithRole(User $user, string $roleCode, Branch $branch): void
+{
+    attachRole($user, $roleCode, $branch);
     Sanctum::actingAs($user);
 }
 
@@ -37,20 +42,22 @@ describe('Distributor onboarding', function (): void {
                 'last_name' => 'Distribuidora',
                 'curp' => 'ABCD900101HNLXYZ01',
             ],
-            'family_data' => ['children' => 2],
+            'family_data' => ['children' => 2, 'applicant_age' => 28],
             'vehicles' => [['type' => 'car']],
             'requested_credit_limit' => '10000.00',
         ])->assertCreated()->assertJsonPath('data.status', 'EN_REVISION')->json('data');
 
+        attachRole($verifier, 'verifier', $branch);
         $this->patchJson("/api/v1/applications/{$application['id']}/verifier", [
             'verifier_user_id' => $verifier->id,
         ])->assertOk();
 
-        signInWithRole($verifier, 'verifier', $branch);
+        Sanctum::actingAs($verifier);
         $this->postJson("/api/v1/applications/{$application['id']}/verification", [
             'result' => 'VERIFICADA',
             'visit_date' => now()->toDateTimeString(),
             'checklist' => ['home_visited' => true],
+            'front_photo' => 'verifications/1/front.jpg',
         ])->assertOk();
 
         $category = DistributorCategory::query()->create([
