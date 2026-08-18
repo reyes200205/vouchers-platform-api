@@ -27,7 +27,9 @@ final class StoreApplicationVerificationRequest extends FormRequest
             'visit_date' => ['required', 'date'],
             'checklist' => ['nullable', 'array'],
             'justifications' => ['nullable', 'array'],
-            'front_photo' => ['nullable', 'string', 'max:255'],
+            // La foto de fachada la toma y sube el verificador durante la visita
+            // (ver VerificationPhotoController::store), por lo que es obligatoria aqui.
+            'front_photo' => ['required', 'string', 'max:255'],
             'id_with_person_photo' => ['nullable', 'string', 'max:255'],
             'proof_of_address_photo' => ['nullable', 'string', 'max:255'],
             'additional_evidence' => ['nullable', 'array'],

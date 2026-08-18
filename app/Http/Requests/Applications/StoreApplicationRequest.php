@@ -42,17 +42,18 @@ final class StoreApplicationRequest extends FormRequest
             'person.latitude' => ['nullable', 'decimal:0,7'],
             'person.longitude' => ['nullable', 'decimal:0,7'],
             'person.notes' => ['nullable', 'string'],
-            'family_data' => ['nullable', 'array'],
-            'external_affiliations' => ['nullable', 'array'],
+            // family_data agrupa: familiares/conyuge, ocupacion (donde trabaja o estudia, edad)
+            // y vivienda (tenencia, dimensiones, referencia laboral). Ver new.vue en el frontend
+            // para la forma exacta que arma el coordinador.
+            'family_data' => ['required', 'array'],
+            'family_data.applicant_age' => ['required', 'integer', 'min:18'],
             'vehicles' => ['nullable', 'array'],
-            'requested_credit_limit' => ['nullable', 'decimal:0,2', 'min:0'],
+            'requested_credit_limit' => ['required', 'decimal:0,2', 'min:1000'],
             'bank_account_id' => ['nullable', 'integer', 'exists:bank_accounts,id'],
             'initial_category_code' => ['sometimes', 'string', 'max:20'],
             'id_front_path' => ['nullable', 'string', 'max:255'],
             'id_back_path' => ['nullable', 'string', 'max:255'],
             'proof_of_address_path' => ['nullable', 'string', 'max:255'],
-            'credit_bureau_report_path' => ['nullable', 'string', 'max:255'],
-            'credit_bureau_result' => ['nullable', 'string', 'max:100'],
             'house_photos_complete' => ['sometimes', 'boolean'],
         ];
     }

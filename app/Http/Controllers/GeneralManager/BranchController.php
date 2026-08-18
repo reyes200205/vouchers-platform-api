@@ -54,6 +54,26 @@ final class BranchController extends ApiController
         return $this->success($formatted);
     }
 
+    public function verifiers(Branch $branch): JsonResponse
+    {
+        $users = User::query()
+            ->whereHas('businessRoles', function ($query) use ($branch): void {
+                $query->where('roles.name', 'verifier')
+                    ->whereNull('model_has_roles.revoked_at')
+                    ->where('model_has_roles.branch_id', $branch->id);
+            })
+            ->with('person')
+            ->get();
+
+        $formatted = $users->map(fn ($user) => [
+            'id' => $user->id,
+            'username' => $user->username,
+            'name' => $user->person ? trim($user->person->first_name . ' ' . $user->person->last_name) : $user->username,
+        ]);
+
+        return $this->success($formatted);
+    }
+
     public function store(StoreBranchRequest $request, AuditLogger $audit): JsonResponse
     {
         $data = $request->safe()->except('manager_user_id');
