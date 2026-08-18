@@ -24,7 +24,7 @@ final class DatabaseSeeder extends Seeder
             // RolesAndPermissionSeeder::class,
             // UserSeeder::class,
             // BranchAndEmployeeSeeder::class,
-            AlessandroDemoSeeder::class,
+            // AlessandroDemoSeeder::class,
         ]);
     }
 }
