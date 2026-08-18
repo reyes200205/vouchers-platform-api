@@ -24,6 +24,7 @@ final class UpdateFinancialProductRequest extends FormRequest
             'code' => ['sometimes', 'string', 'max:30', Rule::unique('financial_products', 'code')->ignore($this->route('financialProduct'))],
             'name' => ['sometimes', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:255'],
+            'category_id' => ['nullable', 'integer', Rule::exists('distributor_categories', 'id')],
             'principal_amount' => ['sometimes', 'decimal:0,2', 'min:0'],
             'number_of_fortnights' => ['sometimes', 'integer', 'min:1'],
             'company_commission_percentage' => ['sometimes', 'decimal:0,4', 'between:0,100'],

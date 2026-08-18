@@ -9,6 +9,7 @@ use App\Enums\VoucherStatus;
 use App\Models\CustomerPayment;
 use App\Models\Distributor;
 use App\Models\PointMovement;
+use App\Models\PointSetting;
 use App\Models\User;
 use App\Models\Voucher;
 use Illuminate\Support\Facades\DB;
@@ -92,8 +93,9 @@ final class RecordCustomerPaymentService
 
     private function calculatePoints(Distributor $distributor, float $amount): int
     {
-        $divisor = 1200.00;
-        $multiplier = $distributor->category?->points_per_1200 ?? 1;
+        $divisor = (int) (PointSetting::query()->value('point_divisor_factor') ?? 1200);
+        $multiplier = $distributor->category?->points_per_1200
+            ?? (int) (PointSetting::query()->value('point_multiplier') ?? 3);
 
         return (int) floor($amount / $divisor) * $multiplier;
     }

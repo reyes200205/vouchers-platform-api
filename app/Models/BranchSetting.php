@@ -15,11 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'cutoff_time',
     'payment_frequency_days',
     'payment_due_days',
-    'default_credit_limit',
     'insurance_rates_json',
-    'opening_commission_percentage',
-    'biweekly_interest_percentage',
-    'late_payment_penalty_amount',
     'auto_increase_threshold',
     'minimum_score_increase_percentage',
     'category_settings_json',
@@ -33,11 +29,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 final class BranchSetting extends Model
 {
     protected $casts = [
-        'default_credit_limit' => 'decimal:2',
         'insurance_rates_json' => 'array',
-        'opening_commission_percentage' => 'decimal:4',
-        'biweekly_interest_percentage' => 'decimal:4',
-        'late_payment_penalty_amount' => 'decimal:2',
         'auto_increase_threshold' => 'decimal:2',
         'minimum_score_increase_percentage' => 'decimal:2',
         'category_settings_json' => 'array',
@@ -69,5 +61,25 @@ final class BranchSetting extends Model
     public function logs(): HasMany
     {
         return $this->hasMany(BranchSettingsLog::class);
+    }
+
+    /**
+     * Resolves the insurance amount for a given principal using the branch tariff.
+     * Returns null when no tier covers the amount.
+     */
+    public function insuranceAmountFor(float $principalAmount): ?float
+    {
+        $rates = $this->insurance_rates_json ?? [];
+
+        foreach ($rates as $tier) {
+            $min = (float) ($tier['min_amount'] ?? 0);
+            $max = (float) ($tier['max_amount'] ?? PHP_FLOAT_MAX);
+
+            if ($principalAmount >= $min && $principalAmount < $max) {
+                return (float) $tier['insurance_amount'];
+            }
+        }
+
+        return null;
     }
 }

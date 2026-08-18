@@ -26,10 +26,17 @@ final class BranchSettingController extends ApiController
 
     public function update(UpdateBranchSettingRequest $request, Branch $branch, AuditLogger $audit): JsonResponse
     {
-        $setting = DB::transaction(function () use ($request, $branch): BranchSetting {
+        $data = $request->validated();
+
+        if (array_key_exists('insurance_rates', $data)) {
+            $data['insurance_rates_json'] = $data['insurance_rates'];
+            unset($data['insurance_rates']);
+        }
+
+        $setting = DB::transaction(function () use ($request, $branch, $data): BranchSetting {
             $setting = BranchSetting::query()->firstOrCreate(['branch_id' => $branch->id])->refresh();
-            $before = $setting->only(array_keys($request->validated()));
-            $setting->fill($request->validated());
+            $before = $setting->only(array_keys($data));
+            $setting->fill($data);
             $setting->updated_by_user_id = $request->user()->id;
             $setting->save();
 
@@ -39,7 +46,7 @@ final class BranchSettingController extends ApiController
                 'updated_by_user_id' => $request->user()->id,
                 'event_type' => BranchSettingsLogEventType::SUCURSAL,
                 'before_changes_json' => $before,
-                'after_changes_json' => $setting->only(array_keys($request->validated())),
+                'after_changes_json' => $setting->only(array_keys($data)),
             ]);
 
             return $setting;

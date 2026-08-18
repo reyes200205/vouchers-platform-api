@@ -34,7 +34,10 @@ final class FinancialProductController extends ApiController
 
     public function store(StoreFinancialProductRequest $request): JsonResponse
     {
-        $product = FinancialProduct::query()->create($request->validated());
+        $data = $request->validated();
+        $data['code'] = $data['code'] ?? 'VAL-GLOBAL-'.str_pad((string) (FinancialProduct::query()->count() + 1), 4, '0', STR_PAD_LEFT);
+
+        $product = FinancialProduct::query()->create($data);
 
         return $this->created(new FinancialProductResource($product));
     }

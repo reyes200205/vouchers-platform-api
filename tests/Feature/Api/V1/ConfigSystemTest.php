@@ -25,9 +25,10 @@ function loginWithBusinessRole(User $user, string $roleCode, ?Branch $branch = n
     Sanctum::actingAs($user);
 }
 
-function categoryPayload(): array
+function categoryPayload(int $branchId): array
 {
     return [
+        'branch_id' => $branchId,
         'code' => 'BRONCE',
         'name' => 'Bronce',
         'commission_percentage' => '10.0000',
@@ -79,6 +80,57 @@ describe('Branch settings (config de vales y puntos por sucursal)', function ():
         ])->assertUnprocessable();
     });
 
+    it('lets a branch manager configure insurance tariff tiers', function (): void {
+        $branch = Branch::factory()->create();
+        $manager = User::factory()->create();
+        loginWithBusinessRole($manager, 'branch_manager', $branch);
+
+        $this->patchJson("/api/v1/branches/{$branch->id}/settings", [
+            'insurance_rates' => [
+                ['min_amount' => '0.00', 'max_amount' => '4999.99', 'insurance_amount' => '50.00'],
+                ['min_amount' => '5000.00', 'max_amount' => '9999.99', 'insurance_amount' => '100.00'],
+                ['min_amount' => '10000.00', 'max_amount' => '99999999.00', 'insurance_amount' => '200.00'],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.insurance_rates.1.insurance_amount', '100.00');
+
+        $this->assertDatabaseHas('branch_settings', [
+            'branch_id' => $branch->id,
+        ]);
+        $this->assertDatabaseHas('branch_settings_logs', [
+            'branch_id' => $branch->id,
+            'event_type' => 'SUCURSAL',
+        ]);
+    });
+
+    it('rejects overlapping or malformed insurance tariff tiers', function (): void {
+        $branch = Branch::factory()->create();
+        $manager = User::factory()->create();
+        loginWithBusinessRole($manager, 'branch_manager', $branch);
+
+        $this->patchJson("/api/v1/branches/{$branch->id}/settings", [
+            'insurance_rates' => [
+                ['min_amount' => '0.00', 'max_amount' => '10000.00', 'insurance_amount' => '50.00'],
+                ['min_amount' => '5000.00', 'max_amount' => '15000.00', 'insurance_amount' => '100.00'],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('insurance_rates.1');
+
+        $this->patchJson("/api/v1/branches/{$branch->id}/settings", [
+            'insurance_rates' => [
+                ['min_amount' => '0.00', 'max_amount' => '10000.00'],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('insurance_rates.0.insurance_amount');
+
+        $this->patchJson("/api/v1/branches/{$branch->id}/settings", [
+            'insurance_rates' => [
+                ['min_amount' => '5000.00', 'max_amount' => '1000.00', 'insurance_amount' => '50.00'],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('insurance_rates.0');
+    });
+
     it('forbids a branch manager from editing settings of another branch', function (): void {
         $branchA = Branch::factory()->create();
         $branchB = Branch::factory()->create();
@@ -107,8 +159,9 @@ describe('Distributor categories', function (): void {
     it('allows a general manager to create and update a category', function (): void {
         $manager = User::factory()->create();
         loginWithBusinessRole($manager, 'general_manager');
+        $branch = Branch::factory()->create();
 
-        $this->postJson('/api/v1/distributor-categories', categoryPayload())
+        $this->postJson('/api/v1/distributor-categories', categoryPayload($branch->id))
             ->assertCreated()
             ->assertJsonPath('data.code', 'BRONCE')
             ->assertJsonPath('data.commission_percentage', '10.0000');
@@ -126,16 +179,49 @@ describe('Distributor categories', function (): void {
     it('forbids an administrator from managing categories but allows viewing', function (): void {
         $administrator = User::factory()->create();
         loginWithBusinessRole($administrator, 'administrator');
-        $category = DistributorCategory::query()->create(categoryPayload());
+        $branch = Branch::factory()->create();
+        $category = DistributorCategory::query()->create(categoryPayload($branch->id));
 
         $this->getJson('/api/v1/distributor-categories')
             ->assertOk()
             ->assertJsonPath('data.data.0.id', $category->id);
 
-        $this->postJson('/api/v1/distributor-categories', array_merge(categoryPayload(), [
+        $this->postJson('/api/v1/distributor-categories', array_merge(categoryPayload($branch->id), [
             'code' => 'PLATA',
             'name' => 'Plata',
         ]))->assertForbidden();
+    });
+
+    it('lets a general manager move a category to another branch', function (): void {
+        $manager = User::factory()->create();
+        loginWithBusinessRole($manager, 'general_manager');
+        $branchA = Branch::factory()->create();
+        $branchB = Branch::factory()->create();
+        $category = DistributorCategory::query()->create(categoryPayload($branchA->id));
+
+        $this->patchJson("/api/v1/distributor-categories/{$category->id}", [
+            'branch_id' => $branchB->id,
+        ])->assertOk()
+            ->assertJsonPath('data.branch_id', $branchB->id);
+
+        $this->assertDatabaseHas('distributor_categories', [
+            'id' => $category->id,
+            'branch_id' => $branchB->id,
+        ]);
+    });
+
+    it('rejects moving a category when the target branch already has the same code or name', function (): void {
+        $manager = User::factory()->create();
+        loginWithBusinessRole($manager, 'general_manager');
+        $branchA = Branch::factory()->create();
+        $branchB = Branch::factory()->create();
+        $category = DistributorCategory::query()->create(categoryPayload($branchA->id));
+        DistributorCategory::query()->create(categoryPayload($branchB->id));
+
+        $this->patchJson("/api/v1/distributor-categories/{$category->id}", [
+            'branch_id' => $branchB->id,
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('branch_id');
     });
 });
 

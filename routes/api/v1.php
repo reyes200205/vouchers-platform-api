@@ -5,8 +5,10 @@ declare(strict_types=1);
 use App\Http\Controllers\Administrator\GeneralManagerController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\BranchManager\BranchSettingController;
+use App\Http\Controllers\BranchManager\CategoryController;
 use App\Http\Controllers\BranchManager\CustomerChangeRequestController;
 use App\Http\Controllers\BranchManager\CutoffController as BranchManagerCutoffController;
+use App\Http\Controllers\BranchManager\ProductController;
 use App\Http\Controllers\Cashier\CustomerController as CashierCustomerController;
 use App\Http\Controllers\Cashier\PaymentController as CashierPaymentController;
 use App\Http\Controllers\Cashier\ReconciliationController as CashierReconciliationController;
@@ -36,6 +38,7 @@ use App\Http\Controllers\GeneralManager\PointSettingController;
 use App\Http\Controllers\GeneralManager\ReconciliationController as GeneralManagerReconciliationController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\System\RolesController;
+use App\Http\Controllers\Staff\StaffController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -70,6 +73,15 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
         Route::post('/general-managers', [GeneralManagerController::class, 'store'])->name('general-managers.store');
     });
 
+    Route::middleware('business.ability:staff.view')->group(function (): void {
+        Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');
+    });
+
+    Route::middleware('business.ability:staff.manage')->group(function (): void {
+        Route::post('/staff', [StaffController::class, 'store'])->name('staff.store');
+        Route::patch('/staff/{user}', [StaffController::class, 'update'])->name('staff.update');
+    });
+
     Route::middleware('business.ability:branches.manage')->group(function (): void {
         Route::get('/branches/available-managers', [BranchController::class, 'availableManagers'])->name('branches.available-managers');
     });
@@ -90,6 +102,18 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
 
     Route::middleware('business.ability:branch-settings.view,branch')->get('/branches/{branch}/settings', [BranchSettingController::class, 'show'])->name('branch-settings.show');
     Route::middleware('business.ability:branch-settings.manage,branch')->patch('/branches/{branch}/settings', [BranchSettingController::class, 'update'])->name('branch-settings.update');
+
+    Route::middleware('business.ability:products.view,branch')->get('/branches/{branch}/products', [ProductController::class, 'index'])->name('branch-products.index');
+    Route::middleware('business.ability:products.manage,branch')->group(function (): void {
+        Route::post('/branches/{branch}/products', [ProductController::class, 'store'])->name('branch-products.store');
+        Route::patch('/branches/{branch}/products/{financialProduct}', [ProductController::class, 'update'])->name('branch-products.update');
+    });
+
+    Route::middleware('business.ability:categories.view,branch')->get('/branches/{branch}/categories', [CategoryController::class, 'index'])->name('branch-categories.index');
+    Route::middleware('business.ability:categories.manage,branch')->group(function (): void {
+        Route::post('/branches/{branch}/categories', [CategoryController::class, 'store'])->name('branch-categories.store');
+        Route::patch('/branches/{branch}/categories/{distributorCategory}', [CategoryController::class, 'update'])->name('branch-categories.update');
+    });
 
     Route::middleware('business.ability:products.view')->group(function (): void {
         Route::get('/financial-products', [FinancialProductController::class, 'index'])->name('financial-products.index');

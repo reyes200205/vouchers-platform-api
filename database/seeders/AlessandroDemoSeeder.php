@@ -42,15 +42,6 @@ final class AlessandroDemoSeeder extends Seeder
     {
         $gm = $this->userWithRole('alessandro', 'Gerente General (Demo)', 'general_manager', null);
 
-        $categories = collect();
-        foreach ([
-            ['code' => 'COPPER', 'name' => 'Cobre', 'commission_percentage' => 8.0000, 'points_per_1200' => 3, 'late_penalty_percentage' => 20.0000, 'is_active' => true],
-            ['code' => 'SILVER', 'name' => 'Plata', 'commission_percentage' => 10.0000, 'points_per_1200' => 4, 'late_penalty_percentage' => 18.0000, 'is_active' => true],
-            ['code' => 'GOLD', 'name' => 'Oro', 'commission_percentage' => 12.0000, 'points_per_1200' => 5, 'late_penalty_percentage' => 15.0000, 'is_active' => true],
-        ] as $categoryData) {
-            $categories->push(DistributorCategory::query()->create($categoryData));
-        }
-
         $products = collect();
         foreach ([
             ['code' => 'VALOR-15000', 'name' => 'Vale por Valor 15K', 'description' => 'Vale de 15,000 MXN a 8 quincenas', 'principal_amount' => 15000.00, 'number_of_fortnights' => 8, 'company_commission_percentage' => 10.0000, 'insurance_amount' => 100.00, 'fortnightly_interest_percentage' => 5.0000, 'late_fee_amount' => 300.00, 'disbursement_method' => DisbursementMethod::TRANSFERENCIA, 'is_active' => true],
@@ -59,13 +50,31 @@ final class AlessandroDemoSeeder extends Seeder
             $products->push(FinancialProduct::query()->create($productData));
         }
 
+        $categoryTemplates = [
+            ['code' => 'COBRE', 'name' => 'Cobre', 'commission_percentage' => 3.0000, 'points_per_1200' => 3, 'late_penalty_percentage' => 20.0000],
+            ['code' => 'PLATA', 'name' => 'Plata', 'commission_percentage' => 6.0000, 'points_per_1200' => 3, 'late_penalty_percentage' => 20.0000],
+            ['code' => 'ORO', 'name' => 'Oro', 'commission_percentage' => 10.0000, 'points_per_1200' => 3, 'late_penalty_percentage' => 20.0000],
+        ];
+
+        $insuranceTiers = [
+            ['min_amount' => 0, 'max_amount' => 7999.99, 'insurance_amount' => 50.00],
+            ['min_amount' => 8000, 'max_amount' => 14999.99, 'insurance_amount' => 100.00],
+            ['min_amount' => 15000, 'max_amount' => PHP_FLOAT_MAX, 'insurance_amount' => 200.00],
+        ];
+
+        $branchProductTemplates = [
+            ['name' => 'Vale Zapatería 8K', 'description' => 'Vale de 8,000 MXN a 2 quincenas', 'principal_amount' => 8000.00, 'number_of_fortnights' => 2],
+            ['name' => 'Vale Ropa 6K', 'description' => 'Vale de 6,000 MXN a 3 quincenas', 'principal_amount' => 6000.00, 'number_of_fortnights' => 3],
+            ['name' => 'Vale Abarrotes 10K', 'description' => 'Vale de 10,000 MXN a 4 quincenas', 'principal_amount' => 10000.00, 'number_of_fortnights' => 4],
+        ];
+
         PointSetting::query()->firstOrCreate([], [
             'point_value_mxn' => 2.00,
             'updated_by_user_id' => $gm->id,
         ]);
 
         $branchNames = ['Sucursal Centro', 'Sucursal Norte', 'Sucursal Sur'];
-        $branches = collect($branchNames)->map(function (string $name, int $index) use ($gm): Branch {
+        $branches = collect($branchNames)->map(function (string $name, int $index) use ($gm, $categoryTemplates, $branchProductTemplates, $insuranceTiers): Branch {
             $branch = Branch::query()->create([
                 'code' => 'SUC-'.str_pad((string) ($index + 1), 3, '0', STR_PAD_LEFT),
                 'name' => $name,
@@ -78,13 +87,41 @@ final class AlessandroDemoSeeder extends Seeder
             BranchSetting::query()->firstOrCreate(['branch_id' => $branch->id], [
                 'updated_by_user_id' => $bm->id,
                 'payment_due_days' => 15,
-                'default_credit_limit' => 50000.00,
-                'opening_commission_percentage' => 10.0000,
-                'biweekly_interest_percentage' => 5.0000,
-                'late_payment_penalty_amount' => 300.00,
                 'pre_vale_max_percentage' => 50.00,
                 'pre_vale_tolerance_amount' => 1000.00,
                 'point_value_mxn' => 2.00,
+                'insurance_rates_json' => $insuranceTiers,
+            ]);
+
+            $categories = collect();
+            foreach ($categoryTemplates as $categoryData) {
+                $categories->push(DistributorCategory::query()->create([
+                    'branch_id' => $branch->id,
+                    'code' => $categoryData['code'].'-'.$branch->code,
+                    'name' => $categoryData['name'],
+                    'commission_percentage' => $categoryData['commission_percentage'],
+                    'points_per_1200' => $categoryData['points_per_1200'],
+                    'late_penalty_percentage' => $categoryData['late_penalty_percentage'],
+                    'is_active' => true,
+                ]));
+            }
+            $branch->setAttribute('demo_categories', $categories);
+
+            $template = $branchProductTemplates[$index % count($branchProductTemplates)];
+            FinancialProduct::query()->create([
+                'branch_id' => $branch->id,
+                'category_id' => $categories->first()->id,
+                'code' => 'VAL-'.$branch->code.'-'.str_pad((string) ($index + 1), 4, '0', STR_PAD_LEFT),
+                'name' => $template['name'],
+                'description' => $template['description'],
+                'principal_amount' => $template['principal_amount'],
+                'number_of_fortnights' => $template['number_of_fortnights'],
+                'company_commission_percentage' => 10.0000,
+                'insurance_amount' => 50.00,
+                'fortnightly_interest_percentage' => 5.0000,
+                'late_fee_amount' => 200.00,
+                'disbursement_method' => DisbursementMethod::TRANSFERENCIA,
+                'is_active' => true,
             ]);
 
             return $branch;
@@ -94,12 +131,12 @@ final class AlessandroDemoSeeder extends Seeder
         $people = Person::factory()->count(10)->create();
 
         foreach ($branches as $branchIndex => $branch) {
-            $category = $categories[$branchIndex % $categories->count()];
+            $branchCategories = $branch->getAttribute('demo_categories');
             foreach ($people->forPage($branchIndex + 1, 3) as $person) {
                 $distributor = Distributor::query()->create([
                     'person_id' => $person->id,
                     'branch_id' => $branch->id,
-                    'category_id' => $category->id,
+                    'category_id' => $branchCategories[$branchIndex % $branchCategories->count()]->id,
                     'distributor_number' => 'DIST-'.str_pad((string) ($distributors->count() + 1), 8, '0', STR_PAD_LEFT),
                     'status' => DistributorStatus::ACTIVA,
                     'credit_limit' => 50000 + ($distributors->count() * 25000),

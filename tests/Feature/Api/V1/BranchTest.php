@@ -41,8 +41,6 @@ describe('Branches', function (): void {
             'cutoff_day' => 15,
             'cutoff_time' => '17:30',
             'payment_frequency_days' => 14,
-            'default_credit_limit' => '10000.00',
-            'biweekly_interest_percentage' => '5.0000',
         ])->assertOk()->assertJsonPath('data.cutoff_day', 15);
 
         $this->assertDatabaseHas('branch_settings_logs', [

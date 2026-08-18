@@ -20,6 +20,7 @@ final class DistributorCategoryResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'branch_id' => $this->branch_id,
             'code' => $this->code,
             'name' => $this->name,
             'commission_percentage' => $this->commission_percentage,

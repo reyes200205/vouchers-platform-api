@@ -20,6 +20,14 @@ final class FinancialProductResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'branch_id' => $this->branch_id,
+            'origin' => $this->branch_id === null ? 'global' : 'branch',
+            'category_id' => $this->category_id,
+            'category' => $this->whenLoaded('category', fn () => $this->category ? [
+                'id' => $this->category->id,
+                'code' => $this->category->code,
+                'name' => $this->category->name,
+            ] : null),
             'code' => $this->code,
             'name' => $this->name,
             'description' => $this->description,

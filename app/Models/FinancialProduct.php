@@ -9,10 +9,13 @@ use Database\Factories\FinancialProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
+    'branch_id',
+    'category_id',
     'code',
     'name',
     'description',
@@ -39,6 +42,22 @@ final class FinancialProduct extends Model
         'disbursement_method' => DisbursementMethod::class,
         'is_active' => 'boolean',
     ];
+
+    /**
+     * @return BelongsTo<Branch, $this>
+     */
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    /**
+     * @return BelongsTo<DistributorCategory, $this>
+     */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(DistributorCategory::class, 'category_id');
+    }
 
     /**
      * @return HasMany<Voucher, $this>

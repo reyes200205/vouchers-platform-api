@@ -8,10 +8,12 @@ use Database\Factories\DistributorCategoryFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
+    'branch_id',
     'code',
     'name',
     'commission_percentage',
@@ -29,6 +31,14 @@ final class DistributorCategory extends Model
         'late_penalty_percentage' => 'decimal:4',
         'is_active' => 'boolean',
     ];
+
+    /**
+     * @return BelongsTo<Branch, $this>
+     */
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
 
     /**
      * @return HasMany<Distributor, $this>

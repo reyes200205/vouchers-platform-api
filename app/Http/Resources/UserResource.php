@@ -27,7 +27,22 @@ final class UserResource extends JsonResource
             'person' => $this->whenLoaded('person', fn () => [
                 'id' => $this->person?->id,
                 'first_name' => $this->person?->first_name,
+                'middle_name' => $this->person?->middle_name,
                 'last_name' => $this->person?->last_name,
+                'second_last_name' => $this->person?->second_last_name,
+                'gender' => $this->person?->gender?->value,
+                'birth_date' => $this->person?->birth_date?->toDateString(),
+                'curp' => $this->person?->curp,
+                'rfc' => $this->person?->rfc,
+                'home_phone' => $this->person?->home_phone,
+                'mobile_phone' => $this->person?->mobile_phone,
+                'email' => $this->person?->email,
+                'street' => $this->person?->street,
+                'external_number' => $this->person?->external_number,
+                'neighborhood' => $this->person?->neighborhood,
+                'city' => $this->person?->city,
+                'state' => $this->person?->state,
+                'postal_code' => $this->person?->postal_code,
             ]),
             'roles' => $this->whenLoaded('businessRoles', fn () => $this->businessRoles
                 ->filter(fn ($role) => $role->pivot->revoked_at === null)

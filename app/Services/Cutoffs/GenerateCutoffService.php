@@ -15,6 +15,7 @@ use App\Models\CutoffRelationItem;
 use App\Models\CustomerPayment;
 use App\Models\Distributor;
 use App\Models\PointMovement;
+use App\Models\PointSetting;
 use App\Models\User;
 use App\Models\Voucher;
 use Illuminate\Support\Carbon;
@@ -107,6 +108,9 @@ final class GenerateCutoffService
         $totalEarlyBonusPoints = 0.0;
         $totalLatePenaltyPoints = 0.0;
 
+        $pointDivisor = (int) (PointSetting::query()->value('point_divisor_factor') ?? 1200);
+        $pointMultiplier = (int) (PointSetting::query()->value('point_multiplier') ?? 3);
+
         foreach ($payments as $voucherId => $voucherPayments) {
             $voucher = Voucher::query()->find($voucherId);
 
@@ -118,9 +122,9 @@ final class GenerateCutoffService
             $lateFee = $this->calculateLateFees($voucher, $voucherPayments);
             $commission = round($paymentAmount * ((float) $voucher->distributor_profit_percentage_snapshot / 100), 2);
 
-            $basePoints = (int) floor($paymentAmount / 1200) * (int) ($voucher->distributor?->category?->points_per_1200 ?? 1);
-            $bonusPoints = $this->calculateEarlyBonusPoints($voucher, $voucherPayments, $basePoints);
-            $penaltyPoints = $this->calculateLatePenaltyPoints($voucher, $voucherPayments, $basePoints);
+            $basePoints = (int) floor($paymentAmount / $pointDivisor) * ($voucher->distributor?->category?->points_per_1200 ?? $pointMultiplier);
+            $bonusPoints = $this->calculateEarlyBonusPoints($voucher, $voucherPayments, $basePoints, $pointDivisor, $pointMultiplier);
+            $penaltyPoints = $this->calculateLatePenaltyPoints($voucher, $voucherPayments, $basePoints, $pointDivisor, $pointMultiplier);
 
             if ($bonusPoints > 0) {
                 PointMovement::query()->create([
@@ -248,7 +252,7 @@ final class GenerateCutoffService
     /**
      * @param  \Illuminate\Support\Collection<int, CustomerPayment>  $payments
      */
-    private function calculateEarlyBonusPoints(Voucher $voucher, mixed $payments, int $basePoints): int
+    private function calculateEarlyBonusPoints(Voucher $voucher, mixed $payments, int $basePoints, int $pointDivisor, int $pointMultiplier): int
     {
         if ($voucher->early_payment_start_date === null || $voucher->early_payment_end_date === null) {
             return 0;
@@ -268,7 +272,7 @@ final class GenerateCutoffService
             return 0;
         }
 
-        $earlyBasePoints = (int) floor($earlyAmount / 1200) * (int) ($voucher->distributor?->category?->points_per_1200 ?? 1);
+        $earlyBasePoints = (int) floor($earlyAmount / $pointDivisor) * ($voucher->distributor?->category?->points_per_1200 ?? $pointMultiplier);
 
         return max(1, (int) round($earlyBasePoints * 0.10));
     }
@@ -276,7 +280,7 @@ final class GenerateCutoffService
     /**
      * @param  \Illuminate\Support\Collection<int, CustomerPayment>  $payments
      */
-    private function calculateLatePenaltyPoints(Voucher $voucher, mixed $payments, int $basePoints): int
+    private function calculateLatePenaltyPoints(Voucher $voucher, mixed $payments, int $basePoints, int $pointDivisor, int $pointMultiplier): int
     {
         if ($voucher->payment_due_date === null) {
             return 0;
@@ -295,6 +299,6 @@ final class GenerateCutoffService
             return 0;
         }
 
-        return (int) floor($lateAmount / 1200) * (int) ($voucher->distributor?->category?->points_per_1200 ?? 1);
+        return (int) floor($lateAmount / $pointDivisor) * ($voucher->distributor?->category?->points_per_1200 ?? $pointMultiplier);
     }
 }
