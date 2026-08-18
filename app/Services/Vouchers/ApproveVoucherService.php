@@ -46,12 +46,15 @@ final class ApproveVoucherService
                 ->firstOrCreate(['branch_id' => $distributor->branch_id])
                 ->refresh();
 
+            $requiresPreValeAfterIncrease = $distributor->prevale_required_after_credit_increase_at !== null;
+
             $preValeResult = $this->financial->validatePreVale(
                 requestedAmount: (float) $voucherRequest->requested_amount,
                 availableCredit: $availableCredit,
                 totalCreditLimit: (float) $distributor->credit_limit,
                 maxPercentage: (float) $branchSetting->pre_vale_max_percentage,
                 toleranceAmount: (float) $branchSetting->pre_vale_tolerance_amount,
+                ruleRequired: $voucherRequest->is_pre_vale || $requiresPreValeAfterIncrease,
             );
 
             if (! $preValeResult->allowed) {
@@ -103,6 +106,10 @@ final class ApproveVoucherService
                     ->where('customer_id', $voucherRequest->customer_id)
                     ->where('relationship_status', CustomerDistributorRelationshipStatus::ACTIVA->value)
                     ->update(['prevale_approved' => true]);
+            }
+
+            if ($requiresPreValeAfterIncrease) {
+                $distributor->update(['prevale_required_after_credit_increase_at' => null]);
             }
 
             return $voucher;

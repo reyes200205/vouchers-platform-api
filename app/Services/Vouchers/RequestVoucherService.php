@@ -39,9 +39,15 @@ final class RequestVoucherService
             $customer = Customer::query()->findOrFail($data['customer_id']);
 
             $this->assertCustomerBelongsToDistributor($distributor, $customer);
-            $this->assertCustomerVerified($customer);
-            $this->assertNoActiveVoucher($customer);
             $this->assertProductActive($product);
+
+            $isFirstCustomerVoucher = ! $customer->vouchers()->exists();
+            $requiresPreValeAfterIncrease = $distributor->prevale_required_after_credit_increase_at !== null;
+            $requiresPreVale = $isFirstCustomerVoucher || $requiresPreValeAfterIncrease;
+
+            if (! $requiresPreVale) {
+                $this->assertCustomerVerified($customer);
+            }
 
             $branchSetting = BranchSetting::query()
                 ->firstOrCreate(['branch_id' => $distributor->branch_id])
@@ -74,6 +80,7 @@ final class RequestVoucherService
                 totalCreditLimit: (float) $distributor->credit_limit,
                 maxPercentage: (float) $branchSetting->pre_vale_max_percentage,
                 toleranceAmount: (float) $branchSetting->pre_vale_tolerance_amount,
+                ruleRequired: $requiresPreVale,
             );
 
             if (! $preValeResult->allowed) {
@@ -111,22 +118,6 @@ final class RequestVoucherService
     {
         if ($customer->status !== CustomerStatus::ACTIVO || $customer->verified_at === null) {
             abort(422, 'El cliente debe estar activo y verificado por la cajera para solicitar un vale.');
-        }
-    }
-
-    private function assertNoActiveVoucher(Customer $customer): void
-    {
-        $hasActiveVoucher = $customer->vouchers()
-            ->whereIn('status', [
-                VoucherStatus::ACTIVO->value,
-                VoucherStatus::PAGO_PARCIAL->value,
-                VoucherStatus::MOROSO->value,
-            ])
-            ->where('current_balance', '>', 0)
-            ->exists();
-
-        if ($hasActiveVoucher) {
-            abort(422, 'El cliente ya tiene un vale activo con saldo pendiente.');
         }
     }
 

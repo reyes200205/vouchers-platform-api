@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Services\Financial;
 
 /**
- * Resultado de la validacion de la regla del pre-vale (primer vale de la
- * distribuidora cuando tiene el 100% de su credito disponible).
+ * Resultado de la validacion de la regla del pre-vale (primer vale histórico
+ * del cliente o primer vale posterior a un incremento de línea).
  */
 final class PreValeValidationResult
 {

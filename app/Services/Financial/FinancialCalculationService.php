@@ -63,8 +63,8 @@ final class FinancialCalculationService
     }
 
     /**
-     * Valida la regla del pre-vale. La regla solo aplica cuando el credito
-     * disponible es exactamente el total (100% disponible).
+    * Valida la regla del pre-vale. Aplica al primer vale histórico del cliente
+    * y al primer vale otorgado después de un incremento de línea.
      *
      * @param  float  $maxPercentage  Porcentaje maximo del pre-vale (default 50).
      * @param  float  $toleranceAmount  Tolerancia de redondeo en pesos (default 500).
@@ -75,16 +75,15 @@ final class FinancialCalculationService
         float $totalCreditLimit,
         float $maxPercentage,
         float $toleranceAmount,
+        bool $ruleRequired,
     ): PreValeValidationResult {
-        $hasFullCreditAvailable = $totalCreditLimit > 0 && abs($availableCredit - $totalCreditLimit) < 0.01;
-
-        if (! $hasFullCreditAvailable) {
+        if (! $ruleRequired) {
             return PreValeValidationResult::allowed();
         }
 
         $maxAllowedAmount = min(
             $availableCredit,
-            round($availableCredit * $maxPercentage / 100 + $toleranceAmount, 2)
+            round($totalCreditLimit * $maxPercentage / 100 + $toleranceAmount, 2)
         );
 
         if ($requestedAmount > $maxAllowedAmount) {

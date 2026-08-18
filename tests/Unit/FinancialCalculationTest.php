@@ -65,14 +65,15 @@ describe('Voucher snapshot (formula del documento)', function (): void {
     });
 });
 
-describe('Pre-vale rule (50% + tolerancia cuando hay 100% disponible)', function (): void {
-    it('allows the first voucher up to 50% of available credit plus tolerance', function (): void {
+describe('Pre-vale rule (50% del limite + tolerancia)', function (): void {
+    it('allows a pre-vale up to 50% of the credit limit plus tolerance', function (): void {
         $result = financial()->validatePreVale(
             requestedAmount: 5000.00,
             availableCredit: 10000.00,
             totalCreditLimit: 10000.00,
             maxPercentage: 50.0,
             toleranceAmount: 500.00,
+            ruleRequired: true,
         );
 
         expect($result->allowed)->toBeTrue()
@@ -87,6 +88,7 @@ describe('Pre-vale rule (50% + tolerancia cuando hay 100% disponible)', function
             totalCreditLimit: 10000.00,
             maxPercentage: 50.0,
             toleranceAmount: 500.00,
+            ruleRequired: true,
         );
 
         expect($result->allowed)->toBeTrue();
@@ -99,6 +101,7 @@ describe('Pre-vale rule (50% + tolerancia cuando hay 100% disponible)', function
             totalCreditLimit: 10000.00,
             maxPercentage: 50.0,
             toleranceAmount: 500.00,
+            ruleRequired: true,
         );
 
         expect($result->allowed)->toBeFalse()
@@ -114,19 +117,21 @@ describe('Pre-vale rule (50% + tolerancia cuando hay 100% disponible)', function
             totalCreditLimit: 800.00,
             maxPercentage: 50.0,
             toleranceAmount: 500.00,
+            ruleRequired: true,
         );
 
         expect($result->allowed)->toBeTrue()
             ->and($result->maxAllowedAmount)->toBe(800.00);
     });
 
-    it('does not apply the rule when the distributor does not have 100% available', function (): void {
+    it('does not apply the rule when the customer already has voucher history', function (): void {
         $result = financial()->validatePreVale(
             requestedAmount: 6000.00,
             availableCredit: 6000.00,
             totalCreditLimit: 10000.00,
             maxPercentage: 50.0,
             toleranceAmount: 500.00,
+            ruleRequired: false,
         );
 
         expect($result->allowed)->toBeTrue()
@@ -140,6 +145,7 @@ describe('Pre-vale rule (50% + tolerancia cuando hay 100% disponible)', function
             totalCreditLimit: 0.00,
             maxPercentage: 50.0,
             toleranceAmount: 500.00,
+            ruleRequired: false,
         );
 
         expect($result->allowed)->toBeTrue()

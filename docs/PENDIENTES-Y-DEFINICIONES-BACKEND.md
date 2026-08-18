@@ -6,6 +6,53 @@ Rama de trabajo: `Axel`
 Este documento permite repartir el backend entre dos personas sin duplicar trabajo. Las
 reglas respondidas aquí se convierten en contratos de API, validaciones y pruebas.
 
+## Actualización post-merge: 2026-08-18
+
+Se revisaron todos los commits posteriores al merge `ad421061de29ef3139eb9e24bc1c3e813be3020e`
+y el estado actual de `develop`. El equipo ya agregó rutas, modelos, servicios, migraciones y
+pruebas para clientes, transferencias, solicitudes y entrega de vales, pagos, cortes,
+conciliación bancaria, puntos/canjes, aumentos de línea, categorías, productos, personal,
+notificaciones y tableros.
+
+### Ajustes aplicados con las respuestas recibidas
+
+- El pre-vale se decide por el primer vale histórico del cliente o por la marca pendiente
+    después de un aumento de línea; ya no depende de que la distribuidora tenga el 100% de
+    crédito disponible. Su tope es 50% del límite de crédito más la tolerancia configurada
+    (por defecto $500), sin superar el crédito disponible.
+- Un vale activo no bloquea un nuevo vale cuando existe línea disponible. Sí bloquea una
+    transferencia de cliente mientras conserve saldo.
+- El cliente puede solicitar su primer pre-vale estando `EN_VERIFICACION`. La cajera debe
+    validarlo y marcarlo `ACTIVO` con INE y comprobante de domicilio antes de feriar el vale.
+- La marca de pre-vale pendiente después de un aumento se consume al aprobar el primer vale
+    posterior al incremento.
+- Productos, categorías y sus porcentajes son administrables únicamente por el gerente
+    general. Los aumentos de línea los solicita coordinador o distribuidora y los
+    preautoriza/decide un gerente.
+- La conciliación manual queda registrada por cajera y exige una segunda autorización de
+    una persona distinta con rol coordinador, gerente de sucursal, gerente general o
+    administrador.
+
+### Respuestas incorporadas sin cambio de código adicional
+
+- La distribuidora sólo consulta clientes con vínculo activo.
+- La transferencia exige que no existan vales activos y sólo puede haber una pendiente por
+    cliente; el servicio ya conserva ese comportamiento.
+- El cálculo del vale ya congela producto y porcentajes: principal + comisión + seguro +
+    interés por todas las quincenas, dividido entre el número de quincenas.
+- Los pagos se concilian automáticamente al importar el archivo por referencia única de
+    relación de corte; las diferencias quedan pendientes de segunda autorización.
+- Los puntos se pueden canjear por efectivo usando el valor configurable por punto.
+- La línea disponible se recupera al conciliar los abonos y los reportes requeridos ya
+    tienen servicios/base de rutas para cartera, cortes, pagos, conciliación y puntos.
+
+### Pendientes que no se deben inferir
+
+Las preguntas sin respuesta siguen abiertas: 6-8, 10, 12-14, 17, 19, 22-23, 26,
+28-30, 32, 34, 37, 45-46 y 48-50. También falta concretar si la marca de 50% posterior
+a aumento se consume al crear, aprobar o feriar el primer vale; la implementación la
+consume al aprobar para evitar gastar línea por un borrador.
+
 ## 1. Estado actual
 
 ### Implementado o en implementación avanzada
