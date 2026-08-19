@@ -36,6 +36,39 @@ final class CoordinadorController extends ApiController
         return $this->success($applications);
     }
 
+    /**
+     * Detalle completo de una solicitud: datos del solicitante, evidencia
+     * capturada por el coordinador (INE, comprobante de domicilio) y, si ya
+     * se visitó, la verificación en sitio (incluida la foto de fachada). Se
+     * usa desde la Bandeja de Aprobaciones al decidir una solicitud.
+     */
+    public function show(Request $request, Application $application): JsonResponse
+    {
+        $application->load([
+            'applicant',
+            'branch',
+            'coordinator.person',
+            'assignedVerifier.person',
+            'verification.verifier.person',
+        ]);
+
+        $baseUrl = $request->getSchemeAndHttpHost().'/storage/';
+        $toUrl = fn (?string $path): ?string => $path ? $baseUrl.$path : null;
+
+        $data = $application->toArray();
+        $data['id_front_url'] = $toUrl($application->id_front_path);
+        $data['id_back_url'] = $toUrl($application->id_back_path);
+        $data['proof_of_address_url'] = $toUrl($application->proof_of_address_path);
+
+        if ($application->verification !== null) {
+            $data['verification']['front_photo_url'] = $toUrl($application->verification->front_photo);
+            $data['verification']['id_with_person_photo_url'] = $toUrl($application->verification->id_with_person_photo);
+            $data['verification']['proof_of_address_photo_url'] = $toUrl($application->verification->proof_of_address_photo);
+        }
+
+        return $this->success($data);
+    }
+
     public function store(StoreApplicationRequest $request, AuditLogger $audit): JsonResponse
     {
         /** @var User $user */

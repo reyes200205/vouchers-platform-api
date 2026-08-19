@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'distributor_id',
     'collected_by_user_id',
     'payment_date',
+    'due_date_snapshot',
     'amount',
     'payment_method',
     'is_partial',
@@ -31,6 +32,7 @@ final class CustomerPayment extends Model
 
     protected $casts = [
         'payment_date' => 'datetime',
+        'due_date_snapshot' => 'date',
         'amount' => 'decimal:2',
         'payment_method' => PaymentMethod::class,
         'is_partial' => 'boolean',

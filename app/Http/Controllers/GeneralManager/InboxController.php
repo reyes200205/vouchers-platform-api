@@ -30,7 +30,16 @@ final class InboxController extends ApiController
             ? null
             : $user->activeBusinessBranchIds();
 
-        $branchIds = $branchId ? [$branchId] : $allowedBranchIds;
+        // Si mandan branch_id, se respeta pero SIEMPRE dentro de lo que el
+        // usuario ya tiene permitido — antes branch_id pisaba por completo el
+        // filtro de sucursales del usuario, así que un gerente de sucursal
+        // podía pedir la bandeja de una sucursal que no es la suya con solo
+        // cambiar el query param.
+        if ($branchId !== null) {
+            $branchIds = $allowedBranchIds === null ? [$branchId] : array_values(array_intersect($allowedBranchIds, [$branchId]));
+        } else {
+            $branchIds = $allowedBranchIds;
+        }
 
         $data = [];
 

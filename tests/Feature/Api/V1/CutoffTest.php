@@ -2,10 +2,8 @@
 
 declare(strict_types=1);
 
-use App\Enums\PaymentMethod;
 use App\Enums\VoucherStatus;
 use App\Models\Branch;
-use App\Models\CustomerPayment;
 use App\Models\Cutoff;
 use App\Models\CutoffRelation;
 use App\Models\Distributor;
@@ -28,6 +26,14 @@ function cutoffSignInBusinessRole(User $user, string $roleCode, Branch $branch):
     Sanctum::actingAs($user);
 }
 
+/**
+ * Vale con una quincena programada (fortnightly_payment_amount = 2825.00 sobre
+ * total_debt_amount = 22600.00 en 8 quincenas) cuya utilidad para la
+ * distribuidora (distributor_profit_amount = 1200.00) reparte 150.00 de
+ * comisión por quincena — ver GenerateCutoffService::calculateDistributorCommission().
+ * El cliente le paga esto a la distribuidora fuera del sistema; lo único que
+ * el corte necesita del vale es su calendario (payment_due_date) y sus montos.
+ */
 function cutoffVoucher(Branch $branch, Distributor $distributor, string $dueDate, float $lateFee = 300.00): Voucher
 {
     return Voucher::factory()->create([
@@ -36,7 +42,9 @@ function cutoffVoucher(Branch $branch, Distributor $distributor, string $dueDate
         'status' => VoucherStatus::ACTIVO,
         'payment_due_date' => $dueDate,
         'late_fee_amount_snapshot' => $lateFee,
-        'distributor_profit_percentage_snapshot' => 8.0000,
+        'distributor_profit_amount' => 1200.00,
+        'total_debt_amount' => 22600.00,
+        'fortnightly_payment_amount' => 2825.00,
         'total_fortnights' => 8,
         'payments_made' => 0,
         'current_balance' => 22600.00,
@@ -52,17 +60,7 @@ describe('Cutoffs', function (): void {
             'available_credit' => 20000,
             'current_points' => 0,
         ]);
-        $voucher = cutoffVoucher($branch, $distributor, now()->addDays(30)->toDateString());
-
-        CustomerPayment::query()->create([
-            'voucher_id' => $voucher->id,
-            'customer_id' => $voucher->customer_id,
-            'distributor_id' => $distributor->id,
-            'payment_date' => now()->subDays(5),
-            'amount' => 2825.00,
-            'payment_method' => PaymentMethod::EFECTIVO,
-            'is_partial' => true,
-        ]);
+        $voucher = cutoffVoucher($branch, $distributor, now()->toDateString());
 
         $manager = User::factory()->create();
         cutoffSignInBusinessRole($manager, 'branch_manager', $branch);
@@ -86,17 +84,13 @@ describe('Cutoffs', function (): void {
         ]);
 
         $relation = CutoffRelation::query()->firstOrFail();
-        // La utilidad de la distribuidora se reparte sobre el principal (900 al
-        // 8% del amount=1200 por defecto de VoucherFactory / 8 quincenas =
-        // 150.00 cuando el pago cubre exactamente una quincena completa), no
-        // sobre el pago quincenal total (que ya incluye comisión + seguro +
-        // interés). Ver GenerateCutoffService::calculateDistributorCommission().
         $this->assertDatabaseHas('cutoff_relation_items', [
             'cutoff_relation_id' => $relation->id,
             'voucher_id' => $voucher->id,
             'payment_amount' => 2825.00,
             'commission_amount' => 150.00,
             'late_fee_amount' => 0.00,
+            'is_late_payment' => 0,
             'line_total_amount' => 2675.00,
         ]);
 
@@ -111,20 +105,13 @@ describe('Cutoffs', function (): void {
         expect($relation->payment_reference)->toStartWith('REF-');
     });
 
-    it('applies late fees when the customer pays after the due date', function (): void {
+    it('never applies a late fee at generation time — lateness is only decided later, when the relation is marked VENCIDA', function (): void {
         $branch = Branch::factory()->create();
         $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
-        $voucher = cutoffVoucher($branch, $distributor, now()->subDays(10)->toDateString(), 300.00);
-
-        CustomerPayment::query()->create([
-            'voucher_id' => $voucher->id,
-            'customer_id' => $voucher->customer_id,
-            'distributor_id' => $distributor->id,
-            'payment_date' => now()->subDays(2),
-            'amount' => 2825.00,
-            'payment_method' => PaymentMethod::EFECTIVO,
-            'is_partial' => true,
-        ]);
+        // El vale ya está vencido desde antes de que abriera el periodo del
+        // corte, pero eso no importa aquí: el corte solo agenda lo que le toca
+        // cobrar a la distribuidora, nunca decide si va a llegar tarde.
+        $voucher = cutoffVoucher($branch, $distributor, now()->subDays(1)->toDateString(), 300.00);
 
         $manager = User::factory()->create();
         cutoffSignInBusinessRole($manager, 'branch_manager', $branch);
@@ -136,26 +123,16 @@ describe('Cutoffs', function (): void {
 
         $this->assertDatabaseHas('cutoff_relation_items', [
             'voucher_id' => $voucher->id,
-            'late_fee_amount' => 300.00,
-            'is_late_payment' => 1,
-            'line_total_amount' => 2975.00,
+            'late_fee_amount' => 0.00,
+            'is_late_payment' => 0,
+            'line_total_amount' => 2675.00,
         ]);
     });
 
     it('carries unpaid relations into the next cutoff', function (): void {
         $branch = Branch::factory()->create();
         $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
-        $voucher = cutoffVoucher($branch, $distributor, now()->addDays(30)->toDateString());
-
-        CustomerPayment::query()->create([
-            'voucher_id' => $voucher->id,
-            'customer_id' => $voucher->customer_id,
-            'distributor_id' => $distributor->id,
-            'payment_date' => now()->subDays(5),
-            'amount' => 2825.00,
-            'payment_method' => PaymentMethod::EFECTIVO,
-            'is_partial' => true,
-        ]);
+        cutoffVoucher($branch, $distributor, now()->toDateString());
 
         $manager = User::factory()->create();
         cutoffSignInBusinessRole($manager, 'branch_manager', $branch);
@@ -189,7 +166,7 @@ describe('Cutoffs', function (): void {
         ]);
     });
 
-    it('skips distributors without payments or unpaid relations', function (): void {
+    it('skips distributors without vouchers due or unpaid relations', function (): void {
         $branch = Branch::factory()->create();
         Distributor::factory()->create(['branch_id' => $branch->id]);
 
@@ -207,17 +184,7 @@ describe('Cutoffs', function (): void {
     it('reprocesses a cutoff creating a new executed one', function (): void {
         $branch = Branch::factory()->create();
         $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
-        $voucher = cutoffVoucher($branch, $distributor, now()->addDays(30)->toDateString());
-
-        CustomerPayment::query()->create([
-            'voucher_id' => $voucher->id,
-            'customer_id' => $voucher->customer_id,
-            'distributor_id' => $distributor->id,
-            'payment_date' => now()->subDays(5),
-            'amount' => 2825.00,
-            'payment_method' => PaymentMethod::EFECTIVO,
-            'is_partial' => true,
-        ]);
+        cutoffVoucher($branch, $distributor, now()->toDateString());
 
         $manager = User::factory()->create();
         cutoffSignInBusinessRole($manager, 'branch_manager', $branch);
@@ -261,17 +228,7 @@ describe('Cutoffs', function (): void {
     it('marks overdue relations as VENCIDA', function (): void {
         $branch = Branch::factory()->create();
         $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
-        $voucher = cutoffVoucher($branch, $distributor, now()->subDays(5)->toDateString());
-
-        CustomerPayment::query()->create([
-            'voucher_id' => $voucher->id,
-            'customer_id' => $voucher->customer_id,
-            'distributor_id' => $distributor->id,
-            'payment_date' => now()->subDays(25),
-            'amount' => 2825.00,
-            'payment_method' => PaymentMethod::EFECTIVO,
-            'is_partial' => true,
-        ]);
+        cutoffVoucher($branch, $distributor, now()->subDays(25)->toDateString());
 
         $manager = User::factory()->create();
         cutoffSignInBusinessRole($manager, 'branch_manager', $branch);

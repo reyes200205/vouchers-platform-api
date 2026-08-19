@@ -7,7 +7,13 @@ return [
 
     'abilities' => [
         'platform.view' => ['administrator', 'general_manager'],
-        'inbox.view' => ['administrator', 'general_manager'],
+        // El gerente de sucursal ya decide sobre solicitudes/incrementos/canjes
+        // de SU sucursal (applications.decide, credit-increase.decide,
+        // points.redeem.decide), así que también necesita ver la bandeja donde
+        // aparecen esas solicitudes pendientes — si no, tiene el permiso para
+        // decidir pero no la forma de encontrarlas. InboxController ya filtra
+        // por sucursal para roles no globales (activeBusinessBranchIds()).
+        'inbox.view' => ['administrator', 'general_manager', 'branch_manager'],
         'users.manage' => ['administrator'],
         'staff.view' => ['general_manager', 'branch_manager'],
         'staff.manage' => ['general_manager', 'branch_manager'],

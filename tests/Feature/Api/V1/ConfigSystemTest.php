@@ -192,6 +192,42 @@ describe('Distributor categories', function (): void {
         ]))->assertForbidden();
     });
 
+    it('lets a branch manager create a category for their own branch via /branches/{branch}/categories', function (): void {
+        // branch_id sale del segmento de la URL, no del cuerpo — antes
+        // StoreDistributorCategoryRequest lo exigía en el body y el
+        // controlador lo fusionaba DESPUÉS de que ya se había validado, así
+        // que esto siempre fallaba con "El campo sucursal es obligatorio".
+        $branch = Branch::factory()->create();
+        $manager = User::factory()->create();
+        loginWithBusinessRole($manager, 'branch_manager', $branch);
+
+        $payload = categoryPayload($branch->id);
+        unset($payload['branch_id']);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/categories", $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.branch_id', $branch->id)
+            ->assertJsonPath('data.code', 'BRONCE');
+
+        $this->assertDatabaseHas('distributor_categories', [
+            'branch_id' => $branch->id,
+            'code' => 'BRONCE',
+        ]);
+    });
+
+    it('forbids a branch manager from creating a category for a different branch via /branches/{branch}/categories', function (): void {
+        $ownBranch = Branch::factory()->create();
+        $otherBranch = Branch::factory()->create();
+        $manager = User::factory()->create();
+        loginWithBusinessRole($manager, 'branch_manager', $ownBranch);
+
+        $payload = categoryPayload($otherBranch->id);
+        unset($payload['branch_id']);
+
+        $this->postJson("/api/v1/branches/{$otherBranch->id}/categories", $payload)
+            ->assertForbidden();
+    });
+
     it('forbids a branch manager from managing categories through the global catalog endpoint', function (): void {
         // Un branch_manager sí puede crear categorías de SU sucursal, pero vía
         // /branches/{branch}/categories (ver BranchManager\CategoryController).

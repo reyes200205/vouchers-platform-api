@@ -41,6 +41,7 @@ final class RequestVoucherService
             $this->assertCustomerVerified($customer);
             $this->assertNoActiveVoucher($customer);
             $this->assertProductActive($product);
+            $this->assertProductMatchesCategory($distributor, $product);
 
             $branchSetting = BranchSetting::query()
                 ->firstOrCreate(['branch_id' => $distributor->branch_id])
@@ -55,7 +56,9 @@ final class RequestVoucherService
                 fortnightlyInterestPercentage: (float) $product->fortnightly_interest_percentage,
                 totalFortnights: $product->number_of_fortnights,
                 categoryCommissionPercentage: $categoryCommission,
-                lateFeeAmount: (float) $product->late_fee_amount,
+                // La multa por atraso ya no vive en el producto: es global de la
+                // sucursal (configurable en branch_settings).
+                lateFeeAmount: (float) $branchSetting->late_payment_penalty_amount,
             );
 
             if (! $this->financial->isMultipleOfStep((float) $product->principal_amount, (int) $branchSetting->voucher_amount_step)) {
@@ -134,6 +137,19 @@ final class RequestVoucherService
     {
         if (! $product->is_active) {
             abort(422, 'El producto financiero seleccionado no está activo.');
+        }
+    }
+
+    /**
+     * Un producto con categoria asignada solo puede canjearlo una distribuidora
+     * de esa misma categoria (ej. un producto de categoria ORO no lo puede pedir
+     * una distribuidora COBRE). Un producto sin categoria (category_id null) es
+     * generico: cualquier distribuidora puede canjearlo sin importar la suya.
+     */
+    private function assertProductMatchesCategory(Distributor $distributor, FinancialProduct $product): void
+    {
+        if ($product->category_id !== null && $product->category_id !== $distributor->category_id) {
+            abort(422, 'El producto seleccionado no está disponible para la categoría de esta distribuidora.');
         }
     }
 }

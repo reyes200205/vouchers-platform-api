@@ -141,6 +141,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:point-settings.manage')->patch('/point-settings', [PointSettingController::class, 'update'])->name('point-settings.update');
 
     Route::middleware('business.ability:applications.view')->get('/applications', [CoordinadorController::class, 'index'])->name('applications.index');
+    Route::middleware('business.ability:applications.view,application')->get('/applications/{application}', [CoordinadorController::class, 'show'])->name('applications.show');
     Route::post('/applications', [CoordinadorController::class, 'store'])->name('applications.store');
     Route::middleware('business.ability:applications.assign-verifier,application')->patch('/applications/{application}/verifier', [CoordinadorController::class, 'assignVerifier'])->name('applications.assign-verifier');
     Route::middleware('business.ability:applications.verify,application')->post('/applications/{application}/verification', [VerificadorController::class, 'verify'])->name('applications.verify');

@@ -168,27 +168,59 @@ final class ImportBankDepositsService
      */
     private function buildHeaderMap(?array $headers): array
     {
+        // Los bancos no usan un nombre de columna estándar para lo mismo — el
+        // mismo archivo puede traer "Fecha de pago" en vez de "Fecha", o
+        // "Pago" en vez de "Importe". Antes solo se reconocían nombres
+        // exactos de una sola palabra, así que un archivo real (como el que
+        // reportó el usuario) no mapeaba ni fecha ni importe y todas las
+        // filas fallaban la validación sin razón aparente.
         $map = [
+            // fecha
             'fecha' => 'fecha',
             'date' => 'fecha',
+            'fecha de pago' => 'fecha',
+            'fecha de deposito' => 'fecha',
+            'fecha deposito' => 'fecha',
+            'fecha de operacion' => 'fecha',
+            'fecha operacion' => 'fecha',
+            'fecha de transaccion' => 'fecha',
+
+            // referencia
             'referencia' => 'referencia',
             'reference' => 'referencia',
             'referencia_pago' => 'referencia',
+            'referencia de pago' => 'referencia',
+            'no de referencia' => 'referencia',
+            'numero de referencia' => 'referencia',
+            'clave de rastreo' => 'referencia',
+
+            // concepto
             'concepto' => 'concepto',
             'descripcion' => 'concepto',
             'description' => 'concepto',
             'detalle' => 'concepto',
+            'concepto de pago' => 'concepto',
+
+            // importe
             'importe' => 'importe',
             'monto' => 'importe',
             'amount' => 'importe',
             'deposito' => 'importe',
             'deposit' => 'importe',
+            'pago' => 'importe',
+            'cantidad' => 'importe',
+            'monto de pago' => 'importe',
+            'monto del deposito' => 'importe',
+
+            // hora (opcional, no bloquea la fila si falta)
+            'hora' => 'hora',
+            'time' => 'hora',
         ];
 
         $headerMap = [];
 
         foreach ($headers ?? [] as $index => $header) {
-            $normalized = strtolower(trim((string) $header));
+            $normalized = $this->normalizeHeader($header);
 
             if (isset($map[$normalized])) {
                 $headerMap[$index] = $map[$normalized];
@@ -200,6 +232,20 @@ final class ImportBankDepositsService
         }
 
         return $headerMap;
+    }
+
+    /**
+     * Normaliza minúsculas, espacios y acentos ("Depósito" -> "deposito") para
+     * que el diccionario de alias no dependa de tildes exactas.
+     */
+    private function normalizeHeader(mixed $header): string
+    {
+        $value = strtolower(trim((string) $header));
+        $withoutAccents = strtr($value, [
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ñ' => 'n',
+        ]);
+
+        return trim(preg_replace('/\s+/', ' ', $withoutAccents) ?? $withoutAccents);
     }
 
     /**
@@ -230,7 +276,7 @@ final class ImportBankDepositsService
         BankTransaction::query()->create([
             'reference' => $reference,
             'transaction_date' => $this->parseDate($row['fecha']),
-            'transaction_time' => null,
+            'transaction_time' => $this->parseTime($row['hora'] ?? null),
             'amount' => $this->parseAmount($row['importe']),
             'transaction_type' => 'DEPOSITO',
             'transaction_number' => $reference,
@@ -259,6 +305,33 @@ final class ImportBankDepositsService
         $amount = (float) $cleaned;
 
         return $negative ? -$amount : $amount;
+    }
+
+    private function parseTime(mixed $value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('H:i:s');
+        }
+
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        // Una celda de hora en Excel a veces llega como fracción numérica del
+        // día (igual que las fechas), no como texto "HH:MM".
+        if (is_numeric($value)) {
+            try {
+                return Date::excelToDateTimeObject((float) $value)->format('H:i:s');
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        try {
+            return Carbon::parse((string) $value)->format('H:i:s');
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function parseDate(mixed $value): ?Carbon

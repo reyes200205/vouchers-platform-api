@@ -24,7 +24,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'company_commission_percentage',
     'insurance_amount',
     'fortnightly_interest_percentage',
-    'late_fee_amount',
     'disbursement_method',
     'is_active',
 ])]
@@ -38,7 +37,6 @@ final class FinancialProduct extends Model
         'company_commission_percentage' => 'decimal:4',
         'insurance_amount' => 'decimal:2',
         'fortnightly_interest_percentage' => 'decimal:4',
-        'late_fee_amount' => 'decimal:2',
         'disbursement_method' => DisbursementMethod::class,
         'is_active' => 'boolean',
     ];

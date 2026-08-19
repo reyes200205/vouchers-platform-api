@@ -2,16 +2,17 @@
 
 declare(strict_types=1);
 
-use App\Enums\PaymentMethod;
-use App\Enums\VoucherStatus;
+use App\Enums\CutoffRelationStatus;
+use App\Models\BankTransaction;
 use App\Models\Branch;
-use App\Models\CustomerPayment;
+use App\Models\Cutoff;
+use App\Models\CutoffRelation;
 use App\Models\Distributor;
 use App\Models\DistributorCategory;
 use App\Models\PointRedemption;
 use App\Models\Role;
 use App\Models\User;
-use App\Models\Voucher;
+use App\Services\Reconciliations\AutoMatchDepositsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 
@@ -40,21 +41,38 @@ function pointSignInBusinessRole(User $user, string $roleCode, Branch $branch): 
     Sanctum::actingAs($user);
 }
 
-function pointVoucher(Branch $branch, Distributor $distributor, string $dueDate, string $earlyStart, string $earlyEnd): Voucher
+/**
+ * Crea una relación de corte GENERADA lista para conciliar (como si ya la
+ * hubiera generado GenerateCutoffService), con el monto exacto que se le va a
+ * "depositar" en el test.
+ */
+function pointRelation(Branch $branch, Distributor $distributor, float $totalPayment, float $totalLateFees = 0.00): CutoffRelation
 {
-    return Voucher::factory()->create([
-        'branch_id' => $branch->id,
+    return CutoffRelation::query()->create([
+        'cutoff_id' => Cutoff::factory()->create(['branch_id' => $branch->id])->id,
         'distributor_id' => $distributor->id,
-        'status' => VoucherStatus::ACTIVO,
-        'payment_due_date' => $dueDate,
-        'early_payment_start_date' => $earlyStart,
-        'early_payment_end_date' => $earlyEnd,
-        'current_balance' => 22600.00,
+        'relation_number' => 'REL-PTS-' . fake()->unique()->numberBetween(1000, 9999),
+        'payment_reference' => 'REF-PTS-' . fake()->unique()->numberBetween(1000, 9999),
+        'payment_due_date' => now()->addDays(15)->toDateString(),
+        'early_payment_start_date' => now()->toDateString(),
+        'early_payment_end_date' => now()->addDays(14)->toDateString(),
+        'total_payment' => $totalPayment,
+        'total_commission' => 0.00,
+        'total_late_fees' => $totalLateFees,
+        'total_amount_due' => round($totalPayment + $totalLateFees, 2),
+        'status' => CutoffRelationStatus::GENERADA,
+        'generated_at' => now(),
     ]);
 }
 
 describe('Points', function (): void {
-    it('grants early payment bonus points and applies late penalties in the cutoff', function (): void {
+    it('awards the full formula points for an on-time (anticipado) settlement — no extra bonus on top', function (): void {
+        // Los puntos son de la DISTRIBUIDORA, no del cliente: se otorgan cuando
+        // su CutoffRelation queda conciliada (PAGADA), no al registrarse un pago
+        // individual (eso ya no existe como fuente de verdad — ver
+        // SettleCutoffRelationService). La fórmula (total/1200 piso *
+        // multiplicador) YA ES el cálculo para "pagos anticipados" — no hay un
+        // porcentaje de bono aparte encima de eso.
         $branch = Branch::factory()->create();
         $category = DistributorCategory::factory()->create(['points_per_1200' => 1]);
         $distributor = Distributor::factory()->create([
@@ -63,51 +81,82 @@ describe('Points', function (): void {
             'current_points' => 0,
         ]);
 
-        $earlyVoucher = pointVoucher($branch, $distributor, now()->addDays(10)->toDateString(), now()->subDays(10)->toDateString(), now()->subDays(5)->toDateString());
-        CustomerPayment::query()->create([
-            'voucher_id' => $earlyVoucher->id,
-            'customer_id' => $earlyVoucher->customer_id,
-            'distributor_id' => $distributor->id,
-            'payment_date' => now()->subDays(6),
-            'amount' => 1200.00,
-            'payment_method' => PaymentMethod::EFECTIVO,
+        $relation = pointRelation($branch, $distributor, 3600.00);
+
+        BankTransaction::query()->create([
+            'reference' => $relation->payment_reference,
+            'transaction_date' => now()->toDateString(),
+            'amount' => 3600.00,
+            'transaction_type' => 'DEPOSITO',
         ]);
 
-        $lateVoucher = pointVoucher($branch, $distributor, now()->subDays(20)->toDateString(), now()->subDays(30)->toDateString(), now()->subDays(25)->toDateString());
-        CustomerPayment::query()->create([
-            'voucher_id' => $lateVoucher->id,
-            'customer_id' => $lateVoucher->customer_id,
-            'distributor_id' => $distributor->id,
-            'payment_date' => now()->subDays(15),
-            'amount' => 1200.00,
-            'payment_method' => PaymentMethod::EFECTIVO,
+        $cashier = User::factory()->create();
+        pointSignInBusinessRole($cashier, 'cashier', $branch);
+
+        app(AutoMatchDepositsService::class)->execute($cashier);
+
+        $this->assertDatabaseHas('cutoff_relations', [
+            'id' => $relation->id,
+            'status' => 'PAGADA',
         ]);
 
-        $manager = User::factory()->create();
-        pointSignInBusinessRole($manager, 'branch_manager', $branch);
-
-        $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
-            'period_start' => now()->subDays(30)->toDateString(),
-            'period_end' => now()->toDateString(),
-        ])->assertCreated();
-
+        // basePoints = floor(3600 / 1200) * 1 = 3. Sin bono extra: los puntos
+        // otorgados son exactamente la fórmula.
         $this->assertDatabaseHas('point_movements', [
             'distributor_id' => $distributor->id,
-            'voucher_id' => $earlyVoucher->id,
             'transaction_type' => 'GANADO_ANTICIPADO',
-            'points' => 1,
-        ]);
-
-        $this->assertDatabaseHas('point_movements', [
-            'distributor_id' => $distributor->id,
-            'voucher_id' => $lateVoucher->id,
-            'transaction_type' => 'PENALIZACION_ATRASO',
-            'points' => -1,
+            'points' => 3,
         ]);
 
         $this->assertDatabaseHas('distributors', [
             'id' => $distributor->id,
-            'current_points' => 0.00,
+            'current_points' => 3.00,
+        ]);
+    });
+
+    it('applies the configured late-payment penalty to the points when the relation was ever marked overdue', function (): void {
+        $branch = Branch::factory()->create();
+        $category = DistributorCategory::factory()->create(['points_per_1200' => 1]);
+        $distributor = Distributor::factory()->create([
+            'branch_id' => $branch->id,
+            'category_id' => $category->id,
+            'current_points' => 0,
+        ]);
+
+        // total_late_fees > 0 es la señal de que esta relación llegó a
+        // vencerse (MarkOverdueRelationsService le aplica la multa ahí); eso es
+        // lo único que SettleCutoffRelationService usa para decidir el -20%,
+        // para no repetir lógica de fechas en más de un lugar.
+        $relation = pointRelation($branch, $distributor, 3600.00, 150.00);
+
+        BankTransaction::query()->create([
+            'reference' => $relation->payment_reference,
+            'transaction_date' => now()->toDateString(),
+            'amount' => 3750.00,
+            'transaction_type' => 'DEPOSITO',
+        ]);
+
+        $cashier = User::factory()->create();
+        pointSignInBusinessRole($cashier, 'cashier', $branch);
+
+        app(AutoMatchDepositsService::class)->execute($cashier);
+
+        $this->assertDatabaseHas('cutoff_relations', [
+            'id' => $relation->id,
+            'status' => 'PAGADA',
+        ]);
+
+        // basePoints = floor(3600 / 1200) * 1 = 3; -20% (default de
+        // point_settings.late_penalty_percentage) => floor(3 * 0.80) = 2.
+        $this->assertDatabaseHas('point_movements', [
+            'distributor_id' => $distributor->id,
+            'transaction_type' => 'GANADO_PUNTUAL',
+            'points' => 2,
+        ]);
+
+        $this->assertDatabaseHas('distributors', [
+            'id' => $distributor->id,
+            'current_points' => 2.00,
         ]);
     });
 

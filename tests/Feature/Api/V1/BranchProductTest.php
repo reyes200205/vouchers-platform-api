@@ -222,6 +222,28 @@ describe('Branch products', function (): void {
             ->assertJsonPath('data.insurance_amount', '250.00');
     });
 
+    it('treats the tier max_amount as inclusive — a principal exactly at the boundary still matches', function (): void {
+        // Antes se comparaba con `<` (exclusivo): un tramo "5001-8000" no
+        // cubría un vale de exactamente $8000, y el seguro se quedaba en $0
+        // aunque la sucursal sí tuviera tarifas configuradas para ese monto.
+        $branch = Branch::factory()->create();
+        BranchSetting::query()->create([
+            'branch_id' => $branch->id,
+            'insurance_rates_json' => [
+                ['min_amount' => 2000, 'max_amount' => 5000, 'insurance_amount' => 300.00],
+                ['min_amount' => 5001, 'max_amount' => 8000, 'insurance_amount' => 350.00],
+            ],
+        ]);
+        productSignIn('branch_manager', $branch);
+
+        $payload = productPayload(['principal_amount' => '8000.00']);
+        unset($payload['insurance_amount']);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/products", $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.insurance_amount', '350.00');
+    });
+
     it('falls back to zero insurance when no tier covers the amount', function (): void {
         $branch = Branch::factory()->create();
         BranchSetting::query()->create([

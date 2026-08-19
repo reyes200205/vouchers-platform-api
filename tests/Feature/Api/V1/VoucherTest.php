@@ -203,6 +203,46 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
         $this->assertDatabaseCount('voucher_requests', 0);
     });
 
+    it('rejects a request for a product tied to a different distributor category', function (): void {
+        ['branch' => $branch, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $otherCategory = DistributorCategory::factory()->create();
+        $product = FinancialProduct::factory()->create(['category_id' => $otherCategory->id]);
+        $user = User::factory()->create();
+        signInDistributor($user, $distributor);
+
+        $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'El producto seleccionado no está disponible para la categoría de esta distribuidora.');
+
+        $this->assertDatabaseCount('voucher_requests', 0);
+    });
+
+    it('allows a request for a product tied to the distributor own category', function (): void {
+        ['branch' => $branch, 'category' => $category, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $product = FinancialProduct::factory()->create(['category_id' => $category->id]);
+        $user = User::factory()->create();
+        signInDistributor($user, $distributor);
+
+        $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated();
+    });
+
+    it('allows a request for a product with no category regardless of the distributor category', function (): void {
+        ['branch' => $branch, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $product = FinancialProduct::factory()->create(['category_id' => null]);
+        $user = User::factory()->create();
+        signInDistributor($user, $distributor);
+
+        $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated();
+    });
+
     it('rejects a request when available credit is not enough for the total debt', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
         $distributor->update(['credit_limit' => 30000, 'available_credit' => 20000]);

@@ -27,6 +27,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'pre_vale_max_percentage',
     'pre_vale_tolerance_amount',
     'point_value_mxn',
+    'point_divisor_factor',
+    'point_multiplier',
+    'late_penalty_percentage',
     'updated_by_user_id',
 ])]
 final class BranchSetting extends Model
@@ -43,6 +46,7 @@ final class BranchSetting extends Model
         'pre_vale_max_percentage' => 'decimal:2',
         'pre_vale_tolerance_amount' => 'decimal:2',
         'point_value_mxn' => 'decimal:2',
+        'late_penalty_percentage' => 'decimal:4',
     ];
 
     /**
@@ -72,6 +76,11 @@ final class BranchSetting extends Model
     /**
      * Resolves the insurance amount for a given principal using the branch tariff.
      * Returns null when no tier covers the amount.
+     *
+     * "Monto máximo" es inclusivo: si un tramo dice 5001-8000, un vale de
+     * exactamente $8000 debe seguir cayendo en ese tramo. Antes se comparaba
+     * con `<` (exclusivo), así que un monto que coincidía justo con el tope de
+     * un tramo no calzaba en NINGÚN tramo y el seguro se quedaba en $0.
      */
     public function insuranceAmountFor(float $principalAmount): ?float
     {
@@ -81,7 +90,7 @@ final class BranchSetting extends Model
             $min = (float) ($tier['min_amount'] ?? 0);
             $max = (float) ($tier['max_amount'] ?? PHP_FLOAT_MAX);
 
-            if ($principalAmount >= $min && $principalAmount < $max) {
+            if ($principalAmount >= $min && $principalAmount <= $max) {
                 return (float) $tier['insurance_amount'];
             }
         }
