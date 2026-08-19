@@ -9,10 +9,10 @@ use App\Enums\CutoffStatus;
 use App\Enums\CutoffType;
 use App\Enums\PointMovementType;
 use App\Models\Branch;
+use App\Models\CustomerPayment;
 use App\Models\Cutoff;
 use App\Models\CutoffRelation;
 use App\Models\CutoffRelationItem;
-use App\Models\CustomerPayment;
 use App\Models\Distributor;
 use App\Models\PointMovement;
 use App\Models\PointSetting;
@@ -90,8 +90,8 @@ final class GenerateCutoffService
             'cutoff_id' => $cutoff->id,
             'distributor_id' => $distributor->id,
             'previous_relation_id' => $previousRelation?->id,
-            'relation_number' => 'REL-' . $cutoff->id . '-' . $distributor->id,
-            'payment_reference' => 'REF-' . strtoupper(substr(md5(uniqid((string) $distributor->id, true)), 0, 10)),
+            'relation_number' => 'REL-'.$cutoff->id.'-'.$distributor->id,
+            'payment_reference' => 'REF-'.mb_strtoupper(mb_substr(md5(uniqid((string) $distributor->id, true)), 0, 10)),
             'payment_due_date' => $periodEnd->copy()->addDays(15)->toDateString(),
             'early_payment_start_date' => $periodEnd->copy()->addDay()->toDateString(),
             'early_payment_end_date' => $periodEnd->copy()->addDays(10)->toDateString(),
@@ -120,7 +120,7 @@ final class GenerateCutoffService
 
             $paymentAmount = round($voucherPayments->sum(fn ($payment) => (float) $payment->amount), 2);
             $lateFee = $this->calculateLateFees($voucher, $voucherPayments);
-            $commission = round($paymentAmount * ((float) $voucher->distributor_profit_percentage_snapshot / 100), 2);
+            $commission = $this->calculateDistributorCommission($voucher, $paymentAmount);
 
             $basePoints = (int) floor($paymentAmount / $pointDivisor) * ($voucher->distributor?->category?->points_per_1200 ?? $pointMultiplier);
             $bonusPoints = $this->calculateEarlyBonusPoints($voucher, $voucherPayments, $basePoints, $pointDivisor, $pointMultiplier);
@@ -226,6 +226,31 @@ final class GenerateCutoffService
         if ($pointsDelta !== 0.0) {
             $distributor->increment('current_points', $pointsDelta);
         }
+    }
+
+    /**
+     * Utilidad de la distribuidora sobre un pago del corte.
+     *
+     * La utilidad total del vale (`distributor_profit_amount`) se cotiza sobre el
+     * PRINCIPAL, no sobre el total a pagar (que ya incluye comisión de apertura,
+     * seguro e interés) — ver `FinancialCalculationService::calculateVoucherSnapshot()`.
+     * Por eso aquí no se vuelve a multiplicar `distributor_profit_percentage_snapshot`
+     * contra el pago del periodo (eso duplicaría el % sobre conceptos que no
+     * generan utilidad para la distribuidora e infla lo que se queda). En vez de
+     * eso, se reparte la utilidad total proporcionalmente a qué fracción de la
+     * deuda total representa este pago: si el pago es exactamente una quincena,
+     * el resultado es idéntico a `distributor_profit_amount / total_fortnights`.
+     */
+    private function calculateDistributorCommission(Voucher $voucher, float $paymentAmount): float
+    {
+        $totalDebt = (float) $voucher->total_debt_amount;
+        $profitTotal = (float) $voucher->distributor_profit_amount;
+
+        if ($totalDebt <= 0 || $profitTotal <= 0) {
+            return 0.0;
+        }
+
+        return round($profitTotal * ($paymentAmount / $totalDebt), 2);
     }
 
     /**

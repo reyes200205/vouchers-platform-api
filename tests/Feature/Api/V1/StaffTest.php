@@ -145,7 +145,7 @@ describe('Staff management', function (): void {
         ])->assertStatus(422);
     });
 
-    it('lets a branch manager create a cashier only in their branch', function (): void {
+    it('lets a branch manager create a cashier, coordinator, and verifier in their branch', function (): void {
         $myBranch = Branch::factory()->create();
         staffSignIn('branch_manager', $myBranch);
 
@@ -178,7 +178,46 @@ describe('Staff management', function (): void {
             'curp' => 'CASI940707HDFTRV02',
             'role_code' => 'coordinator',
             'branch_id' => $myBranch->id,
-        ])->assertStatus(403);
+        ])->assertCreated();
+    });
+
+    it('lets a branch manager create a verifier for their branch', function (): void {
+        $myBranch = Branch::factory()->create();
+        staffSignIn('branch_manager', $myBranch);
+
+        $this->postJson('/api/v1/staff', [
+            'first_name' => 'Maria',
+            'last_name' => 'Lopez',
+            'username' => 'maria.lopez',
+            'password' => 'secret123',
+            'curp' => 'LOPM920514MDFRRR06',
+            'role_code' => 'verifier',
+            'branch_id' => $myBranch->id,
+        ])->assertCreated();
+    });
+
+    it('lets a branch manager upgrade an existing cashier to coordinator or verifier', function (): void {
+        $myBranch = Branch::factory()->create();
+        staffSignIn('branch_manager', $myBranch);
+
+        $cashier = User::factory()->create();
+        $cashier->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $myBranch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->patchJson("/api/v1/staff/{$cashier->id}", [
+            'is_active' => true,
+            'role_code' => 'coordinator',
+        ])->assertOk()
+            ->assertJsonPath('data.roles.0.code', 'coordinator');
+
+        $this->patchJson("/api/v1/staff/{$cashier->id}", [
+            'is_active' => true,
+            'role_code' => 'verifier',
+        ])->assertOk()
+            ->assertJsonPath('data.roles.0.code', 'verifier');
     });
 
     it('updates staff status and role as general manager', function (): void {

@@ -86,21 +86,26 @@ describe('Cutoffs', function (): void {
         ]);
 
         $relation = CutoffRelation::query()->firstOrFail();
+        // La utilidad de la distribuidora se reparte sobre el principal (900 al
+        // 8% del amount=1200 por defecto de VoucherFactory / 8 quincenas =
+        // 150.00 cuando el pago cubre exactamente una quincena completa), no
+        // sobre el pago quincenal total (que ya incluye comisión + seguro +
+        // interés). Ver GenerateCutoffService::calculateDistributorCommission().
         $this->assertDatabaseHas('cutoff_relation_items', [
             'cutoff_relation_id' => $relation->id,
             'voucher_id' => $voucher->id,
             'payment_amount' => 2825.00,
-            'commission_amount' => 226.00,
+            'commission_amount' => 150.00,
             'late_fee_amount' => 0.00,
-            'line_total_amount' => 2599.00,
+            'line_total_amount' => 2675.00,
         ]);
 
         $this->assertDatabaseHas('cutoff_relations', [
             'id' => $relation->id,
             'total_payment' => 2825.00,
-            'total_commission' => 226.00,
+            'total_commission' => 150.00,
             'total_late_fees' => 0.00,
-            'total_amount_due' => 2599.00,
+            'total_amount_due' => 2675.00,
         ]);
 
         expect($relation->payment_reference)->toStartWith('REF-');
@@ -133,7 +138,7 @@ describe('Cutoffs', function (): void {
             'voucher_id' => $voucher->id,
             'late_fee_amount' => 300.00,
             'is_late_payment' => 1,
-            'line_total_amount' => 2899.00,
+            'line_total_amount' => 2975.00,
         ]);
     });
 
@@ -169,8 +174,8 @@ describe('Cutoffs', function (): void {
         $secondRelation = CutoffRelation::query()->where('id', '!=', $firstRelation->id)->firstOrFail();
 
         expect($secondRelation->previous_relation_id)->toBe($firstRelation->id);
-        expect((float) $secondRelation->total_carryover_received)->toBe(2599.00);
-        expect((float) $secondRelation->total_amount_due)->toBe(2599.00);
+        expect((float) $secondRelation->total_carryover_received)->toBe(2675.00);
+        expect((float) $secondRelation->total_amount_due)->toBe(2675.00);
 
         $this->assertDatabaseHas('cutoff_relations', [
             'id' => $firstRelation->id,
@@ -180,7 +185,7 @@ describe('Cutoffs', function (): void {
         $this->assertDatabaseHas('cutoff_relation_items', [
             'cutoff_relation_id' => $secondRelation->id,
             'origin_relation_id' => $firstRelation->id,
-            'payment_amount' => 2599.00,
+            'payment_amount' => 2675.00,
         ]);
     });
 
@@ -223,17 +228,33 @@ describe('Cutoffs', function (): void {
         ])->assertCreated();
 
         $cutoff = Cutoff::query()->firstOrFail();
+        $originalRelation = CutoffRelation::query()->where('cutoff_id', $cutoff->id)->firstOrFail();
 
         $gm = User::factory()->create();
         cutoffSignInBusinessRole($gm, 'general_manager', $branch);
 
-        $this->postJson("/api/v1/cutoffs/{$cutoff->id}/reprocess")
+        $response = $this->postJson("/api/v1/cutoffs/{$cutoff->id}/reprocess")
             ->assertCreated()
             ->assertJsonPath('data.status', 'EJECUTADO');
 
         $this->assertDatabaseHas('cutoffs', [
             'id' => $cutoff->id,
             'status' => 'REPROCESADO',
+        ]);
+
+        $newCutoffId = $response->json('data.id');
+        $newRelation = CutoffRelation::query()
+            ->where('cutoff_id', $newCutoffId)
+            ->where('distributor_id', $distributor->id)
+            ->firstOrFail();
+
+        // previous_relation_id es una FK a cutoff_relations.id, no a cutoffs.id:
+        // debe apuntar a la relación original de esta distribuidora, y esa
+        // relación original debe quedar cerrada para no contar el saldo doble.
+        expect($newRelation->previous_relation_id)->toBe($originalRelation->id);
+        $this->assertDatabaseHas('cutoff_relations', [
+            'id' => $originalRelation->id,
+            'status' => 'CERRADA',
         ]);
     });
 
@@ -263,7 +284,7 @@ describe('Cutoffs', function (): void {
         $relation = CutoffRelation::query()->firstOrFail();
         expect($relation->payment_due_date->isPast())->toBeTrue();
 
-        $count = (new \App\Services\Cutoffs\MarkOverdueRelationsService())->execute();
+        $count = (new App\Services\Cutoffs\MarkOverdueRelationsService())->execute();
 
         expect($count)->toBe(1);
         $this->assertDatabaseHas('cutoff_relations', [

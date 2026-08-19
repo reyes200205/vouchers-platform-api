@@ -192,6 +192,22 @@ describe('Distributor categories', function (): void {
         ]))->assertForbidden();
     });
 
+    it('forbids a branch manager from managing categories through the global catalog endpoint', function (): void {
+        // Un branch_manager sí puede crear categorías de SU sucursal, pero vía
+        // /branches/{branch}/categories (ver BranchManager\CategoryController).
+        // El endpoint global /distributor-categories es exclusivo del gerente
+        // general, para que un gerente de sucursal no pueda crear/editar
+        // categorías de OTRAS sucursales pasando un branch_id arbitrario.
+        $branch = Branch::factory()->create();
+        $manager = User::factory()->create();
+        loginWithBusinessRole($manager, 'branch_manager', $branch);
+
+        $this->postJson('/api/v1/distributor-categories', categoryPayload($branch->id))
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('distributor_categories', ['code' => 'BRONCE']);
+    });
+
     it('lets a general manager move a category to another branch', function (): void {
         $manager = User::factory()->create();
         loginWithBusinessRole($manager, 'general_manager');
@@ -267,7 +283,11 @@ describe('Point settings (globales)', function (): void {
 });
 
 describe('Financial products (catálogo)', function (): void {
-    it('allows a branch manager to create a financial product', function (): void {
+    it('forbids a branch manager from creating a product in the global catalog', function (): void {
+        // El catálogo global (financial-products sin sucursal) es exclusivo del
+        // gerente general — un gerente de sucursal debe crear sus productos vía
+        // /branches/{branch}/products (ver BranchProductTest.php), que sí queda
+        // scoped a su propia sucursal.
         $branch = Branch::factory()->create();
         $manager = User::factory()->create();
         loginWithBusinessRole($manager, 'branch_manager', $branch);
@@ -283,10 +303,31 @@ describe('Financial products (catálogo)', function (): void {
             'late_fee_amount' => '50.00',
             'disbursement_method' => 'TRANSFERENCIA',
             'is_active' => true,
-        ])->assertCreated()
-            ->assertJsonPath('data.code', 'QUINCENA-8');
+        ])->assertForbidden();
 
-        $this->assertDatabaseHas('financial_products', ['code' => 'QUINCENA-8']);
+        $this->assertDatabaseMissing('financial_products', ['code' => 'QUINCENA-8']);
+    });
+
+    it('allows a general manager to create a product in the global catalog', function (): void {
+        $manager = User::factory()->create();
+        loginWithBusinessRole($manager, 'general_manager');
+
+        $this->postJson('/api/v1/financial-products', [
+            'code' => 'QUINCENA-8',
+            'name' => 'Plan quincenal 8',
+            'principal_amount' => '8000.00',
+            'number_of_fortnights' => 8,
+            'company_commission_percentage' => '5.0000',
+            'insurance_amount' => '100.00',
+            'fortnightly_interest_percentage' => '2.5000',
+            'late_fee_amount' => '50.00',
+            'disbursement_method' => 'TRANSFERENCIA',
+            'is_active' => true,
+        ])->assertCreated()
+            ->assertJsonPath('data.code', 'QUINCENA-8')
+            ->assertJsonPath('data.branch_id', null);
+
+        $this->assertDatabaseHas('financial_products', ['code' => 'QUINCENA-8', 'branch_id' => null]);
     });
 
     it('allows a branch manager to view the catalog', function (): void {

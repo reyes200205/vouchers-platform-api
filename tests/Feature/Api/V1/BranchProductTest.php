@@ -14,7 +14,7 @@ use Laravel\Sanctum\Sanctum;
 uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
-    $this->seed(\Database\Seeders\RolesAndPermissionSeeder::class);
+    $this->seed(Database\Seeders\RolesAndPermissionSeeder::class);
 });
 
 function productRole(string $code): Role
@@ -235,6 +235,47 @@ describe('Branch products', function (): void {
         $this->postJson("/api/v1/branches/{$branch->id}/products", productPayload(['principal_amount' => '30000.00']))
             ->assertCreated()
             ->assertJsonPath('data.insurance_amount', '0.00');
+    });
+
+    it('inherits commission, interest and late fee from the branch settings when omitted', function (): void {
+        $branch = Branch::factory()->create();
+        BranchSetting::query()->create([
+            'branch_id' => $branch->id,
+            'opening_commission_percentage' => 12.5000,
+            'biweekly_interest_percentage' => 4.0000,
+            'late_payment_penalty_amount' => 250.00,
+        ]);
+        productSignIn('branch_manager', $branch);
+
+        $payload = productPayload();
+        unset($payload['company_commission_percentage'], $payload['fortnightly_interest_percentage'], $payload['late_fee_amount']);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/products", $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.company_commission_percentage', '12.5000')
+            ->assertJsonPath('data.fortnightly_interest_percentage', '4.0000')
+            ->assertJsonPath('data.late_fee_amount', '250.00');
+    });
+
+    it('keeps explicit commission, interest and late fee when provided', function (): void {
+        $branch = Branch::factory()->create();
+        BranchSetting::query()->create([
+            'branch_id' => $branch->id,
+            'opening_commission_percentage' => 12.5000,
+            'biweekly_interest_percentage' => 4.0000,
+            'late_payment_penalty_amount' => 250.00,
+        ]);
+        productSignIn('branch_manager', $branch);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/products", productPayload([
+            'company_commission_percentage' => '10.0000',
+            'fortnightly_interest_percentage' => '5.0000',
+            'late_fee_amount' => '300.00',
+        ]))
+            ->assertCreated()
+            ->assertJsonPath('data.company_commission_percentage', '10.0000')
+            ->assertJsonPath('data.fortnightly_interest_percentage', '5.0000')
+            ->assertJsonPath('data.late_fee_amount', '300.00');
     });
 
     it('includes global products in the branch catalog marked as global', function (): void {

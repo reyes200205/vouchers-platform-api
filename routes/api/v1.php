@@ -38,8 +38,8 @@ use App\Http\Controllers\GeneralManager\PointController as GeneralManagerPointCo
 use App\Http\Controllers\GeneralManager\PointSettingController;
 use App\Http\Controllers\GeneralManager\ReconciliationController as GeneralManagerReconciliationController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\System\RolesController;
 use App\Http\Controllers\Staff\StaffController;
+use App\Http\Controllers\System\RolesController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -122,7 +122,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
         Route::get('/financial-products/{financialProduct}', [FinancialProductController::class, 'show'])->name('financial-products.show');
     });
 
-    Route::middleware('business.ability:products.manage')->group(function (): void {
+    Route::middleware('business.ability:products.manage.global')->group(function (): void {
         Route::post('/financial-products', [FinancialProductController::class, 'store'])->name('financial-products.store');
         Route::patch('/financial-products/{financialProduct}', [FinancialProductController::class, 'update'])->name('financial-products.update');
     });
@@ -132,7 +132,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
         Route::get('/distributor-categories/{distributorCategory}', [DistributorCategoryController::class, 'show'])->name('distributor-categories.show');
     });
 
-    Route::middleware('business.ability:categories.manage')->group(function (): void {
+    Route::middleware('business.ability:categories.manage.global')->group(function (): void {
         Route::post('/distributor-categories', [DistributorCategoryController::class, 'store'])->name('distributor-categories.store');
         Route::patch('/distributor-categories/{distributorCategory}', [DistributorCategoryController::class, 'update'])->name('distributor-categories.update');
     });

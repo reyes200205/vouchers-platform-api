@@ -14,7 +14,6 @@ use App\Models\FinancialProduct;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Voucher;
-use App\Models\VoucherRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 
@@ -121,6 +120,31 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
             'financial_product_id' => $product->id,
         ])->assertCreated()
             ->assertJsonPath('data.is_pre_vale', false);
+    });
+
+    it('reapplies the 50% rule after a credit increase even if the distributor is not at 100% available', function (): void {
+        // Regla confirmada: si el gerente autoriza un aumento de línea mientras
+        // la distribuidora ya tiene crédito usado, el siguiente vale vuelve a
+        // respetar el 50% del DISPONIBLE + tolerancia, aunque el disponible no
+        // sea igual al límite total (ver Distributor::prevale_required_after_credit_increase_at).
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $distributor->update([
+            'credit_limit' => 30000,
+            'available_credit' => 25000, // ya tiene 5,000 usados
+            'prevale_required_after_credit_increase_at' => now(),
+        ]);
+        $user = User::factory()->create();
+        signInDistributor($user, $distributor);
+
+        // 50% de 25,000 + 500 de tolerancia = 13,000. El producto por defecto
+        // pide 15,000, así que debe rechazarse igual que un pre-vale normal.
+        $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'El monto supera el máximo permitido para el primer vale (50% del crédito disponible).');
+
+        $this->assertDatabaseCount('voucher_requests', 0);
     });
 
     it('rejects a request for a customer that is not verified', function (): void {
@@ -243,6 +267,33 @@ describe('Voucher approval (coordinador/gerente)', function (): void {
             'distributor_id' => $distributor->id,
             'prevale_approved' => true,
         ]);
+    });
+
+    it('clears the credit-increase reactivation flag once the next voucher is approved', function (): void {
+        ['branch' => $branch, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $product = FinancialProduct::factory()->create(['principal_amount' => 10000.00]);
+        $distributor->update([
+            'credit_limit' => 30000,
+            'available_credit' => 25000,
+            'prevale_required_after_credit_increase_at' => now(),
+        ]);
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $coordinator = User::factory()->create();
+        signInBusinessRole($coordinator, 'coordinator', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.is_pre_vale', true);
+
+        expect($distributor->refresh()->prevale_required_after_credit_increase_at)->toBeNull();
+        expect((float) $distributor->available_credit)->toBe(9900.00);
     });
 
     it('rejects approval when the distributor no longer has enough credit', function (): void {

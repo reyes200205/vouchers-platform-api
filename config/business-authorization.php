@@ -7,7 +7,7 @@ return [
 
     'abilities' => [
         'platform.view' => ['administrator', 'general_manager'],
-        'inbox.view' => ['administrator', 'general_manager', 'branch_manager'],
+        'inbox.view' => ['administrator', 'general_manager'],
         'users.manage' => ['administrator'],
         'staff.view' => ['general_manager', 'branch_manager'],
         'staff.manage' => ['general_manager', 'branch_manager'],
@@ -17,8 +17,17 @@ return [
         'branch-settings.manage' => ['general_manager', 'branch_manager'],
         'products.view' => ['administrator', 'general_manager', 'branch_manager'],
         'products.manage' => ['general_manager', 'branch_manager'],
+        // Catálogo global (sin sucursal): solo el gerente general lo administra.
+        // No reutilizar 'products.manage' aquí: esa ability también protege la ruta
+        // por sucursal (/branches/{branch}/products) y, al no llevar el parámetro
+        // de sucursal, un branch_manager con CUALQUIER sucursal asignada la superaba
+        // y podía crear productos globales visibles para todas las sucursales.
+        'products.manage.global' => ['general_manager'],
         'categories.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator'],
         'categories.manage' => ['general_manager', 'branch_manager'],
+        // Mismo caso que products.manage.global: catálogo de categorías global,
+        // exclusivo del gerente general.
+        'categories.manage.global' => ['general_manager'],
         'point-settings.view' => ['administrator', 'general_manager', 'branch_manager'],
         'point-settings.manage' => ['general_manager'],
         'applications.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator', 'verifier'],
@@ -55,7 +64,7 @@ return [
         'cutoffs.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator', 'distributor'],
         'cutoffs.manage' => ['branch_manager', 'general_manager'],
         'reconciliations.import' => ['cashier', 'general_manager'],
-        'reconciliations.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator'],
+        'reconciliations.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator', 'cashier'],
         'reconciliations.verify' => ['branch_manager', 'general_manager'],
         'points.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator', 'distributor'],
         'points.redeem.request' => ['distributor'],

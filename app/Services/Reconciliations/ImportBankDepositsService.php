@@ -195,7 +195,7 @@ final class ImportBankDepositsService
             }
         }
 
-        if (!isset($headerMap[0]) && isset($headers[0]) && !in_array(strtolower(trim((string) $headers[0])), $map, true)) {
+        if (count($headerMap) === 0 && isset($headers[0])) {
             $headerMap = [0 => 'fecha', 1 => 'referencia', 2 => 'concepto', 3 => 'importe'];
         }
 

@@ -33,24 +33,37 @@ final class ReprocessCutoffService
                 'executed_at' => now(),
                 'status' => CutoffStatus::EJECUTADO,
                 'config_snapshot_json' => $cutoff->config_snapshot_json,
-                'notes' => 'Reproceso del corte #' . $cutoff->id,
+                'notes' => 'Reproceso del corte #'.$cutoff->id,
             ]);
 
-            $distributorIds = CutoffRelation::query()
+            // Una relación por distribuidora, indexada por distributor_id, para
+            // heredar su id (no el del corte) y su propia fecha límite de pago.
+            $oldRelations = CutoffRelation::query()
                 ->where('cutoff_id', $cutoff->id)
-                ->distinct()
-                ->pluck('distributor_id');
+                ->get()
+                ->keyBy('distributor_id');
 
-            foreach ($distributorIds as $distributorId) {
+            foreach ($oldRelations as $distributorId => $oldRelation) {
                 CutoffRelation::query()->create([
                     'cutoff_id' => $newCutoff->id,
                     'distributor_id' => $distributorId,
-                    'previous_relation_id' => $cutoff->id,
-                    'relation_number' => 'REL-' . $newCutoff->id . '-' . $distributorId,
-                    'payment_reference' => 'REF-' . strtoupper(substr(md5(uniqid((string) $distributorId, true)), 0, 10)),
-                    'payment_due_date' => $cutoff->relations()->first()?->payment_due_date ?? now()->addDays(15)->toDateString(),
+                    // `previous_relation_id` referencia `cutoff_relations.id`, no
+                    // `cutoffs.id`: debe apuntar a la relación anterior de esta
+                    // misma distribuidora, no al id del corte que se reprocesa.
+                    'previous_relation_id' => $oldRelation->id,
+                    'relation_number' => 'REL-'.$newCutoff->id.'-'.$distributorId,
+                    'payment_reference' => 'REF-'.mb_strtoupper(mb_substr(md5(uniqid((string) $distributorId, true)), 0, 10)),
+                    'payment_due_date' => $oldRelation->payment_due_date ?? now()->addDays(15)->toDateString(),
                     'status' => CutoffRelationStatus::GENERADA,
                     'generated_at' => now(),
+                ]);
+
+                // Se cierra la relación reprocesada para que no siga contando
+                // como saldo pendiente por duplicado (ya quedó representada por
+                // la relación nueva enlazada arriba).
+                $oldRelation->update([
+                    'status' => CutoffRelationStatus::CERRADA,
+                    'closed_by_carryover_at' => now(),
                 ]);
             }
 

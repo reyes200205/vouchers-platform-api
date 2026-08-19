@@ -22,8 +22,7 @@ final class RequestVoucherService
 {
     public function __construct(
         private readonly FinancialCalculationService $financial,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array{customer_id: int, financial_product_id: int}  $data
@@ -74,6 +73,7 @@ final class RequestVoucherService
                 totalCreditLimit: (float) $distributor->credit_limit,
                 maxPercentage: (float) $branchSetting->pre_vale_max_percentage,
                 toleranceAmount: (float) $branchSetting->pre_vale_tolerance_amount,
+                reactivationPending: $distributor->prevale_required_after_credit_increase_at !== null,
             );
 
             if (! $preValeResult->allowed) {

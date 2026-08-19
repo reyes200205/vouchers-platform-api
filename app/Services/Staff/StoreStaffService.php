@@ -48,7 +48,11 @@ final class StoreStaffService
         }
 
         if (! $actor->isGeneralManager()) {
-            abort_unless($role->name === 'cashier', 403, 'Solo el gerente general puede crear personal de otro tipo.');
+            abort_unless(
+                in_array($role->name, ListStaffService::BRANCH_MANAGER_ROLES, true),
+                403,
+                'Solo el gerente general puede crear personal de otro tipo.'
+            );
             abort_unless(in_array($data['branch_id'], $actor->activeBusinessBranchIds(), true), 403, 'Solo puedes asignar personal a tus sucursales.');
         }
 

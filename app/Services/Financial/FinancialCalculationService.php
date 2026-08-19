@@ -63,11 +63,19 @@ final class FinancialCalculationService
     }
 
     /**
-     * Valida la regla del pre-vale. La regla solo aplica cuando el credito
-     * disponible es exactamente el total (100% disponible).
+     * Valida la regla del pre-vale. La regla aplica cuando el credito
+     * disponible es exactamente el total (100% disponible) -es decir, el primer
+     * vale de la vida de la distribuidora- o cuando `$reactivationPending` es
+     * true porque un gerente acaba de autorizar un aumento de linea de credito
+     * (ver `Distributor::prevale_required_after_credit_increase_at`): en ese
+     * caso el 50% + tolerancia vuelve a aplicar sobre el credito disponible del
+     * siguiente vale, aunque la distribuidora ya tuviera vales activos.
      *
      * @param  float  $maxPercentage  Porcentaje maximo del pre-vale (default 50).
      * @param  float  $toleranceAmount  Tolerancia de redondeo en pesos (default 500).
+     * @param  bool  $reactivationPending  True si la distribuidora tiene un aumento
+     *                                     de linea reciente que aun no se aplico a
+     *                                     ningun vale.
      */
     public function validatePreVale(
         float $requestedAmount,
@@ -75,10 +83,11 @@ final class FinancialCalculationService
         float $totalCreditLimit,
         float $maxPercentage,
         float $toleranceAmount,
+        bool $reactivationPending = false,
     ): PreValeValidationResult {
         $hasFullCreditAvailable = $totalCreditLimit > 0 && abs($availableCredit - $totalCreditLimit) < 0.01;
 
-        if (! $hasFullCreditAvailable) {
+        if (! $hasFullCreditAvailable && ! $reactivationPending) {
             return PreValeValidationResult::allowed();
         }
 

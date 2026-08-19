@@ -133,6 +133,21 @@ describe('Pre-vale rule (50% + tolerancia cuando hay 100% disponible)', function
             ->and($result->ruleApplied)->toBeFalse();
     });
 
+    it('reapplies the rule when a credit increase reactivation is pending, even without 100% available', function (): void {
+        $result = financial()->validatePreVale(
+            requestedAmount: 6000.00,
+            availableCredit: 6000.00,
+            totalCreditLimit: 10000.00,
+            maxPercentage: 50.0,
+            toleranceAmount: 500.00,
+            reactivationPending: true,
+        );
+
+        expect($result->allowed)->toBeFalse()
+            ->and($result->ruleApplied)->toBeTrue()
+            ->and($result->maxAllowedAmount)->toBe(3500.00);
+    });
+
     it('does not apply the rule with a zero credit limit', function (): void {
         $result = financial()->validatePreVale(
             requestedAmount: 0.00,

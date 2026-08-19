@@ -19,8 +19,7 @@ final class ApproveVoucherService
 {
     public function __construct(
         private readonly FinancialCalculationService $financial,
-    ) {
-    }
+    ) {}
 
     public function execute(User $user, VoucherRequest $voucherRequest): Voucher
     {
@@ -46,12 +45,15 @@ final class ApproveVoucherService
                 ->firstOrCreate(['branch_id' => $distributor->branch_id])
                 ->refresh();
 
+            $reactivationPending = $distributor->prevale_required_after_credit_increase_at !== null;
+
             $preValeResult = $this->financial->validatePreVale(
                 requestedAmount: (float) $voucherRequest->requested_amount,
                 availableCredit: $availableCredit,
                 totalCreditLimit: (float) $distributor->credit_limit,
                 maxPercentage: (float) $branchSetting->pre_vale_max_percentage,
                 toleranceAmount: (float) $branchSetting->pre_vale_tolerance_amount,
+                reactivationPending: $reactivationPending,
             );
 
             if (! $preValeResult->allowed) {
@@ -60,7 +62,14 @@ final class ApproveVoucherService
 
             $distributor->decrement('available_credit', $totalDebt);
 
-            $voucherNumber = 'V-' . ((int) Voucher::query()->max('id') + 1);
+            if ($reactivationPending) {
+                // La regla del 50% ya se aplicó a este vale (el primero desde el
+                // aumento de línea); se libera para que los siguientes vuelvan a
+                // comportarse como vale digital normal.
+                $distributor->update(['prevale_required_after_credit_increase_at' => null]);
+            }
+
+            $voucherNumber = 'V-'.((int) Voucher::query()->max('id') + 1);
 
             $voucher = Voucher::query()->create([
                 'voucher_number' => $voucherNumber,
