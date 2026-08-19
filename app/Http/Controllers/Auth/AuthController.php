@@ -20,7 +20,7 @@ final class AuthController extends ApiController
     public function login(LoginRequest $request, AuditLogger $audit): JsonResponse
     {
         $user = User::query()
-            ->with(['person', 'businessRoles'])
+            ->with(['person', 'businessRoles', 'distributor.category'])
             ->where('username', $request->username)
             ->orWhereHas('person', function ($query) use ($request) {
                 $query->where('email', $request->username);
@@ -69,7 +69,7 @@ final class AuthController extends ApiController
         $user = $request->user();
 
         return $this->success(new UserResource(
-            $user->loadMissing(['person', 'businessRoles'])
+            $user->loadMissing(['person', 'businessRoles', 'distributor.category'])
         ));
     }
 }

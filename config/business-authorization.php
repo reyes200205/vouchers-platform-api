@@ -15,7 +15,7 @@ return [
         'branches.manage' => ['general_manager'],
         'branch-settings.view' => ['administrator', 'general_manager', 'branch_manager'],
         'branch-settings.manage' => ['general_manager', 'branch_manager'],
-        'products.view' => ['administrator', 'general_manager', 'branch_manager'],
+        'products.view' => ['administrator', 'general_manager', 'branch_manager', 'distributor'],
         'products.manage' => ['general_manager', 'branch_manager'],
         // Catálogo global (sin sucursal): solo el gerente general lo administra.
         // No reutilizar 'products.manage' aquí: esa ability también protege la ruta

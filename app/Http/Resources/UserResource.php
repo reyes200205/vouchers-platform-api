@@ -45,6 +45,24 @@ final class UserResource extends JsonResource
                 'postal_code' => $this->person?->postal_code,
                 'email' => $this->person?->email,
             ]),
+            'distributor' => $this->whenLoaded('distributor', fn () => $this->distributor ? [
+                'id' => $this->distributor->id,
+                'distributor_number' => $this->distributor->distributor_number,
+                'branch_id' => $this->distributor->branch_id,
+                'status' => $this->distributor->status?->value,
+                'credit_limit' => $this->distributor->credit_limit,
+                'available_credit' => $this->distributor->available_credit,
+                'unlimited_credit' => $this->distributor->unlimited_credit,
+                'current_points' => $this->distributor->current_points,
+                'can_issue_vouchers' => $this->distributor->can_issue_vouchers,
+                'category' => $this->distributor->relationLoaded('category') && $this->distributor->category
+                    ? [
+                        'id' => $this->distributor->category->id,
+                        'code' => $this->distributor->category->code,
+                        'name' => $this->distributor->category->name,
+                    ]
+                    : null,
+            ] : null),
             'roles' => $this->whenLoaded('businessRoles', function () {
                 $branchIds = $this->businessRoles
                     ->pluck('pivot.branch_id')

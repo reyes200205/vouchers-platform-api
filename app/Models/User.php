@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -52,6 +53,16 @@ final class User extends Authenticatable
     public function person(): BelongsTo
     {
         return $this->belongsTo(Person::class);
+    }
+
+    /**
+     * Registro de Distribuidora asociado a este usuario (cuando su rol de negocio es `distributor`).
+     *
+     * @return HasOne<Distributor, $this>
+     */
+    public function distributor(): HasOne
+    {
+        return $this->hasOne(Distributor::class, 'person_id', 'person_id');
     }
 
     /**
