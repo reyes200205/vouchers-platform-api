@@ -42,6 +42,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Staff\StaffController;
 use App\Http\Controllers\System\AuditLogController;
 use App\Http\Controllers\System\RolesController;
+use App\Http\Controllers\System\SpacesTestController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -72,6 +73,10 @@ Route::get('ping', fn () => response()->json([
 | Routes for
 */
 Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function (): void {
+    Route::middleware('business.ability:storage.spaces.test')
+        ->post('/system/storage/spaces/test-upload', [SpacesTestController::class, 'store'])
+        ->name('system.storage.spaces.test-upload');
+
     Route::middleware('business.ability:users.manage')->group(function (): void {
         Route::post('/general-managers', [GeneralManagerController::class, 'store'])->name('general-managers.store');
     });

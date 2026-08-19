@@ -8,6 +8,7 @@ return [
     'abilities' => [
         'audit-logs.view' => ['super-admin'],
         'platform.view' => ['general_manager'],
+        'storage.spaces.test' => ['super-admin', 'general_manager'],
         // El gerente de sucursal ya decide sobre solicitudes/incrementos/canjes
         // de SU sucursal (applications.decide, credit-increase.decide,
         // points.redeem.decide), así que también necesita ver la bandeja donde
