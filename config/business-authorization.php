@@ -7,6 +7,7 @@ return [
 
     'abilities' => [
         'platform.view' => ['administrator', 'general_manager'],
+        'storage.spaces.test' => ['administrator', 'general_manager'],
         'inbox.view' => ['administrator', 'general_manager', 'branch_manager'],
         'users.manage' => ['administrator'],
         'staff.view' => ['general_manager', 'branch_manager'],
