@@ -175,4 +175,33 @@ final class Voucher extends Model
     {
         return $this->hasOne(SimulatedCompanyExpense::class);
     }
+
+    public function getIsExpiredAttribute(): bool
+    {
+        if ($this->status !== VoucherStatus::APROBADO) {
+            return false;
+        }
+
+        $branchSetting = $this->branch?->setting;
+        if (! $branchSetting || $branchSetting->voucher_expiration_days === null) {
+            return false;
+        }
+
+        $expirationDate = $this->expiration_date;
+        return $expirationDate ? now()->greaterThan($expirationDate) : false;
+    }
+
+    public function getExpirationDateAttribute(): ?\Carbon\Carbon
+    {
+        if ($this->status !== VoucherStatus::APROBADO) {
+            return null;
+        }
+
+        $branchSetting = $this->branch?->setting;
+        if (! $branchSetting || $branchSetting->voucher_expiration_days === null) {
+            return null;
+        }
+
+        return $this->issued_at?->copy()->addDays((int) $branchSetting->voucher_expiration_days);
+    }
 }

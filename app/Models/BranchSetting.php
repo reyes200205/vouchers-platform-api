@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'pre_vale_max_percentage',
     'pre_vale_tolerance_amount',
     'point_value_mxn',
+    'voucher_expiration_days',
     'point_divisor_factor',
     'point_multiplier',
     'late_penalty_percentage',
@@ -46,6 +47,7 @@ final class BranchSetting extends Model
         'pre_vale_max_percentage' => 'decimal:2',
         'pre_vale_tolerance_amount' => 'decimal:2',
         'point_value_mxn' => 'decimal:2',
+        'voucher_expiration_days' => 'integer',
         'late_penalty_percentage' => 'decimal:4',
     ];
 

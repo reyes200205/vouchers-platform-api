@@ -26,7 +26,12 @@ final class BranchController extends ApiController
             $query->whereIn('id', $branchIds);
         }
 
-        $branches = $query->paginate($request->integer('per_page', 15))
+        $perPage = $request->integer('per_page', 15);
+        if ($perPage === -1) {
+            $perPage = $query->count() ?: 15;
+        }
+
+        $branches = $query->paginate($perPage)
             ->appends($request->query());
 
         return $this->success(
@@ -41,7 +46,11 @@ final class BranchController extends ApiController
 
     public function availableManagers(): JsonResponse
     {
-        $users = User::role(['general_manager', 'branch_manager'])
+        $users = User::query()
+            ->whereHas('businessRoles', function ($query) {
+                $query->whereIn('roles.name', ['general_manager', 'branch_manager'])
+                    ->whereNull('model_has_roles.revoked_at');
+            })
             ->with('person')
             ->get();
 
@@ -101,7 +110,7 @@ final class BranchController extends ApiController
 
         $audit->record($request, 'BRANCH_CREATED', 'branches', 'Sucursal creada.', $branch->id);
 
-        return $this->created(new BranchResource($branch));
+        return $this->created(new BranchResource($branch->fresh()));
     }
 
     public function update(UpdateBranchRequest $request, Branch $branch, AuditLogger $audit): JsonResponse

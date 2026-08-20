@@ -40,7 +40,7 @@ final class AlessandroDemoSeeder extends Seeder
 {
     public function run(): void
     {
-        $gm = $this->userWithRole('alessandro', 'Gerente General (Demo)', 'general_manager', null);
+        $gm = $this->userWithRole('alessandro@example.com', 'Gerente General (Demo)', 'general_manager', null);
 
         $products = collect();
         foreach ([
@@ -83,7 +83,7 @@ final class AlessandroDemoSeeder extends Seeder
                 'is_active' => true,
             ]);
 
-            $bm = $this->userWithRole('gerente_sucursal_'.($index + 1), "Gerente {$name}", 'branch_manager', $branch);
+            $bm = $this->userWithRole('gerente_sucursal_'.($index + 1).'@example.com', "Gerente {$name}", 'branch_manager', $branch);
             BranchSetting::query()->firstOrCreate(['branch_id' => $branch->id], [
                 'updated_by_user_id' => $bm->id,
                 'payment_due_days' => 15,
@@ -148,7 +148,7 @@ final class AlessandroDemoSeeder extends Seeder
                 ]);
 
                 $distributorUser = $this->userWithRole(
-                    'distribuidora_'.($distributors->count() + 1),
+                    'distribuidora_'.($distributors->count() + 1).'@example.com',
                     $person->first_name.' '.$person->last_name,
                     'distributor',
                     $branch,
@@ -170,7 +170,9 @@ final class AlessandroDemoSeeder extends Seeder
             }
         }
 
-        $customers = Customer::factory()->count(15)->create();
+        $customers = Customer::factory()->count(15)->create([
+            'branch_id' => fn () => $branches->random()->id,
+        ]);
 
         foreach ($distributors->take(4) as $index => $distributor) {
             $application = Application::query()->create([
@@ -239,10 +241,15 @@ final class AlessandroDemoSeeder extends Seeder
 
     private function userWithRole(string $username, string $displayName, string $roleCode, ?Branch $branch, ?Person $person = null): User
     {
-        $person = $person ?? Person::query()->create([
-            'first_name' => $displayName,
-            'last_name' => 'Demo',
-        ]);
+        if ($person) {
+            $person->update(['email' => $username]);
+        } else {
+            $person = Person::query()->create([
+                'first_name' => $displayName,
+                'last_name' => 'Demo',
+                'email' => $username,
+            ]);
+        }
 
         $user = User::query()->firstOrCreate(['username' => $username], [
             'person_id' => $person->id,

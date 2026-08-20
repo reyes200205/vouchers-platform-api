@@ -48,6 +48,8 @@ final class VoucherResource extends JsonResource
             'transferred_at' => $this->transferred_at?->toIso8601String(),
             'payment_due_date' => $this->payment_due_date?->toDateString(),
             'is_canceled' => $this->is_canceled,
+            'is_expired' => $this->is_expired,
+            'expiration_date' => $this->expiration_date?->toDateString(),
             'canceled_at' => $this->canceled_at?->toIso8601String(),
             'notes' => $this->notes,
             'created_by_user_id' => $this->created_by_user_id,
