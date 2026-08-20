@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('branch_settings', function (Blueprint $table) {
-            $table->unsignedSmallInteger('voucher_expiration_days')->nullable()->after('point_value_mxn');
+            $table->unsignedSmallInteger('voucher_expiration_days')->nullable()->default(5)->after('point_value_mxn');
         });
     }
 
