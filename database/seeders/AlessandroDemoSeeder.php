@@ -242,6 +242,7 @@ final class AlessandroDemoSeeder extends Seeder
         $person = $person ?? Person::query()->create([
             'first_name' => $displayName,
             'last_name' => 'Demo',
+            'email' => "{$username}@example.com",
         ]);
 
         $user = User::query()->firstOrCreate(['username' => $username], [
