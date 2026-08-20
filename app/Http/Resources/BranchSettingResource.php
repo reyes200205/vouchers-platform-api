@@ -37,6 +37,7 @@ final class BranchSettingResource extends JsonResource
             'pre_vale_max_percentage' => $this->pre_vale_max_percentage,
             'pre_vale_tolerance_amount' => $this->pre_vale_tolerance_amount,
             'point_value_mxn' => $this->point_value_mxn,
+            'voucher_expiration_days' => $this->voucher_expiration_days,
             'point_divisor_factor' => $this->point_divisor_factor,
             'point_multiplier' => $this->point_multiplier,
             'late_penalty_percentage' => $this->late_penalty_percentage,

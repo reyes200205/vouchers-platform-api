@@ -29,7 +29,7 @@ final class VoucherController extends ApiController
             ->firstOrFail();
 
         $vouchers = Voucher::query()
-            ->with(['customer.person'])
+            ->with(['customer.person', 'branch.setting'])
             ->where('distributor_id', $distributor->id)
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
             ->latest('id')

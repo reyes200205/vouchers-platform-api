@@ -30,9 +30,16 @@ final class DisburseVoucherService
         $dueDays = (int) ($branchSetting->payment_due_days ?? 15);
         $frequencyDays = (int) ($branchSetting->payment_frequency_days ?? 14);
 
-        return DB::transaction(static function () use ($user, $voucher, $data, $dueDays, $frequencyDays): Voucher {
+        return DB::transaction(static function () use ($user, $voucher, $data, $dueDays, $frequencyDays, $branchSetting): Voucher {
             if ($voucher->status !== VoucherStatus::APROBADO) {
                 abort(422, 'El vale debe estar aprobado para poder dispersarse.');
+            }
+
+            if ($branchSetting->voucher_expiration_days !== null && $voucher->issued_at) {
+                $expirationDate = $voucher->issued_at->copy()->addDays((int) $branchSetting->voucher_expiration_days);
+                if (now()->greaterThan($expirationDate)) {
+                    abort(422, 'El vale ha vencido y no puede ser dispersado.');
+                }
             }
 
             $customer = $voucher->loadMissing('customer')->customer;
