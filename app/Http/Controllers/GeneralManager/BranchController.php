@@ -46,7 +46,11 @@ final class BranchController extends ApiController
 
     public function availableManagers(): JsonResponse
     {
-        $users = User::role(['general_manager', 'branch_manager'])
+        $users = User::query()
+            ->whereHas('businessRoles', function ($query) {
+                $query->whereIn('roles.name', ['general_manager', 'branch_manager'])
+                    ->whereNull('model_has_roles.revoked_at');
+            })
             ->with('person')
             ->get();
 
