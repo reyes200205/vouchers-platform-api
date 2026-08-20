@@ -55,11 +55,17 @@ final class UserResource extends JsonResource
                 'unlimited_credit' => $this->distributor->unlimited_credit,
                 'current_points' => $this->distributor->current_points,
                 'can_issue_vouchers' => $this->distributor->can_issue_vouchers,
+                // Monto maximo permitido para el proximo vale por la regla del
+                // pre-vale (ver AuthController::attachPreValeMaxAmount). Null
+                // significa que la regla no aplica: puede pedir hasta su
+                // credito disponible normalmente.
+                'pre_vale_max_amount' => $this->distributor->pre_vale_max_amount ?? null,
                 'category' => $this->distributor->relationLoaded('category') && $this->distributor->category
                     ? [
                         'id' => $this->distributor->category->id,
                         'code' => $this->distributor->category->code,
                         'name' => $this->distributor->category->name,
+                        'commission_percentage' => $this->distributor->category->commission_percentage,
                     ]
                     : null,
             ] : null),

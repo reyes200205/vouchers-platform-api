@@ -36,6 +36,7 @@ final class FinancialProductResource extends JsonResource
             'company_commission_percentage' => $this->company_commission_percentage,
             'insurance_amount' => $this->insurance_amount,
             'fortnightly_interest_percentage' => $this->fortnightly_interest_percentage,
+            'late_fee_amount' => $this->late_fee_amount,
             'disbursement_method' => $this->disbursement_method?->value,
             'is_active' => $this->is_active,
             'created_at' => $this->created_at?->toIso8601String(),

@@ -50,9 +50,10 @@ final class MarkOverdueRelationsService
         foreach ($items as $item) {
             $voucher = $item->voucher_id !== null ? Voucher::query()->find($item->voucher_id) : null;
 
-            // La multa real vive en branch_settings.late_payment_penalty_amount;
-            // el vale solo trae el snapshot inmutable de ese valor al momento en
-            // que se emitió, nunca un monto propio del producto.
+            // La multa se lee del snapshot inmutable que quedó grabado en el vale al
+            // emitirlo (vouchers.late_fee_amount_snapshot), tomado en su momento del
+            // producto financiero (financial_products.late_fee_amount), no de la
+            // configuración actual de la sucursal ni del producto en vivo.
             $lateFee = round((float) ($voucher?->late_fee_amount_snapshot ?? 0.0), 2);
 
             $item->update([

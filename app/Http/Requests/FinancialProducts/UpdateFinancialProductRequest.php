@@ -30,6 +30,7 @@ final class UpdateFinancialProductRequest extends FormRequest
             'company_commission_percentage' => ['sometimes', 'decimal:0,4', 'between:0,100'],
             'insurance_amount' => ['sometimes', 'decimal:0,2', 'min:0'],
             'fortnightly_interest_percentage' => ['sometimes', 'decimal:0,4', 'between:0,100'],
+            'late_fee_amount' => ['sometimes', 'decimal:0,2', 'min:0'],
             'disbursement_method' => ['sometimes', 'in:TRANSFERENCIA,EFECTIVO,MIXTO'],
             'is_active' => ['sometimes', 'boolean'],
         ];

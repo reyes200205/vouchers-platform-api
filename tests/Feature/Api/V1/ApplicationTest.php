@@ -61,6 +61,7 @@ describe('Distributor onboarding', function (): void {
         ])->assertOk();
 
         $category = DistributorCategory::query()->create([
+            'branch_id' => $branch->id,
             'code' => 'PLATA',
             'name' => 'Plata',
             'commission_percentage' => '6.0000',

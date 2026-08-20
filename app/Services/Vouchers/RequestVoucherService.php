@@ -38,7 +38,7 @@ final class RequestVoucherService
             $customer = Customer::query()->findOrFail($data['customer_id']);
 
             $this->assertCustomerBelongsToDistributor($distributor, $customer);
-            $this->assertCustomerVerified($customer);
+            $this->assertCustomerEligible($customer);
             $this->assertNoActiveVoucher($customer);
             $this->assertProductActive($product);
             $this->assertProductMatchesCategory($distributor, $product);
@@ -56,9 +56,10 @@ final class RequestVoucherService
                 fortnightlyInterestPercentage: (float) $product->fortnightly_interest_percentage,
                 totalFortnights: $product->number_of_fortnights,
                 categoryCommissionPercentage: $categoryCommission,
-                // La multa por atraso ya no vive en el producto: es global de la
-                // sucursal (configurable en branch_settings).
-                lateFeeAmount: (float) $branchSetting->late_payment_penalty_amount,
+                // La multa por atraso vive en el producto (no todos los vales de la
+                // sucursal tienen la misma multa); branch_settings solo aporta el
+                // default con el que se resolvió el producto al crearlo.
+                lateFeeAmount: (float) $product->late_fee_amount,
             );
 
             if (! $this->financial->isMultipleOfStep((float) $product->principal_amount, (int) $branchSetting->voucher_amount_step)) {
@@ -110,10 +111,22 @@ final class RequestVoucherService
         }
     }
 
-    private function assertCustomerVerified(Customer $customer): void
+    /**
+     * Un cliente nuevo (EN_VERIFICACION) SI puede recibir el vale: la
+     * verificación presencial ahora se exige hasta la dispersión en
+     * sucursal (ver DisburseVoucherService), no aquí. Pero un cliente
+     * BLOQUEADO, MOROSO o INACTIVO no puede recibir un vale nuevo.
+     */
+    private function assertCustomerEligible(Customer $customer): void
     {
-        if ($customer->status !== CustomerStatus::ACTIVO || $customer->verified_at === null) {
-            abort(422, 'El cliente debe estar activo y verificado por la cajera para solicitar un vale.');
+        $blockedStatuses = [
+            CustomerStatus::BLOQUEADO,
+            CustomerStatus::MOROSO,
+            CustomerStatus::INACTIVO,
+        ];
+
+        if (in_array($customer->status, $blockedStatuses, true)) {
+            abort(422, 'El cliente no puede recibir un vale nuevo por su estado actual.');
         }
     }
 

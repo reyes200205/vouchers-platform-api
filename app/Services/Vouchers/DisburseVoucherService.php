@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Vouchers;
 
+use App\Enums\CustomerStatus;
 use App\Enums\VoucherStatus;
 use App\Models\BranchSetting;
 use App\Models\User;
@@ -32,6 +33,12 @@ final class DisburseVoucherService
         return DB::transaction(static function () use ($user, $voucher, $data, $dueDays, $frequencyDays): Voucher {
             if ($voucher->status !== VoucherStatus::APROBADO) {
                 abort(422, 'El vale debe estar aprobado para poder dispersarse.');
+            }
+
+            $customer = $voucher->loadMissing('customer')->customer;
+
+            if ($customer->status !== CustomerStatus::ACTIVO || $customer->verified_at === null) {
+                abort(422, 'El cliente debe ser verificado por la cajera antes de poder recibir el vale.');
             }
 
             $voucher->update([

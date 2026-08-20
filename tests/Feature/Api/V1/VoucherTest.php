@@ -83,8 +83,8 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
             ->assertJsonPath('data.is_pre_vale', true)
             ->assertJsonPath('data.status', 'PENDIENTE')
             ->assertJsonPath('data.requested_amount', '15000.00')
-            ->assertJsonPath('data.snapshot.total_debt_amount', 22600)
-            ->assertJsonPath('data.snapshot.fortnightly_payment_amount', 2825);
+            ->assertJsonPath('data.snapshot.total_debt_amount', 21400)
+            ->assertJsonPath('data.snapshot.fortnightly_payment_amount', 2675);
 
         $this->assertDatabaseHas('voucher_requests', [
             'distributor_id' => $distributor->id,
@@ -147,11 +147,12 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
         $this->assertDatabaseCount('voucher_requests', 0);
     });
 
-    it('rejects a request for a customer that is not verified', function (): void {
+    it('allows a request for a customer that is not verified yet (verification happens at disbursement)', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor] = voucherScenario();
         $customer = Customer::factory()->create([
             'branch_id' => $branch->id,
             'status' => CustomerStatus::EN_VERIFICACION,
+            'verified_at' => null,
         ]);
         CustomerDistributor::query()->create([
             'distributor_id' => $distributor->id,
@@ -164,10 +165,41 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
         $this->postJson('/api/v1/vouchers', [
             'customer_id' => $customer->id,
             'financial_product_id' => $product->id,
-        ])->assertStatus(422);
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('voucher_requests', [
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'status' => 'PENDIENTE',
+        ]);
+    });
+
+    it('rejects a request for a customer that is blocked, delinquent or inactive', function (string $status): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor] = voucherScenario();
+        $customer = Customer::factory()->create([
+            'branch_id' => $branch->id,
+            'status' => $status,
+        ]);
+        CustomerDistributor::query()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'relationship_status' => CustomerDistributorRelationshipStatus::ACTIVA,
+        ]);
+        $user = User::factory()->create();
+        signInDistributor($user, $distributor);
+
+        $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'El cliente no puede recibir un vale nuevo por su estado actual.');
 
         $this->assertDatabaseCount('voucher_requests', 0);
-    });
+    })->with([
+        'bloqueado' => CustomerStatus::BLOQUEADO->value,
+        'moroso' => CustomerStatus::MOROSO->value,
+        'inactivo' => CustomerStatus::INACTIVO->value,
+    ]);
 
     it('rejects a request for a customer with an active voucher with balance', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
@@ -278,8 +310,8 @@ describe('Voucher approval (coordinador/gerente)', function (): void {
             ->assertJsonPath('data.status', 'APROBADO')
             ->assertJsonPath('data.is_pre_vale', true)
             ->assertJsonPath('data.voucher_number', 'V-1')
-            ->assertJsonPath('data.total_debt_amount', '22600.00')
-            ->assertJsonPath('data.fortnightly_payment_amount', '2825.00')
+            ->assertJsonPath('data.total_debt_amount', '21400.00')
+            ->assertJsonPath('data.fortnightly_payment_amount', '2675.00')
             ->assertJsonPath('data.approved_by_user_id', $coordinator->id);
 
         $this->assertDatabaseHas('vouchers', [
@@ -288,12 +320,12 @@ describe('Voucher approval (coordinador/gerente)', function (): void {
             'customer_id' => $customer->id,
             'status' => 'APROBADO',
             'is_pre_vale' => true,
-            'current_balance' => 22600.00,
+            'current_balance' => 21400.00,
         ]);
 
         $this->assertDatabaseHas('distributors', [
             'id' => $distributor->id,
-            'available_credit' => 7400.00,
+            'available_credit' => 8600.00,
         ]);
 
         $this->assertDatabaseHas('voucher_requests', [
@@ -333,7 +365,7 @@ describe('Voucher approval (coordinador/gerente)', function (): void {
             ->assertJsonPath('data.is_pre_vale', true);
 
         expect($distributor->refresh()->prevale_required_after_credit_increase_at)->toBeNull();
-        expect((float) $distributor->available_credit)->toBe(9900.00);
+        expect((float) $distributor->available_credit)->toBe(10700.00);
     });
 
     it('rejects approval when the distributor no longer has enough credit', function (): void {
@@ -420,6 +452,36 @@ describe('Voucher disbursement (cajera)', function (): void {
             'transfer_reference' => 'SPEI-20260816-002',
             'authorized_number' => 'AUT-0002',
         ])->assertStatus(422);
+    });
+
+    it('rejects disbursement when the customer has not been verified by the cashier', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor] = voucherScenario();
+        $customer = Customer::factory()->create([
+            'branch_id' => $branch->id,
+            'status' => CustomerStatus::EN_VERIFICACION,
+            'verified_at' => null,
+        ]);
+        $voucher = Voucher::factory()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'financial_product_id' => $product->id,
+            'status' => VoucherStatus::APROBADO,
+        ]);
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260816-004',
+            'authorized_number' => 'AUT-0004',
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'El cliente debe ser verificado por la cajera antes de poder recibir el vale.');
+
+        $this->assertDatabaseHas('vouchers', [
+            'id' => $voucher->id,
+            'status' => 'APROBADO',
+        ]);
     });
 
     it('forbids a coordinator from disbursing vouchers', function (): void {

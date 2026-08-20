@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\AuditLog;
 use App\Models\Branch;
+use App\Models\Distributor;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -174,5 +175,56 @@ describe('Me', function (): void {
         $response = $this->getJson('/api/v1/auth/me');
 
         $response->assertStatus(401);
+    });
+
+    it('exposes the pre-vale max amount when the distributor has 100% of credit available', function (): void {
+        $user = User::factory()->create();
+        Distributor::factory()->create([
+            'person_id' => $user->person_id,
+            'credit_limit' => 20000,
+            'available_credit' => 20000,
+        ]);
+        $token = $user->createToken('test-token')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/v1/auth/me');
+
+        // 50% de 20,000 + tolerancia de 500 (defaults de branch_settings) = 10,500.
+        $response->assertStatus(200)
+            ->assertJsonPath('data.distributor.pre_vale_max_amount', 10500.0);
+    });
+
+    it('does not limit the pre-vale amount when the distributor does not have 100% of credit available', function (): void {
+        $user = User::factory()->create();
+        Distributor::factory()->create([
+            'person_id' => $user->person_id,
+            'credit_limit' => 20000,
+            'available_credit' => 12000,
+        ]);
+        $token = $user->createToken('test-token')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/v1/auth/me');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.distributor.pre_vale_max_amount', null);
+    });
+
+    it('reapplies the pre-vale limit when a credit increase reactivation is pending', function (): void {
+        $user = User::factory()->create();
+        Distributor::factory()->create([
+            'person_id' => $user->person_id,
+            'credit_limit' => 20000,
+            'available_credit' => 12000,
+            'prevale_required_after_credit_increase_at' => now(),
+        ]);
+        $token = $user->createToken('test-token')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/v1/auth/me');
+
+        // 50% de 12,000 (disponible) + tolerancia de 500 = 6,500.
+        $response->assertStatus(200)
+            ->assertJsonPath('data.distributor.pre_vale_max_amount', 6500.0);
     });
 });
