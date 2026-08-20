@@ -170,7 +170,9 @@ final class AlessandroDemoSeeder extends Seeder
             }
         }
 
-        $customers = Customer::factory()->count(15)->create();
+        $customers = Customer::factory()->count(15)->create([
+            'branch_id' => fn () => $branches->random()->id,
+        ]);
 
         foreach ($distributors->take(4) as $index => $distributor) {
             $application = Application::query()->create([
