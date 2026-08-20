@@ -31,7 +31,10 @@ final class CategoryController extends ApiController
 
     public function store(StoreDistributorCategoryRequest $request, Branch $branch): JsonResponse
     {
-        $request->merge(['branch_id' => $branch->id]);
+        // branch_id ya viene fusionado desde la URL en
+        // StoreDistributorCategoryRequest::prepareForValidation() — se valida
+        // ahí, no aquí, así que para cuando llegamos a este punto ya es parte
+        // de $request->validated().
         $category = DistributorCategory::query()->create($request->validated());
 
         return $this->created(new DistributorCategoryResource($category));

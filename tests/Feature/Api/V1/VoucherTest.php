@@ -14,7 +14,6 @@ use App\Models\FinancialProduct;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Voucher;
-use App\Models\VoucherRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 
@@ -72,7 +71,7 @@ function voucherScenario(): array
 }
 
 describe('Voucher request (pre-issue por la distribuidora)', function (): void {
-    it('creates a pre-vale request when the customer is new', function (): void {
+    it('creates a pre-vale request when the distributor has 100% of credit available', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
         $user = User::factory()->create();
         signInDistributor($user, $distributor);
@@ -84,8 +83,8 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
             ->assertJsonPath('data.is_pre_vale', true)
             ->assertJsonPath('data.status', 'PENDIENTE')
             ->assertJsonPath('data.requested_amount', '15000.00')
-            ->assertJsonPath('data.snapshot.total_debt_amount', 22600)
-            ->assertJsonPath('data.snapshot.fortnightly_payment_amount', 2825);
+            ->assertJsonPath('data.snapshot.total_debt_amount', 21400)
+            ->assertJsonPath('data.snapshot.fortnightly_payment_amount', 2675);
 
         $this->assertDatabaseHas('voucher_requests', [
             'distributor_id' => $distributor->id,
@@ -105,21 +104,14 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
             'customer_id' => $customer->id,
             'financial_product_id' => $product->id,
         ])->assertStatus(422)
-            ->assertJsonPath('message', 'El monto supera el máximo permitido para el primer vale del cliente (50% del límite de crédito de la distribuidora).');
+            ->assertJsonPath('message', 'El monto supera el máximo permitido para el primer vale (50% del crédito disponible).');
 
         $this->assertDatabaseCount('voucher_requests', 0);
     });
 
-    it('does not apply the 50% rule once the customer already had a previous voucher', function (): void {
-        ['branch' => $branch, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
-        Voucher::factory()->create([
-            'distributor_id' => $distributor->id,
-            'customer_id' => $customer->id,
-            'branch_id' => $branch->id,
-            'status' => VoucherStatus::LIQUIDADO,
-            'current_balance' => 0,
-        ]);
-        $product = FinancialProduct::factory()->create(['principal_amount' => 17000.00]);
+    it('does not apply the 50% rule once the distributor is not at 100% available and there is no pending reactivation', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $distributor->update(['credit_limit' => 30000, 'available_credit' => 25000]);
         $user = User::factory()->create();
         signInDistributor($user, $distributor);
 
@@ -130,7 +122,30 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
             ->assertJsonPath('data.is_pre_vale', false);
     });
 
-    it('allows a pre-vale request for a customer that is not verified yet', function (): void {
+    it('reapplies the 50% rule after a credit increase even if the distributor is not at 100% available', function (): void {
+        // Regla confirmada: si el gerente autoriza un aumento de línea mientras
+        // la distribuidora ya tiene crédito usado, el siguiente vale vuelve a
+        // respetar el 50% del DISPONIBLE + tolerancia, aunque el disponible no
+        // sea igual al límite total (ver Distributor::prevale_required_after_credit_increase_at).
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $distributor->update([
+            'credit_limit' => 30000,
+            'available_credit' => 25000, // ya tiene 5,000 usados
+            'prevale_required_after_credit_increase_at' => now(),
+        ]);
+        $user = User::factory()->create();
+        signInDistributor($user, $distributor);
+
+        $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'El monto supera el máximo permitido para el primer vale (50% del crédito disponible).');
+
+        $this->assertDatabaseCount('voucher_requests', 0);
+    });
+
+    it('allows a request for a customer that is not verified yet (verification happens at disbursement)', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor] = voucherScenario();
         $customer = Customer::factory()->create([
             'branch_id' => $branch->id,
@@ -148,37 +163,25 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
         $this->postJson('/api/v1/vouchers', [
             'customer_id' => $customer->id,
             'financial_product_id' => $product->id,
-        ])->assertCreated()
-            ->assertJsonPath('data.is_pre_vale', true);
+        ])->assertCreated();
 
         $this->assertDatabaseHas('voucher_requests', [
             'distributor_id' => $distributor->id,
             'customer_id' => $customer->id,
-            'is_pre_vale' => true,
             'status' => 'PENDIENTE',
         ]);
     });
 
-    it('rejects a non-pre-vale request for a customer that is not verified', function (): void {
+    it('rejects a request for a customer that is blocked, delinquent or inactive', function (string $status): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor] = voucherScenario();
         $customer = Customer::factory()->create([
             'branch_id' => $branch->id,
-            'status' => CustomerStatus::EN_VERIFICACION,
-            'verified_at' => null,
+            'status' => $status,
         ]);
         CustomerDistributor::query()->create([
             'distributor_id' => $distributor->id,
             'customer_id' => $customer->id,
             'relationship_status' => CustomerDistributorRelationshipStatus::ACTIVA,
-        ]);
-        // Ya tuvo un vale antes, asi que no es su prevale y por lo tanto no puede
-        // saltarse la verificacion de la cajera.
-        Voucher::factory()->create([
-            'distributor_id' => $distributor->id,
-            'customer_id' => $customer->id,
-            'branch_id' => $branch->id,
-            'status' => VoucherStatus::LIQUIDADO,
-            'current_balance' => 0,
         ]);
         $user = User::factory()->create();
         signInDistributor($user, $distributor);
@@ -186,10 +189,15 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
         $this->postJson('/api/v1/vouchers', [
             'customer_id' => $customer->id,
             'financial_product_id' => $product->id,
-        ])->assertStatus(422);
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'El cliente no puede recibir un vale nuevo por su estado actual.');
 
         $this->assertDatabaseCount('voucher_requests', 0);
-    });
+    })->with([
+        'bloqueado' => CustomerStatus::BLOQUEADO->value,
+        'moroso' => CustomerStatus::MOROSO->value,
+        'inactivo' => CustomerStatus::INACTIVO->value,
+    ]);
 
     it('rejects a request for a customer that already has a pending voucher request', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
@@ -230,8 +238,8 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
             'financial_product_id' => $product->id,
         ])->assertCreated()->json('data.id');
 
-        $approver = User::factory()->create();
-        signInBusinessRole($approver, 'cashier', $branch);
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
 
         $this->postJson("/api/v1/voucher-requests/{$requestId}/approve")
             ->assertOk();
@@ -280,6 +288,46 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
         $this->assertDatabaseCount('voucher_requests', 0);
     });
 
+    it('rejects a request for a product tied to a different distributor category', function (): void {
+        ['branch' => $branch, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $otherCategory = DistributorCategory::factory()->create();
+        $product = FinancialProduct::factory()->create(['category_id' => $otherCategory->id]);
+        $user = User::factory()->create();
+        signInDistributor($user, $distributor);
+
+        $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'El producto seleccionado no está disponible para la categoría de esta distribuidora.');
+
+        $this->assertDatabaseCount('voucher_requests', 0);
+    });
+
+    it('allows a request for a product tied to the distributor own category', function (): void {
+        ['branch' => $branch, 'category' => $category, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $product = FinancialProduct::factory()->create(['category_id' => $category->id]);
+        $user = User::factory()->create();
+        signInDistributor($user, $distributor);
+
+        $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated();
+    });
+
+    it('allows a request for a product with no category regardless of the distributor category', function (): void {
+        ['branch' => $branch, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $product = FinancialProduct::factory()->create(['category_id' => null]);
+        $user = User::factory()->create();
+        signInDistributor($user, $distributor);
+
+        $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated();
+    });
+
     it('rejects a request when available credit is not enough for the total debt', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
         $distributor->update(['credit_limit' => 30000, 'available_credit' => 20000]);
@@ -297,7 +345,7 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
 });
 
 describe('Voucher approval (cajera/gerente)', function (): void {
-    it('approves the request, creates the voucher and keeps the credit already reserved at request time', function (): void {
+    it('approves the request, creates the voucher and decrements available credit', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
         $distributorUser = User::factory()->create();
         signInDistributor($distributorUser, $distributor);
@@ -307,11 +355,6 @@ describe('Voucher approval (cajera/gerente)', function (): void {
             'financial_product_id' => $product->id,
         ])->assertCreated()->json('data');
 
-        $this->assertDatabaseHas('distributors', [
-            'id' => $distributor->id,
-            'available_credit' => 7400.00,
-        ]);
-
         $cashier = User::factory()->create();
         signInBusinessRole($cashier, 'cashier', $branch);
 
@@ -320,8 +363,8 @@ describe('Voucher approval (cajera/gerente)', function (): void {
             ->assertJsonPath('data.status', 'APROBADO')
             ->assertJsonPath('data.is_pre_vale', true)
             ->assertJsonPath('data.voucher_number', 'V-1')
-            ->assertJsonPath('data.total_debt_amount', '22600.00')
-            ->assertJsonPath('data.fortnightly_payment_amount', '2825.00')
+            ->assertJsonPath('data.total_debt_amount', '21400.00')
+            ->assertJsonPath('data.fortnightly_payment_amount', '2675.00')
             ->assertJsonPath('data.approved_by_user_id', $cashier->id);
 
         $this->assertDatabaseHas('vouchers', [
@@ -330,13 +373,12 @@ describe('Voucher approval (cajera/gerente)', function (): void {
             'customer_id' => $customer->id,
             'status' => 'APROBADO',
             'is_pre_vale' => true,
-            'current_balance' => 22600.00,
+            'current_balance' => 21400.00,
         ]);
 
-        // El credito no vuelve a moverse al aprobar: ya se reservo al pedir el vale.
         $this->assertDatabaseHas('distributors', [
             'id' => $distributor->id,
-            'available_credit' => 7400.00,
+            'available_credit' => 8600.00,
         ]);
 
         $this->assertDatabaseHas('voucher_requests', [
@@ -352,6 +394,55 @@ describe('Voucher approval (cajera/gerente)', function (): void {
         ]);
     });
 
+    it('clears the credit-increase reactivation flag once the next voucher is approved', function (): void {
+        ['branch' => $branch, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $product = FinancialProduct::factory()->create(['principal_amount' => 10000.00]);
+        $distributor->update([
+            'credit_limit' => 30000,
+            'available_credit' => 25000,
+            'prevale_required_after_credit_increase_at' => now(),
+        ]);
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.is_pre_vale', true);
+
+        expect($distributor->refresh()->prevale_required_after_credit_increase_at)->toBeNull();
+        expect((float) $distributor->available_credit)->toBe(10700.00);
+    });
+
+    it('rejects approval when the distributor no longer has enough credit', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $distributor->decrement('available_credit', 24000);
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'El crédito disponible de la distribuidora es insuficiente para aprobar el vale.');
+
+        $this->assertDatabaseCount('vouchers', 0);
+    });
+
     it('forbids the distributor from approving requests', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
         $distributorUser = User::factory()->create();
@@ -364,10 +455,8 @@ describe('Voucher approval (cajera/gerente)', function (): void {
 
         $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")->assertForbidden();
     });
-});
 
-describe('Voucher rejection (cajera/gerente)', function (): void {
-    it('rejects a pending request and returns the reserved credit to the distributor', function (): void {
+    it('forbids a coordinator from approving requests', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
         $distributorUser = User::factory()->create();
         signInDistributor($distributorUser, $distributor);
@@ -377,7 +466,25 @@ describe('Voucher rejection (cajera/gerente)', function (): void {
             'financial_product_id' => $product->id,
         ])->assertCreated()->json('data');
 
-        $this->assertDatabaseHas('distributors', ['id' => $distributor->id, 'available_credit' => 7400.00]);
+        $coordinator = User::factory()->create();
+        signInBusinessRole($coordinator, 'coordinator', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")->assertForbidden();
+    });
+});
+
+describe('Voucher rejection (cajera/gerente)', function (): void {
+    it('rejects a pending request without touching the credit (nothing was reserved yet)', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $this->assertDatabaseHas('distributors', ['id' => $distributor->id, 'available_credit' => 30000.00]);
 
         $cashier = User::factory()->create();
         signInBusinessRole($cashier, 'cashier', $branch);
@@ -394,9 +501,7 @@ describe('Voucher rejection (cajera/gerente)', function (): void {
             'decided_by_user_id' => $cashier->id,
         ]);
         $this->assertDatabaseCount('vouchers', 0);
-
-        // El credito reservado al pedir el vale vuelve a estar disponible.
-        $this->assertDatabaseHas('distributors', ['id' => $distributor->id, 'available_credit' => 30000.00]);
+       $this->assertDatabaseHas('distributors', ['id' => $distributor->id, 'available_credit' => 30000.00]);
     });
 
     it('requires a reason to reject', function (): void {
@@ -480,6 +585,36 @@ describe('Voucher disbursement (cajera)', function (): void {
             'transfer_reference' => 'SPEI-20260816-002',
             'authorized_number' => 'AUT-0002',
         ])->assertStatus(422);
+    });
+
+    it('rejects disbursement when the customer has not been verified by the cashier', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor] = voucherScenario();
+        $customer = Customer::factory()->create([
+            'branch_id' => $branch->id,
+            'status' => CustomerStatus::EN_VERIFICACION,
+            'verified_at' => null,
+        ]);
+        $voucher = Voucher::factory()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'financial_product_id' => $product->id,
+            'status' => VoucherStatus::APROBADO,
+        ]);
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260816-004',
+            'authorized_number' => 'AUT-0004',
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'El cliente debe ser verificado por la cajera antes de poder recibir el vale.');
+
+        $this->assertDatabaseHas('vouchers', [
+            'id' => $voucher->id,
+            'status' => 'APROBADO',
+        ]);
     });
 
     it('forbids a coordinator from disbursing vouchers', function (): void {

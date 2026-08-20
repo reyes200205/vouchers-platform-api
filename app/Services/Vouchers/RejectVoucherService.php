@@ -18,13 +18,9 @@ final class RejectVoucherService
                 abort(422, 'La solicitud ya fue resuelta.');
             }
 
-            $voucherRequest->load('distributor');
-            $snapshot = $voucherRequest->snapshot_json ?? [];
-            $totalDebt = (float) ($snapshot['total_debt_amount'] ?? $voucherRequest->requested_amount);
-
-            // Devuelve el credito reservado al pedir el vale (ver RequestVoucherService).
-            $voucherRequest->distributor->increment('available_credit', $totalDebt);
-
+            // El credito de la distribuidora no se toca al pedir el vale, solo al
+            // aprobarse (ver RequestVoucherService/ApproveVoucherService), asi que
+            // rechazar una solicitud pendiente no tiene nada que devolver.
             $voucherRequest->update([
                 'status' => VoucherRequestStatus::RECHAZADO,
                 'rejection_reason' => $reason,

@@ -7,20 +7,35 @@ namespace App\Services\Cutoffs;
 use App\Enums\CutoffRelationStatus;
 use App\Enums\CutoffStatus;
 use App\Enums\CutoffType;
-use App\Enums\PointMovementType;
+use App\Enums\VoucherStatus;
 use App\Models\Branch;
 use App\Models\Cutoff;
 use App\Models\CutoffRelation;
 use App\Models\CutoffRelationItem;
-use App\Models\CustomerPayment;
 use App\Models\Distributor;
-use App\Models\PointMovement;
-use App\Models\PointSetting;
 use App\Models\User;
 use App\Models\Voucher;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Genera los cortes de pago por distribuidora.
+ *
+ * Los clientes le pagan a la distribuidora directamente (fuera del sistema);
+ * eso es asunto de la distribuidora. Lo que este servicio calcula es cuánto le
+ * corresponde COBRAR a la sucursal a cada distribuidora en este periodo: la
+ * suma de las quincenas programadas (fortnightly_payment_amount) de sus vales
+ * activos cuyo payment_due_date cae dentro del periodo del corte, más
+ * cualquier saldo arrastrado de un corte anterior sin pagar (carryover).
+ *
+ * Ya NO se agrupan CustomerPayment (no se van a capturar pagos individuales de
+ * clientes). Si la distribuidora paga o no, y si su pago llega a tiempo o
+ * atrasado, se determina DESPUÉS de generado este corte: al conciliarse
+ * (SettleCutoffRelationService, vía AutoMatchDepositsService /
+ * VerifyReconciliationService) o al vencerse sin pagar
+ * (MarkOverdueRelationsService). Por eso aquí ningún item se marca
+ * is_late_payment ni lleva multa: eso todavía no se sabe.
+ */
 final class GenerateCutoffService
 {
     /**
@@ -74,27 +89,37 @@ final class GenerateCutoffService
             ->latest('id')
             ->first();
 
-        $payments = CustomerPayment::query()
+        // Vales de la distribuidora cuya proxima quincena programada vence dentro
+        // de este periodo. MOROSO se incluye a proposito: un vale que ya estaba
+        // atrasado (su corte anterior se vencio) sigue generando su quincena
+        // normal en el siguiente corte, aparte del arrastre de la atrasada
+        // (carryover, abajo) — asi como se ve en el ejemplo de la pizarra.
+        $vouchers = Voucher::query()
             ->where('distributor_id', $distributor->id)
-            ->whereNull('reversed_at')
-            ->whereBetween('payment_date', [$periodStart, $periodEnd])
-            ->orderBy('voucher_id')
-            ->get()
-            ->groupBy('voucher_id');
+            ->whereIn('status', [VoucherStatus::ACTIVO, VoucherStatus::PAGO_PARCIAL, VoucherStatus::MOROSO])
+            ->whereBetween('payment_due_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
+            ->orderBy('id')
+            ->get();
 
-        if ($previousRelation === null && $payments->isEmpty()) {
+        if ($previousRelation === null && $vouchers->isEmpty()) {
             return;
         }
+
+        // Los dias limite para que la distribuidora liquide el corte los define
+        // la sucursal (branch_settings.payment_due_days/payment_frequency_days),
+        // igual que para las quincenas de cada vale — nunca un numero fijo aqui.
+        $dueDays = (int) ($cutoff->branch->branchSetting?->payment_due_days ?? 15);
+        $frequencyDays = (int) ($cutoff->branch->branchSetting?->payment_frequency_days ?? 14);
 
         $relation = CutoffRelation::query()->create([
             'cutoff_id' => $cutoff->id,
             'distributor_id' => $distributor->id,
             'previous_relation_id' => $previousRelation?->id,
-            'relation_number' => 'REL-' . $cutoff->id . '-' . $distributor->id,
-            'payment_reference' => 'REF-' . strtoupper(substr(md5(uniqid((string) $distributor->id, true)), 0, 10)),
-            'payment_due_date' => $periodEnd->copy()->addDays(15)->toDateString(),
+            'relation_number' => 'REL-'.$cutoff->id.'-'.$distributor->id,
+            'payment_reference' => 'REF-'.mb_strtoupper(mb_substr(md5(uniqid((string) $distributor->id, true)), 0, 10)),
+            'payment_due_date' => $periodEnd->copy()->addDays($dueDays)->toDateString(),
             'early_payment_start_date' => $periodEnd->copy()->addDay()->toDateString(),
-            'early_payment_end_date' => $periodEnd->copy()->addDays(10)->toDateString(),
+            'early_payment_end_date' => $periodEnd->copy()->addDays($frequencyDays)->toDateString(),
             'credit_limit_snapshot' => $distributor->credit_limit,
             'available_credit_snapshot' => $distributor->available_credit,
             'points_snapshot' => $distributor->current_points,
@@ -104,79 +129,29 @@ final class GenerateCutoffService
 
         $totalPayment = 0.0;
         $totalCommission = 0.0;
-        $totalLateFees = 0.0;
-        $totalEarlyBonusPoints = 0.0;
-        $totalLatePenaltyPoints = 0.0;
 
-        $pointDivisor = (int) (PointSetting::query()->value('point_divisor_factor') ?? 1200);
-        $pointMultiplier = (int) (PointSetting::query()->value('point_multiplier') ?? 3);
-
-        foreach ($payments as $voucherId => $voucherPayments) {
-            $voucher = Voucher::query()->find($voucherId);
-
-            if ($voucher === null) {
-                continue;
-            }
-
-            $paymentAmount = round($voucherPayments->sum(fn ($payment) => (float) $payment->amount), 2);
-            $lateFee = $this->calculateLateFees($voucher, $voucherPayments);
-            $commission = round($paymentAmount * ((float) $voucher->distributor_profit_percentage_snapshot / 100), 2);
-
-            $basePoints = (int) floor($paymentAmount / $pointDivisor) * ($voucher->distributor?->category?->points_per_1200 ?? $pointMultiplier);
-            $bonusPoints = $this->calculateEarlyBonusPoints($voucher, $voucherPayments, $basePoints, $pointDivisor, $pointMultiplier);
-            $penaltyPoints = $this->calculateLatePenaltyPoints($voucher, $voucherPayments, $basePoints, $pointDivisor, $pointMultiplier);
-
-            if ($bonusPoints > 0) {
-                PointMovement::query()->create([
-                    'distributor_id' => $voucher->distributor_id,
-                    'voucher_id' => $voucher->id,
-                    'cutoff_id' => $cutoff->id,
-                    'transaction_type' => PointMovementType::GANADO_ANTICIPADO,
-                    'points' => $bonusPoints,
-                    'point_value_snapshot' => $cutoff->branch->branchSetting?->point_value_mxn ?? 2.00,
-                    'reason' => 'Pago anticipado del cliente en el corte.',
-                    'transaction_date' => now(),
-                ]);
-
-                $totalEarlyBonusPoints += $bonusPoints;
-            }
-
-            if ($penaltyPoints > 0) {
-                PointMovement::query()->create([
-                    'distributor_id' => $voucher->distributor_id,
-                    'voucher_id' => $voucher->id,
-                    'cutoff_id' => $cutoff->id,
-                    'transaction_type' => PointMovementType::PENALIZACION_ATRASO,
-                    'points' => -$penaltyPoints,
-                    'point_value_snapshot' => $cutoff->branch->branchSetting?->point_value_mxn ?? 2.00,
-                    'reason' => 'Pago atrasado del cliente en el corte.',
-                    'transaction_date' => now(),
-                ]);
-
-                $totalLatePenaltyPoints += $penaltyPoints;
-            }
+        foreach ($vouchers as $voucher) {
+            $paymentAmount = round((float) $voucher->fortnightly_payment_amount, 2);
+            $commission = $this->calculateDistributorCommission($voucher, $paymentAmount);
 
             CutoffRelationItem::query()->create([
                 'cutoff_relation_id' => $relation->id,
                 'voucher_id' => $voucher->id,
                 'customer_id' => $voucher->customer_id,
                 'product_name_snapshot' => $voucher->financialProduct?->name ?? 'Producto',
-                'payments_made' => $voucherPayments->count(),
+                'payments_made' => $voucher->payments_made,
                 'total_payments' => $voucher->total_fortnights,
-                'is_late_payment' => $lateFee > 0,
-                'installment_number' => $voucher->payments_made,
-                'accumulated_late_installments' => $voucher->payments_made - $voucherPayments->filter(
-                    fn ($payment) => $payment->payment_date->lte($voucher->payment_due_date)
-                )->count(),
+                'is_late_payment' => false,
+                'installment_number' => $voucher->payments_made + 1,
+                'accumulated_late_installments' => 0,
                 'commission_amount' => $commission,
                 'payment_amount' => $paymentAmount,
-                'late_fee_amount' => $lateFee,
-                'line_total_amount' => round($paymentAmount + $lateFee - $commission, 2),
+                'late_fee_amount' => 0.00,
+                'line_total_amount' => round($paymentAmount - $commission, 2),
             ]);
 
             $totalPayment += $paymentAmount;
             $totalCommission += $commission;
-            $totalLateFees += $lateFee;
         }
 
         $carryover = 0.0;
@@ -216,89 +191,34 @@ final class GenerateCutoffService
         $relation->update([
             'total_payment' => round($totalPayment, 2),
             'total_commission' => round($totalCommission, 2),
-            'total_late_fees' => round($totalLateFees, 2),
+            'total_late_fees' => 0.00,
             'total_carryover_received' => round($carryover, 2),
-            'total_amount_due' => round($totalPayment + $totalLateFees - $totalCommission + $carryover, 2),
+            'total_amount_due' => round($totalPayment - $totalCommission + $carryover, 2),
         ]);
-
-        $pointsDelta = $totalEarlyBonusPoints - $totalLatePenaltyPoints;
-
-        if ($pointsDelta !== 0.0) {
-            $distributor->increment('current_points', $pointsDelta);
-        }
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, CustomerPayment>  $payments
+     * Utilidad de la distribuidora sobre un pago del corte.
+     *
+     * La utilidad total del vale (`distributor_profit_amount`) se cotiza sobre el
+     * PRINCIPAL, no sobre el total a pagar (que ya incluye comisión de apertura,
+     * seguro e interés) — ver `FinancialCalculationService::calculateVoucherSnapshot()`.
+     * Por eso aquí no se vuelve a multiplicar `distributor_profit_percentage_snapshot`
+     * contra el pago del periodo (eso duplicaría el % sobre conceptos que no
+     * generan utilidad para la distribuidora e infla lo que se queda). En vez de
+     * eso, se reparte la utilidad total proporcionalmente a qué fracción de la
+     * deuda total representa este pago: si el pago es exactamente una quincena,
+     * el resultado es idéntico a `distributor_profit_amount / total_fortnights`.
      */
-    private function calculateLateFees(Voucher $voucher, mixed $payments): float
+    private function calculateDistributorCommission(Voucher $voucher, float $paymentAmount): float
     {
-        $lateFee = 0.0;
-        $dueDate = $voucher->payment_due_date;
+        $totalDebt = (float) $voucher->total_debt_amount;
+        $profitTotal = (float) $voucher->distributor_profit_amount;
 
-        if ($dueDate === null) {
-            return $lateFee;
+        if ($totalDebt <= 0 || $profitTotal <= 0) {
+            return 0.0;
         }
 
-        foreach ($payments as $payment) {
-            if ($payment->payment_date->gt(Carbon::parse($dueDate)->endOfDay())) {
-                $lateFee += (float) $voucher->late_fee_amount_snapshot;
-            }
-        }
-
-        return round($lateFee, 2);
-    }
-
-    /**
-     * @param  \Illuminate\Support\Collection<int, CustomerPayment>  $payments
-     */
-    private function calculateEarlyBonusPoints(Voucher $voucher, mixed $payments, int $basePoints, int $pointDivisor, int $pointMultiplier): int
-    {
-        if ($voucher->early_payment_start_date === null || $voucher->early_payment_end_date === null) {
-            return 0;
-        }
-
-        $start = Carbon::parse($voucher->early_payment_start_date)->startOfDay();
-        $end = Carbon::parse($voucher->early_payment_end_date)->endOfDay();
-        $earlyAmount = 0.0;
-
-        foreach ($payments as $payment) {
-            if ($payment->payment_date->between($start, $end)) {
-                $earlyAmount += (float) $payment->amount;
-            }
-        }
-
-        if ($earlyAmount <= 0) {
-            return 0;
-        }
-
-        $earlyBasePoints = (int) floor($earlyAmount / $pointDivisor) * ($voucher->distributor?->category?->points_per_1200 ?? $pointMultiplier);
-
-        return max(1, (int) round($earlyBasePoints * 0.10));
-    }
-
-    /**
-     * @param  \Illuminate\Support\Collection<int, CustomerPayment>  $payments
-     */
-    private function calculateLatePenaltyPoints(Voucher $voucher, mixed $payments, int $basePoints, int $pointDivisor, int $pointMultiplier): int
-    {
-        if ($voucher->payment_due_date === null) {
-            return 0;
-        }
-
-        $dueDate = Carbon::parse($voucher->payment_due_date)->endOfDay();
-        $lateAmount = 0.0;
-
-        foreach ($payments as $payment) {
-            if ($payment->payment_date->gt($dueDate)) {
-                $lateAmount += (float) $payment->amount;
-            }
-        }
-
-        if ($lateAmount <= 0) {
-            return 0;
-        }
-
-        return (int) floor($lateAmount / $pointDivisor) * ($voucher->distributor?->category?->points_per_1200 ?? $pointMultiplier);
+        return round($profitTotal * ($paymentAmount / $totalDebt), 2);
     }
 }

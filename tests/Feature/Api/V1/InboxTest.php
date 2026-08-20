@@ -160,6 +160,34 @@ describe('General manager inbox', function (): void {
             ->assertJsonPath('data.applications.items.0.branch_id', $branchA->id);
     });
 
+    it('ignores a branch_id query param outside what the branch manager is allowed to see', function (): void {
+        // Antes, branch_id en el query pisaba por completo el filtro de
+        // sucursales del usuario (activeBusinessBranchIds()): un gerente de
+        // sucursal podía pedir la bandeja de OTRA sucursal con solo cambiar
+        // el query param, sin que la ability lo evitara.
+        $ownBranch = Branch::factory()->create();
+        $otherBranch = Branch::factory()->create();
+
+        Application::query()->create([
+            'applicant_person_id' => \App\Models\Person::factory()->create()->id,
+            'branch_id' => $otherBranch->id,
+            'status' => 'POSIBLE_DISTRIBUIDORA',
+        ]);
+
+        $manager = User::factory()->create();
+        $role = Role::query()->firstOrCreate(['code' => 'branch_manager'], ['name' => 'branch_manager']);
+        $manager->businessRoles()->attach($role, [
+            'branch_id' => $ownBranch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($manager);
+
+        $this->getJson('/api/v1/general/inbox?tab=applications&branch_id='.$otherBranch->id)
+            ->assertOk()
+            ->assertJsonPath('data.applications.total', 0);
+    });
+
     it('forbids a distributor from viewing the inbox', function (): void {
         $branch = Branch::factory()->create();
         $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);

@@ -83,20 +83,36 @@ describe('Customer lifecycle', function (): void {
         ]);
     });
 
-    it('lets a distributor list its own customers in the paginated shape the frontend expects', function (): void {
+    it('lists customers in a paginated envelope, scoped to a distributor when requested', function (): void {
+        // Regresion: el controlador regresaba CustomerResource::collection($customers) directo,
+        // que al ir envuelto en success() pierde el `meta`/`links` de paginacion y `data` queda
+        // como el arreglo plano de clientes en vez de {data:[], links:[], meta:{}}. El frontend
+        // (composable useCustomers + pages que hacen result.data) esperan la forma paginada, asi
+        // que la app se quedaba pegada en "Cargando clientes..." al recibir un arreglo sin `.data`.
         $branch = Branch::factory()->create();
         $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
-        $customer = Customer::factory()->create(['branch_id' => $branch->id]);
-        CustomerDistributor::query()->create([
-            'distributor_id' => $distributor->id,
-            'customer_id' => $customer->id,
-            'relationship_status' => CustomerDistributorRelationshipStatus::ACTIVA,
-        ]);
         $distributorUser = User::factory()->create();
         signInAsDistributor($distributorUser, $distributor);
 
+        $customer = Customer::factory()->create(['branch_id' => $branch->id]);
+        $customer->distributors()->attach($distributor->id, [
+            'relationship_status' => CustomerDistributorRelationshipStatus::ACTIVA->value,
+            'linked_at' => now(),
+        ]);
+
+        // Cliente sin relacion con esta distribuidora: no debe aparecer al filtrar por distributor_id.
+        Customer::factory()->create(['branch_id' => $branch->id]);
+
         $this->getJson("/api/v1/customers?distributor_id={$distributor->id}")
             ->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    'data',
+                    'links',
+                    'meta' => ['current_page', 'last_page', 'per_page', 'total'],
+                ],
+            ])
+            ->assertJsonCount(1, 'data.data')
             ->assertJsonPath('data.data.0.id', $customer->id)
             ->assertJsonPath('data.meta.total', 1);
     });
@@ -195,6 +211,38 @@ describe('Customer change requests', function (): void {
             'mobile_phone' => '5559998877',
             'email' => 'nuevo@example.com',
         ]);
+    });
+
+    it('lists pending change requests in a paginated envelope for the inbox', function (): void {
+        // Misma regresion que en el listado de clientes: sin ->response()->getData(true),
+        // `data` llega como el arreglo plano de solicitudes en vez de {data:[], links:[], meta:{}},
+        // y la bandeja de aprobaciones (que hace customerRequests.value.data) se queda sin nada.
+        $branch = Branch::factory()->create();
+        $customer = Customer::factory()->active()->create(['branch_id' => $branch->id]);
+
+        $cashier = User::factory()->create();
+        signInWithBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/customers/{$customer->id}/change-requests", [
+            'change_type' => 'CONTACT',
+            'new_values' => ['mobile_phone' => '5559998877'],
+        ])->assertCreated();
+
+        $manager = User::factory()->create();
+        signInWithBusinessRole($manager, 'branch_manager', $branch);
+
+        $this->getJson('/api/v1/customer-change-requests?status=PENDIENTE')
+            ->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    'data',
+                    'links',
+                    'meta' => ['current_page', 'last_page', 'per_page', 'total'],
+                ],
+            ])
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.customer_id', $customer->id)
+            ->assertJsonPath('data.meta.total', 1);
     });
 
     it('rejects a change request with a reason', function (): void {

@@ -6,7 +6,6 @@ namespace App\Http\Requests\Branches;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Facades\Validator;
 
 final class UpdateBranchSettingRequest extends FormRequest
 {
@@ -29,6 +28,9 @@ final class UpdateBranchSettingRequest extends FormRequest
             'insurance_rates.*.min_amount' => ['required_with:insurance_rates', 'decimal:0,2', 'min:0'],
             'insurance_rates.*.max_amount' => ['required_with:insurance_rates', 'decimal:0,2', 'min:0'],
             'insurance_rates.*.insurance_amount' => ['required_with:insurance_rates', 'decimal:0,2', 'min:0'],
+            'opening_commission_percentage' => ['sometimes', 'decimal:0,4', 'between:0,100'],
+            'biweekly_interest_percentage' => ['sometimes', 'decimal:0,4', 'between:0,100'],
+            'late_payment_penalty_amount' => ['sometimes', 'decimal:0,2', 'min:0'],
             'auto_increase_threshold' => ['nullable', 'decimal:0,2', 'min:0'],
             'minimum_score_increase_percentage' => ['sometimes', 'decimal:0,2', 'between:0,100'],
             'category_settings_json' => ['nullable', 'array'],
@@ -37,6 +39,9 @@ final class UpdateBranchSettingRequest extends FormRequest
             'pre_vale_max_percentage' => ['sometimes', 'decimal:0,2', 'between:0,100'],
             'pre_vale_tolerance_amount' => ['sometimes', 'decimal:0,2', 'min:0'],
             'point_value_mxn' => ['sometimes', 'decimal:0,2', 'min:0'],
+            'point_divisor_factor' => ['nullable', 'integer', 'min:1'],
+            'point_multiplier' => ['nullable', 'integer', 'min:0'],
+            'late_penalty_percentage' => ['nullable', 'decimal:0,4', 'between:0,100'],
         ];
     }
 

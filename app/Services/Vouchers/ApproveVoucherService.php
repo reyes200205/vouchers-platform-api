@@ -8,14 +8,20 @@ use App\Enums\CustomerDistributorRelationshipStatus;
 use App\Enums\CustomerStatus;
 use App\Enums\VoucherRequestStatus;
 use App\Enums\VoucherStatus;
+use App\Models\BranchSetting;
 use App\Models\CustomerDistributor;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherRequest;
+use App\Services\Financial\FinancialCalculationService;
 use Illuminate\Support\Facades\DB;
 
 final class ApproveVoucherService
 {
+    public function __construct(
+        private readonly FinancialCalculationService $financial,
+    ) {}
+
     public function execute(User $user, VoucherRequest $voucherRequest): Voucher
     {
         return DB::transaction(function () use ($user, $voucherRequest): Voucher {
@@ -29,13 +35,41 @@ final class ApproveVoucherService
             $distributor = $voucherRequest->distributor;
             $snapshot = $voucherRequest->snapshot_json ?? [];
             $totalDebt = (float) ($snapshot['total_debt_amount'] ?? $voucherRequest->requested_amount);
+            $availableCredit = (float) $distributor->available_credit;
 
-            // El credito ya se reservo cuando la distribuidora pidio el vale
-            // (ver RequestVoucherService), asi que aqui no se vuelve a descontar
-            // ni se revalida la regla del prevale (ya se evaluo con el estado del
-            // credito previo a la reserva).
+            if ($availableCredit < $totalDebt) {
+                abort(422, 'El crédito disponible de la distribuidora es insuficiente para aprobar el vale.');
+            }
 
-            $voucherNumber = 'V-' . ((int) Voucher::query()->max('id') + 1);
+            $branchSetting = BranchSetting::query()
+                ->firstOrCreate(['branch_id' => $distributor->branch_id])
+                ->refresh();
+
+            $reactivationPending = $distributor->prevale_required_after_credit_increase_at !== null;
+
+            $preValeResult = $this->financial->validatePreVale(
+                requestedAmount: (float) $voucherRequest->requested_amount,
+                availableCredit: $availableCredit,
+                totalCreditLimit: (float) $distributor->credit_limit,
+                maxPercentage: (float) $branchSetting->pre_vale_max_percentage,
+                toleranceAmount: (float) $branchSetting->pre_vale_tolerance_amount,
+                reactivationPending: $reactivationPending,
+            );
+
+            if (! $preValeResult->allowed) {
+                abort(422, $preValeResult->reason ?? 'El monto excede el máximo permitido para el primer vale.');
+            }
+
+            $distributor->decrement('available_credit', $totalDebt);
+
+            if ($reactivationPending) {
+                // La regla del 50% ya se aplicó a este vale (el primero desde el
+                // aumento de línea); se libera para que los siguientes vuelvan a
+                // comportarse como vale digital normal.
+                $distributor->update(['prevale_required_after_credit_increase_at' => null]);
+            }
+
+            $voucherNumber = 'V-'.((int) Voucher::query()->max('id') + 1);
 
             $voucher = Voucher::query()->create([
                 'voucher_number' => $voucherNumber,

@@ -23,8 +23,8 @@ describe('Voucher snapshot (formula del documento)', function (): void {
         expect($snapshot->companyCommissionAmount)->toBe(1500.00)
             ->and($snapshot->interestPerFortnight)->toBe(750.00)
             ->and($snapshot->interestAmount)->toBe(6000.00)
-            ->and($snapshot->totalDebt)->toBe(22600.00)
-            ->and($snapshot->fortnightlyPayment)->toBe(2825.00)
+            ->and($snapshot->totalDebt)->toBe(21400.00)
+            ->and($snapshot->fortnightlyPayment)->toBe(2675.00)
             ->and($snapshot->distributorProfitTotal)->toBe(1200.00)
             ->and($snapshot->distributorProfitPerFortnight)->toBe(150.00)
             ->and($snapshot->totalFortnights)->toBe(8);
@@ -42,8 +42,8 @@ describe('Voucher snapshot (formula del documento)', function (): void {
 
         $asArray = $snapshot->toArray();
 
-        expect($asArray['total_debt_amount'])->toBe(8600.00)
-            ->and($asArray['fortnightly_payment_amount'])->toBe(716.67)
+        expect($asArray['total_debt_amount'])->toBe(8200.00)
+            ->and($asArray['fortnightly_payment_amount'])->toBe(683.00)
             ->and($asArray['company_commission_percentage_snapshot'])->toBe(10.0)
             ->and($asArray['interest_percentage_snapshot'])->toBe(5.0)
             ->and($asArray['distributor_profit_percentage_snapshot'])->toBe(8.0);
@@ -131,6 +131,21 @@ describe('Pre-vale rule (50% + tolerancia cuando hay 100% disponible)', function
 
         expect($result->allowed)->toBeTrue()
             ->and($result->ruleApplied)->toBeFalse();
+    });
+
+    it('reapplies the rule when a credit increase reactivation is pending, even without 100% available', function (): void {
+        $result = financial()->validatePreVale(
+            requestedAmount: 6000.00,
+            availableCredit: 6000.00,
+            totalCreditLimit: 10000.00,
+            maxPercentage: 50.0,
+            toleranceAmount: 500.00,
+            reactivationPending: true,
+        );
+
+        expect($result->allowed)->toBeFalse()
+            ->and($result->ruleApplied)->toBeTrue()
+            ->and($result->maxAllowedAmount)->toBe(3500.00);
     });
 
     it('does not apply the rule with a zero credit limit', function (): void {

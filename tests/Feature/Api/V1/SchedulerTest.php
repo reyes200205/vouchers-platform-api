@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 use App\Enums\CutoffRelationStatus;
 use App\Enums\DistributorStatus;
-use App\Enums\PaymentMethod;
 use App\Enums\VoucherStatus;
 use App\Models\Branch;
-use App\Models\CustomerPayment;
 use App\Models\Cutoff;
 use App\Models\CutoffRelation;
+use App\Models\CutoffRelationItem;
 use App\Models\Distributor;
 use App\Models\Role;
 use App\Models\User;
@@ -32,7 +31,7 @@ function schedulerSignIn(User $user, string $roleCode, Branch $branch): void
 }
 
 describe('Scheduler and notifications', function (): void {
-    it('marks vouchers as MOROSO when the due date passes', function (): void {
+    it('marks the cutoff relation as VENCIDA, applies the late fee, drops the commission and flags the voucher as MOROSO when the due date passes', function (): void {
         $branch = Branch::factory()->create();
         $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
         $voucher = Voucher::factory()->create([
@@ -41,8 +40,10 @@ describe('Scheduler and notifications', function (): void {
             'status' => VoucherStatus::ACTIVO,
             'payment_due_date' => now()->subDays(2)->toDateString(),
             'current_balance' => 5000.00,
+            'fortnightly_payment_amount' => 2500.00,
+            'late_fee_amount_snapshot' => 150.00,
         ]);
-        Voucher::factory()->create([
+        $onTimeVoucher = Voucher::factory()->create([
             'branch_id' => $branch->id,
             'distributor_id' => $distributor->id,
             'status' => VoucherStatus::ACTIVO,
@@ -50,14 +51,56 @@ describe('Scheduler and notifications', function (): void {
             'current_balance' => 5000.00,
         ]);
 
-        Artisan::call('vouchers:mark-overdue');
+        $cutoff = Cutoff::factory()->create(['branch_id' => $branch->id]);
+        $relation = CutoffRelation::query()->create([
+            'cutoff_id' => $cutoff->id,
+            'distributor_id' => $distributor->id,
+            'relation_number' => 'REL-OVERDUE',
+            'payment_reference' => 'REF-OVERDUE',
+            'payment_due_date' => now()->subDays(1)->toDateString(),
+            'total_payment' => 2500.00,
+            'total_commission' => 100.00,
+            'total_amount_due' => 2400.00,
+            'status' => CutoffRelationStatus::GENERADA,
+            'generated_at' => now()->subDays(15),
+        ]);
+        $item = CutoffRelationItem::query()->create([
+            'cutoff_relation_id' => $relation->id,
+            'voucher_id' => $voucher->id,
+            'customer_id' => $voucher->customer_id,
+            'product_name_snapshot' => 'Producto',
+            'payments_made' => 0,
+            'total_payments' => $voucher->total_fortnights,
+            'is_late_payment' => false,
+            'installment_number' => 1,
+            'accumulated_late_installments' => 0,
+            'commission_amount' => 100.00,
+            'payment_amount' => 2500.00,
+            'late_fee_amount' => 0.00,
+            'line_total_amount' => 2400.00,
+        ]);
+
+        Artisan::call('cutoffs:mark-overdue');
 
         $this->assertDatabaseHas('vouchers', [
             'id' => $voucher->id,
             'status' => 'MOROSO',
         ]);
 
-        expect(Voucher::query()->where('status', VoucherStatus::MOROSO)->count())->toBe(1);
+        $this->assertDatabaseHas('vouchers', [
+            'id' => $onTimeVoucher->id,
+            'status' => 'ACTIVO',
+        ]);
+
+        $relation->refresh();
+        $item->refresh();
+
+        expect($relation->status)->toBe(CutoffRelationStatus::VENCIDA)
+            ->and((float) $relation->total_late_fees)->toBe(150.00)
+            ->and((float) $relation->total_commission)->toBe(0.00)
+            ->and((float) $item->late_fee_amount)->toBe(150.00)
+            ->and((float) $item->commission_amount)->toBe(0.00)
+            ->and($item->is_late_payment)->toBeTrue();
     });
 
     it('blocks a distributor after 3 consecutive overdue cutoffs and notifies', function (): void {
@@ -183,7 +226,6 @@ describe('Scheduler and notifications', function (): void {
 
         expect($all)->toContain('cutoffs:generate')
             ->toContain('cutoffs:mark-overdue')
-            ->toContain('vouchers:mark-overdue')
             ->toContain('vouchers:send-reminders');
     });
 });

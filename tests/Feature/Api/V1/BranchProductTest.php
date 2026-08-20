@@ -14,7 +14,7 @@ use Laravel\Sanctum\Sanctum;
 uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
-    $this->seed(\Database\Seeders\RolesAndPermissionSeeder::class);
+    $this->seed(Database\Seeders\RolesAndPermissionSeeder::class);
 });
 
 function productRole(string $code): Role
@@ -222,6 +222,28 @@ describe('Branch products', function (): void {
             ->assertJsonPath('data.insurance_amount', '250.00');
     });
 
+    it('treats the tier max_amount as inclusive — a principal exactly at the boundary still matches', function (): void {
+        // Antes se comparaba con `<` (exclusivo): un tramo "5001-8000" no
+        // cubría un vale de exactamente $8000, y el seguro se quedaba en $0
+        // aunque la sucursal sí tuviera tarifas configuradas para ese monto.
+        $branch = Branch::factory()->create();
+        BranchSetting::query()->create([
+            'branch_id' => $branch->id,
+            'insurance_rates_json' => [
+                ['min_amount' => 2000, 'max_amount' => 5000, 'insurance_amount' => 300.00],
+                ['min_amount' => 5001, 'max_amount' => 8000, 'insurance_amount' => 350.00],
+            ],
+        ]);
+        productSignIn('branch_manager', $branch);
+
+        $payload = productPayload(['principal_amount' => '8000.00']);
+        unset($payload['insurance_amount']);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/products", $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.insurance_amount', '350.00');
+    });
+
     it('falls back to zero insurance when no tier covers the amount', function (): void {
         $branch = Branch::factory()->create();
         BranchSetting::query()->create([
@@ -264,6 +286,47 @@ describe('Branch products', function (): void {
 
         $this->postJson("/api/v1/branches/{$branch->id}/products", productPayload())
             ->assertForbidden();
+    });
+
+    it('inherits commission, interest and late fee from the branch settings when omitted', function (): void {
+        $branch = Branch::factory()->create();
+        BranchSetting::query()->create([
+            'branch_id' => $branch->id,
+            'opening_commission_percentage' => 12.5000,
+            'biweekly_interest_percentage' => 4.0000,
+            'late_payment_penalty_amount' => 250.00,
+        ]);
+        productSignIn('branch_manager', $branch);
+
+        $payload = productPayload();
+        unset($payload['company_commission_percentage'], $payload['fortnightly_interest_percentage'], $payload['late_fee_amount']);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/products", $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.company_commission_percentage', '12.5000')
+            ->assertJsonPath('data.fortnightly_interest_percentage', '4.0000')
+            ->assertJsonPath('data.late_fee_amount', '250.00');
+    });
+
+    it('keeps explicit commission, interest and late fee when provided', function (): void {
+        $branch = Branch::factory()->create();
+        BranchSetting::query()->create([
+            'branch_id' => $branch->id,
+            'opening_commission_percentage' => 12.5000,
+            'biweekly_interest_percentage' => 4.0000,
+            'late_payment_penalty_amount' => 250.00,
+        ]);
+        productSignIn('branch_manager', $branch);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/products", productPayload([
+            'company_commission_percentage' => '10.0000',
+            'fortnightly_interest_percentage' => '5.0000',
+            'late_fee_amount' => '300.00',
+        ]))
+            ->assertCreated()
+            ->assertJsonPath('data.company_commission_percentage', '10.0000')
+            ->assertJsonPath('data.fortnightly_interest_percentage', '5.0000')
+            ->assertJsonPath('data.late_fee_amount', '300.00');
     });
 
     it('includes global products in the branch catalog marked as global', function (): void {

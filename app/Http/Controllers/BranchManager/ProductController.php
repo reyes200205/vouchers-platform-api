@@ -40,13 +40,22 @@ final class ProductController extends ApiController
         $data = $request->validated();
         $data['branch_id'] = $branch->id;
         $data['code'] = $data['code'] ?? $this->nextProductCode($branch);
-        $data['company_commission_percentage'] ??= '0.0000';
-        $data['fortnightly_interest_percentage'] ??= '0.0000';
-        $data['late_fee_amount'] ??= '0.00';
         $data['disbursement_method'] ??= 'TRANSFERENCIA';
 
+        // Si la sucursal no manda un valor explícito para comisión/interés/seguro/
+        // multa, se usan los valores configurados a nivel sucursal en vez de un 0
+        // fijo: así ningún vale termina gratis por omisión. Pero cada producto
+        // puede traer su propio valor (no todos los vales de la sucursal deben
+        // tener la misma multa, el mismo interés o el mismo seguro) — el valor de
+        // la sucursal solo se usa como default al crear, no se vuelve a consultar
+        // después (ver RequestVoucherService, que ya lee todo del producto).
+        $tariff = BranchSetting::query()->where('branch_id', $branch->id)->first();
+
+        $data['company_commission_percentage'] ??= $tariff?->opening_commission_percentage ?? '0.0000';
+        $data['fortnightly_interest_percentage'] ??= $tariff?->biweekly_interest_percentage ?? '0.0000';
+        $data['late_fee_amount'] ??= $tariff?->late_payment_penalty_amount ?? '0.00';
+
         if (! isset($data['insurance_amount'])) {
-            $tariff = BranchSetting::query()->where('branch_id', $branch->id)->first();
             $data['insurance_amount'] = $tariff?->insuranceAmountFor((float) $data['principal_amount']) ?? '0.00';
         }
 
@@ -89,6 +98,6 @@ final class ProductController extends ApiController
         $prefix = 'VAL-'.Str::upper(Str::slug($branch->code, '-')).'-';
         $count = FinancialProduct::query()->where('branch_id', $branch->id)->count() + 1;
 
-        return $prefix.str_pad((string) $count, 4, '0', STR_PAD_LEFT);
+        return $prefix.mb_str_pad((string) $count, 4, '0', STR_PAD_LEFT);
     }
 }

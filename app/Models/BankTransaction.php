@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'company_bank_account_id',
+    'branch_id',
     'reference',
     'transaction_date',
     'transaction_time',
@@ -22,11 +23,12 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 ])]
 final class BankTransaction extends Model
 {
-    const UPDATED_AT = null;
+    public const UPDATED_AT = null;
 
     protected $casts = [
         'transaction_date' => 'date',
         'amount' => 'decimal:2',
+        'branch_id' => 'integer',
     ];
 
     /**

@@ -15,6 +15,11 @@ final class ListStaffService
     public const STAFF_ROLES = ['coordinator', 'verifier', 'branch_manager', 'cashier'];
 
     /**
+     * Roles that a branch manager can create and manage within their own branch.
+     */
+    public const BRANCH_MANAGER_ROLES = ['cashier', 'coordinator', 'verifier'];
+
+    /**
      * Lista el personal con filtros y restricciones por alcance de sucursal.
      *
      * @param  array{branch_id?: int, role?: string, per_page?: int}  $filters

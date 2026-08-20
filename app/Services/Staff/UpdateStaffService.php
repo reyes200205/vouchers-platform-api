@@ -51,7 +51,11 @@ final class UpdateStaffService
 
             if (isset($data['role_code'])) {
                 $targetRole = Role::query()->where('code', $data['role_code'])->firstOrFail();
-                abort_unless($targetRole->name === 'cashier', 403, 'Solo el gerente general puede asignar otro tipo de rol.');
+                abort_unless(
+                    in_array($targetRole->name, ListStaffService::BRANCH_MANAGER_ROLES, true),
+                    403,
+                    'Solo el gerente general puede asignar otro tipo de rol.'
+                );
             }
         } elseif (isset($data['role_code'])) {
             $targetRole = Role::query()->where('code', $data['role_code'])->firstOrFail();

@@ -45,31 +45,30 @@ final class UserResource extends JsonResource
                 'postal_code' => $this->person?->postal_code,
                 'email' => $this->person?->email,
             ]),
-            // Solo aplica a usuarios con rol `distributor`: el vinculo real es
-            // User -> person -> Distributor (person_id), no una FK directa en users.
-            'distributor' => $this->whenLoaded('person', function () {
-                $distributor = $this->person?->distributor;
-                if ($distributor === null) {
-                    return null;
-                }
-
-                return [
-                    'id' => $distributor->id,
-                    'distributor_number' => $distributor->distributor_number,
-                    'branch_id' => $distributor->branch_id,
-                    'status' => $distributor->status?->value,
-                    'credit_limit' => $distributor->credit_limit,
-                    'available_credit' => $distributor->available_credit,
-                    'unlimited_credit' => $distributor->unlimited_credit,
-                    'current_points' => $distributor->current_points,
-                    'can_issue_vouchers' => $distributor->can_issue_vouchers,
-                    'category' => $distributor->category ? [
-                        'id' => $distributor->category->id,
-                        'code' => $distributor->category->code,
-                        'name' => $distributor->category->name,
-                    ] : null,
-                ];
-            }),
+            'distributor' => $this->whenLoaded('distributor', fn () => $this->distributor ? [
+                'id' => $this->distributor->id,
+                'distributor_number' => $this->distributor->distributor_number,
+                'branch_id' => $this->distributor->branch_id,
+                'status' => $this->distributor->status?->value,
+                'credit_limit' => $this->distributor->credit_limit,
+                'available_credit' => $this->distributor->available_credit,
+                'unlimited_credit' => $this->distributor->unlimited_credit,
+                'current_points' => $this->distributor->current_points,
+                'can_issue_vouchers' => $this->distributor->can_issue_vouchers,
+                // Monto maximo permitido para el proximo vale por la regla del
+                // pre-vale (ver AuthController::attachPreValeMaxAmount). Null
+                // significa que la regla no aplica: puede pedir hasta su
+                // credito disponible normalmente.
+                'pre_vale_max_amount' => $this->distributor->pre_vale_max_amount ?? null,
+                'category' => $this->distributor->relationLoaded('category') && $this->distributor->category
+                    ? [
+                        'id' => $this->distributor->category->id,
+                        'code' => $this->distributor->category->code,
+                        'name' => $this->distributor->category->name,
+                        'commission_percentage' => $this->distributor->category->commission_percentage,
+                    ]
+                    : null,
+            ] : null),
             'roles' => $this->whenLoaded('businessRoles', function () {
                 $branchIds = $this->businessRoles
                     ->pluck('pivot.branch_id')

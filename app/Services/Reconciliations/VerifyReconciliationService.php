@@ -9,10 +9,16 @@ use App\Enums\DistributorPaymentStatus;
 use App\Enums\ReconciliationStatus;
 use App\Models\Reconciliation;
 use App\Models\User;
+use App\Services\Cutoffs\SettleCutoffRelationService;
 use Illuminate\Support\Facades\DB;
 
 final class VerifyReconciliationService
 {
+    public function __construct(
+        private readonly SettleCutoffRelationService $settleCutoffRelationService,
+    ) {
+    }
+
     public function execute(User $user, Reconciliation $reconciliation): Reconciliation
     {
         if ($reconciliation->status !== ReconciliationStatus::PENDIENTE_VERIFICACION) {
@@ -44,6 +50,10 @@ final class VerifyReconciliationService
             ]);
 
             $relation->distributor()->increment('available_credit', (float) $payment->amount);
+
+            // Solo hace algo si la relación quedó PAGADA: avanza los vales detrás
+            // de ella y le otorga los puntos a la distribuidora (nunca al cliente).
+            $this->settleCutoffRelationService->execute($relation->refresh());
 
             return $reconciliation->refresh();
         });

@@ -11,19 +11,27 @@ namespace App\Services\Financial;
  *   Comision empresa   = Principal x comision%
  *   Seguro             = monto de seguro
  *   Interes quincenal  = Principal x interes%  (solo sobre el principal)
- *   Total deuda        = Principal + Comision + Seguro + (Interes quincenal x quincenas)
- *   Pago quincenal     = Total deuda / quincenas
  *   Utilidad dist.     = Principal x comision de la categoria
+ *   Total deuda        = Principal + Comision + Seguro + (Interes quincenal x quincenas) - Utilidad dist.
+ *   Pago quincenal     = floor(Total deuda / quincenas)
  *
- * Ejemplo del documento: $15,000 a 8 quincenas, comision 10%, seguro $100,
- * interes 5% => $15,000 + $1,500 + $100 + $6,000 = $22,600 ($2,825 por quincena).
+ * La utilidad de la distribuidora NO se le cobra al cliente aparte: sale de
+ * lo que ya cobra la empresa, asi que se resta del total antes de dividir
+ * entre quincenas (y el pago quincenal siempre se redondea al piso, nunca al
+ * mas cercano).
  *
- * Regla del pre-vale: aplica unicamente cuando el CLIENTE es nuevo (nunca
- * antes se le aprobo un vale, sin importar su estado actual). Ese primer vale
- * del cliente no puede superar el 50% del limite de credito de la
- * distribuidora mas una tolerancia de redondeo (default $500). En cuanto ese
- * primer vale se paga por completo y el cliente pide otro, ya no es pre-vale
- * sino un vale digital normal, sin este tope.
+ * Ejemplo: $15,000 a 8 quincenas, comision 10% ($1,500), seguro $100,
+ * interes 3% ($3,600 en 8 quincenas), categoria 6% ($900 de utilidad
+ * distribuidora) => $15,000 + $1,500 + $100 + $3,600 - $900 = $19,300
+ * ($2,412.50 -> $2,412 por quincena, redondeado al piso).
+ *
+ * Regla del pre-vale: cuando la distribuidora tiene el 100% de su credito
+ * disponible, el primer vale no puede superar el 50% del disponible mas una
+ * tolerancia de redondeo (default $500) para respetar multiplos de 100/500.
+ * La misma regla se fuerza tambien cuando reactivationPending es true (la
+ * distribuidora acaba de recibir un aumento de linea de credito), aunque en
+ * ese momento no tenga el 100% disponible, para que el primer vale tras el
+ * aumento tambien respete el limite del 50%.
  */
 final class FinancialCalculationService
 {
@@ -39,13 +47,19 @@ final class FinancialCalculationService
         $companyCommissionAmount = round($principal * $companyCommissionPercentage / 100, 2);
         $interestPerFortnight = round($principal * $fortnightlyInterestPercentage / 100, 2);
         $interestAmount = round($interestPerFortnight * $totalFortnights, 2);
-        $totalDebt = round(
-            $principal + $companyCommissionAmount + $insuranceAmount + $interestAmount,
-            2
-        );
-        $fortnightlyPayment = round($totalDebt / $totalFortnights, 2);
         $distributorProfitTotal = round($principal * $categoryCommissionPercentage / 100, 2);
         $distributorProfitPerFortnight = round($distributorProfitTotal / $totalFortnights, 2);
+        // La utilidad de la distribuidora sale de lo que ya cobra la empresa: no es
+        // un cargo adicional para el cliente, asi que se resta del total que el
+        // cliente realmente debe.
+        $totalDebt = round(
+            $principal + $companyCommissionAmount + $insuranceAmount + $interestAmount - $distributorProfitTotal,
+            2
+        );
+        // El pago quincenal siempre se redondea al piso, al peso entero (regla de
+        // negocio) -- no a los centavos y nunca al mas cercano: floor(totalDebt /
+        // quincenas), no round().
+        $fortnightlyPayment = floor($totalDebt / $totalFortnights);
 
         return new VoucherSnapshot(
             principal: $principal,
@@ -66,33 +80,33 @@ final class FinancialCalculationService
     }
 
     /**
-     * Valida la regla del pre-vale. La regla solo aplica cuando el cliente es
-     * nuevo (nunca antes tuvo un vale aprobado con esta distribuidora).
+     * Valida la regla del pre-vale.
      *
-     * @param  bool  $isNewCustomer  false si el cliente ya tuvo al menos un vale aprobado antes.
      * @param  float  $maxPercentage  Porcentaje maximo del pre-vale (default 50).
      * @param  float  $toleranceAmount  Tolerancia de redondeo en pesos (default 500).
      */
     public function validatePreVale(
         float $requestedAmount,
-        bool $isNewCustomer,
         float $availableCredit,
         float $totalCreditLimit,
         float $maxPercentage,
         float $toleranceAmount,
+        bool $reactivationPending = false,
     ): PreValeValidationResult {
-        if (! $isNewCustomer) {
+        $hasFullCreditAvailable = $totalCreditLimit > 0 && abs($availableCredit - $totalCreditLimit) < 0.01;
+
+        if (! $hasFullCreditAvailable && ! $reactivationPending) {
             return PreValeValidationResult::allowed();
         }
 
         $maxAllowedAmount = min(
             $availableCredit,
-            round($totalCreditLimit * $maxPercentage / 100 + $toleranceAmount, 2)
+            round($availableCredit * $maxPercentage / 100 + $toleranceAmount, 2)
         );
 
         if ($requestedAmount > $maxAllowedAmount) {
             return PreValeValidationResult::denied(
-                'El monto supera el máximo permitido para el primer vale del cliente (50% del límite de crédito de la distribuidora).',
+                'El monto supera el máximo permitido para el primer vale (50% del crédito disponible).',
                 $maxAllowedAmount
             );
         }

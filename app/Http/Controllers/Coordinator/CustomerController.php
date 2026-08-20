@@ -29,9 +29,7 @@ final class CustomerController extends ApiController
             ->paginate($request->integer('per_page', 15))
             ->appends($request->query());
 
-        return $this->success(
-            CustomerResource::collection($customers)->response()->getData(true)
-        );
+        return $this->success(CustomerResource::collection($customers)->response()->getData(true));
     }
 
     public function show(Request $request, Customer $customer): JsonResponse

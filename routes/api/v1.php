@@ -38,8 +38,8 @@ use App\Http\Controllers\GeneralManager\PointController as GeneralManagerPointCo
 use App\Http\Controllers\GeneralManager\PointSettingController;
 use App\Http\Controllers\GeneralManager\ReconciliationController as GeneralManagerReconciliationController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\System\RolesController;
 use App\Http\Controllers\Staff\StaffController;
+use App\Http\Controllers\System\RolesController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -122,7 +122,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
         Route::get('/financial-products/{financialProduct}', [FinancialProductController::class, 'show'])->name('financial-products.show');
     });
 
-    Route::middleware('business.ability:products.manage')->group(function (): void {
+    Route::middleware('business.ability:products.manage.global')->group(function (): void {
         Route::post('/financial-products', [FinancialProductController::class, 'store'])->name('financial-products.store');
         Route::patch('/financial-products/{financialProduct}', [FinancialProductController::class, 'update'])->name('financial-products.update');
     });
@@ -132,7 +132,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
         Route::get('/distributor-categories/{distributorCategory}', [DistributorCategoryController::class, 'show'])->name('distributor-categories.show');
     });
 
-    Route::middleware('business.ability:categories.manage')->group(function (): void {
+    Route::middleware('business.ability:categories.manage.global')->group(function (): void {
         Route::post('/distributor-categories', [DistributorCategoryController::class, 'store'])->name('distributor-categories.store');
         Route::patch('/distributor-categories/{distributorCategory}', [DistributorCategoryController::class, 'update'])->name('distributor-categories.update');
     });
@@ -141,6 +141,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:point-settings.manage')->patch('/point-settings', [PointSettingController::class, 'update'])->name('point-settings.update');
 
     Route::middleware('business.ability:applications.view')->get('/applications', [CoordinadorController::class, 'index'])->name('applications.index');
+    Route::middleware('business.ability:applications.view,application')->get('/applications/{application}', [CoordinadorController::class, 'show'])->name('applications.show');
     Route::post('/applications', [CoordinadorController::class, 'store'])->name('applications.store');
     Route::middleware('business.ability:applications.assign-verifier,application')->patch('/applications/{application}/verifier', [CoordinadorController::class, 'assignVerifier'])->name('applications.assign-verifier');
     Route::middleware('business.ability:applications.verify,application')->post('/applications/{application}/verification', [VerificadorController::class, 'verify'])->name('applications.verify');
@@ -176,7 +177,6 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     });
 
     Route::middleware('business.ability:vouchers.pre-issue')->post('/vouchers', [DistributorVoucherController::class, 'store'])->name('vouchers.pre-issue');
-    Route::middleware('business.ability:vouchers.pre-issue')->get('/distributor/pre-vale-limit', [DistributorVoucherController::class, 'preValeLimit'])->name('distributor.pre-vale-limit');
     Route::middleware('business.ability:vouchers.approve,voucherRequest')->post('/voucher-requests/{voucherRequest}/approve', [CoordinatorVoucherController::class, 'approve'])->name('vouchers.approve');
     Route::middleware('business.ability:vouchers.reject,voucherRequest')->post('/voucher-requests/{voucherRequest}/reject', [CoordinatorVoucherController::class, 'reject'])->name('vouchers.reject');
     Route::middleware('business.ability:vouchers.disburse,voucher')->post('/vouchers/{voucher}/disburse', [CashierVoucherController::class, 'disburse'])->name('vouchers.disburse');

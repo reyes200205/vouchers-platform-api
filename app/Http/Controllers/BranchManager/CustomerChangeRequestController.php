@@ -31,7 +31,7 @@ final class CustomerChangeRequestController extends ApiController
             ->paginate($request->integer('per_page', 15))
             ->appends($request->query());
 
-        return $this->success(CustomerChangeRequestResource::collection($requests));
+        return $this->success(CustomerChangeRequestResource::collection($requests)->response()->getData(true));
     }
 
     public function decide(DecideCustomerChangeRequest $request, CustomerChangeRequest $customerChangeRequest, ApproveCustomerChangeService $service, AuditLogger $audit): JsonResponse

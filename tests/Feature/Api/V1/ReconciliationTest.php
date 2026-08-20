@@ -93,6 +93,41 @@ describe('Reconciliations', function (): void {
         ]);
     });
 
+    it('imports a bank export that uses real-world Spanish column names instead of the plain ones', function (): void {
+        // Reproduce el archivo real que reportó el usuario: encabezados como
+        // "Fecha de pago" y "Pago" (en vez de "fecha"/"importe" a secas), que
+        // antes no se reconocían y hacían fallar TODAS las filas con "Ninguna
+        // fila del archivo pudo ser importada".
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create([
+            'branch_id' => $branch->id,
+            'available_credit' => 10000,
+            'credit_limit' => 20000,
+        ]);
+        $relation = reconciliationOpenRelation($branch, $distributor);
+
+        $csv = "Concepto,Referencia,Pago,Fecha de pago\n"
+            . "Abono a referencia,{$relation->payment_reference}," . '2599.00,' . now()->subDay()->format('Y-m-d') . "\n"
+            . 'Deposito sin match,SIN-REFERENCIA,500.00,' . now()->subDay()->format('Y-m-d');
+
+        $file = UploadedFile::fake()->createWithContent('estado-cuenta.csv', $csv);
+
+        $cashier = User::factory()->create();
+        reconciliationSignIn($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/reconciliations/import", [
+            'file' => $file,
+        ])->assertCreated()
+            ->assertJsonPath('data.import.row_count', 2)
+            ->assertJsonPath('data.import.error_count', 0)
+            ->assertJsonPath('data.auto_matched', 1);
+
+        $this->assertDatabaseHas('cutoff_relations', [
+            'id' => $relation->id,
+            'status' => 'PAGADA',
+        ]);
+    });
+
     it('flags a difference when the deposit amount does not match the relation', function (): void {
         $branch = Branch::factory()->create();
         $distributor = Distributor::factory()->create([

@@ -11,7 +11,7 @@ use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
 
-function signInWithRole(User $user, string $roleCode, Branch $branch): void
+function attachRole(User $user, string $roleCode, Branch $branch): void
 {
     $role = Role::query()->firstOrCreate(['code' => $roleCode], ['name' => $roleCode]);
     $user->businessRoles()->attach($role, [
@@ -19,6 +19,11 @@ function signInWithRole(User $user, string $roleCode, Branch $branch): void
         'assigned_at' => now(),
         'is_primary' => true,
     ]);
+}
+
+function signInWithRole(User $user, string $roleCode, Branch $branch): void
+{
+    attachRole($user, $roleCode, $branch);
     Sanctum::actingAs($user);
 }
 
@@ -37,23 +42,26 @@ describe('Distributor onboarding', function (): void {
                 'last_name' => 'Distribuidora',
                 'curp' => 'ABCD900101HNLXYZ01',
             ],
-            'family_data' => ['children' => 2],
+            'family_data' => ['children' => 2, 'applicant_age' => 28],
             'vehicles' => [['type' => 'car']],
             'requested_credit_limit' => '10000.00',
         ])->assertCreated()->assertJsonPath('data.status', 'EN_REVISION')->json('data');
 
+        attachRole($verifier, 'verifier', $branch);
         $this->patchJson("/api/v1/applications/{$application['id']}/verifier", [
             'verifier_user_id' => $verifier->id,
         ])->assertOk();
 
-        signInWithRole($verifier, 'verifier', $branch);
+        Sanctum::actingAs($verifier);
         $this->postJson("/api/v1/applications/{$application['id']}/verification", [
             'result' => 'VERIFICADA',
             'visit_date' => now()->toDateTimeString(),
             'checklist' => ['home_visited' => true],
+            'front_photo' => 'verifications/1/front.jpg',
         ])->assertOk();
 
         $category = DistributorCategory::query()->create([
+            'branch_id' => $branch->id,
             'code' => 'PLATA',
             'name' => 'Plata',
             'commission_percentage' => '6.0000',
@@ -76,5 +84,78 @@ describe('Distributor onboarding', function (): void {
             'can_issue_vouchers' => true,
         ]);
         $this->assertDatabaseHas('distributor_activations', ['used_at' => null]);
+    });
+
+    it('shows the full application detail with applicant info and photo URLs for the branch manager deciding it', function (): void {
+        $branch = Branch::factory()->create();
+        $coordinator = User::factory()->create();
+        $verifier = User::factory()->create();
+        $manager = User::factory()->create();
+        signInWithRole($coordinator, 'coordinator', $branch);
+
+        $application = $this->postJson('/api/v1/applications', [
+            'branch_id' => $branch->id,
+            'person' => [
+                'first_name' => 'Ana',
+                'last_name' => 'Distribuidora',
+                'curp' => 'ABCD900101HNLXYZ01',
+                'mobile_phone' => '8112345678',
+                'street' => 'Av. Juarez 123',
+            ],
+            'family_data' => ['children' => 2, 'applicant_age' => 28],
+            'vehicles' => [['type' => 'car']],
+            'requested_credit_limit' => '10000.00',
+            'id_front_path' => 'applications/1/id_front.jpg',
+            'id_back_path' => 'applications/1/id_back.jpg',
+            'proof_of_address_path' => 'applications/1/comprobante.jpg',
+        ])->assertCreated()->json('data');
+
+        attachRole($verifier, 'verifier', $branch);
+        $this->patchJson("/api/v1/applications/{$application['id']}/verifier", [
+            'verifier_user_id' => $verifier->id,
+        ])->assertOk();
+
+        Sanctum::actingAs($verifier);
+        $this->postJson("/api/v1/applications/{$application['id']}/verification", [
+            'result' => 'VERIFICADA',
+            'visit_date' => now()->toDateTimeString(),
+            'checklist' => ['home_visited' => true],
+            'front_photo' => 'verifications/1/fachada.jpg',
+        ])->assertOk();
+
+        signInWithRole($manager, 'branch_manager', $branch);
+
+        $this->getJson("/api/v1/applications/{$application['id']}")
+            ->assertOk()
+            ->assertJsonPath('data.applicant.first_name', 'Ana')
+            ->assertJsonPath('data.applicant.curp', 'ABCD900101HNLXYZ01')
+            ->assertJsonPath('data.applicant.mobile_phone', '8112345678')
+            ->assertJsonPath('data.family_data_json.applicant_age', 28)
+            ->assertJsonPath('data.id_front_url', fn ($url) => str_ends_with($url, '/storage/applications/1/id_front.jpg'))
+            ->assertJsonPath('data.proof_of_address_url', fn ($url) => str_ends_with($url, '/storage/applications/1/comprobante.jpg'))
+            ->assertJsonPath('data.verification.front_photo_url', fn ($url) => str_ends_with($url, '/storage/verifications/1/fachada.jpg'));
+    });
+
+    it('forbids a branch manager from viewing an application of another branch', function (): void {
+        $branch = Branch::factory()->create();
+        $otherBranch = Branch::factory()->create();
+        $coordinator = User::factory()->create();
+        $manager = User::factory()->create();
+        signInWithRole($coordinator, 'coordinator', $branch);
+
+        $application = $this->postJson('/api/v1/applications', [
+            'branch_id' => $branch->id,
+            'person' => [
+                'first_name' => 'Ana',
+                'last_name' => 'Distribuidora',
+                'curp' => 'ABCD900101HNLXYZ02',
+            ],
+            'family_data' => ['applicant_age' => 28],
+            'requested_credit_limit' => '10000.00',
+        ])->assertCreated()->json('data');
+
+        signInWithRole($manager, 'branch_manager', $otherBranch);
+
+        $this->getJson("/api/v1/applications/{$application['id']}")->assertForbidden();
     });
 });
