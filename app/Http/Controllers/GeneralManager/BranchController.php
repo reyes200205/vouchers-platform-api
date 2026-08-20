@@ -26,7 +26,12 @@ final class BranchController extends ApiController
             $query->whereIn('id', $branchIds);
         }
 
-        $branches = $query->paginate($request->integer('per_page', 15))
+        $perPage = $request->integer('per_page', 15);
+        if ($perPage === -1) {
+            $perPage = $query->count() ?: 15;
+        }
+
+        $branches = $query->paginate($perPage)
             ->appends($request->query());
 
         return $this->success(
@@ -101,7 +106,7 @@ final class BranchController extends ApiController
 
         $audit->record($request, 'BRANCH_CREATED', 'branches', 'Sucursal creada.', $branch->id);
 
-        return $this->created(new BranchResource($branch));
+        return $this->created(new BranchResource($branch->fresh()));
     }
 
     public function update(UpdateBranchRequest $request, Branch $branch, AuditLogger $audit): JsonResponse

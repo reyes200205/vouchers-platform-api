@@ -46,6 +46,14 @@ final class Branch extends Model
     }
 
     /**
+     * @return HasOne<BranchSetting, $this>
+     */
+    public function branchSetting(): HasOne
+    {
+        return $this->hasOne(BranchSetting::class);
+    }
+
+    /**
      * @return HasMany<BranchSettingsLog, $this>
      */
     public function settingsLogs(): HasMany
