@@ -6,8 +6,10 @@ namespace App\Http\Controllers\Auth;
 
 use App\Enums\LoginChannel;
 use App\Http\Controllers\ApiController;
+use App\Http\Requests\Auth\ChangePasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Resources\UserResource;
+use App\Models\DistributorActivation;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Http\JsonResponse;
@@ -20,7 +22,7 @@ final class AuthController extends ApiController
     public function login(LoginRequest $request, AuditLogger $audit): JsonResponse
     {
         $user = User::query()
-            ->with(['person', 'businessRoles'])
+            ->with(['person.distributor.category', 'businessRoles'])
             ->where('username', $request->username)
             ->orWhereHas('person', function ($query) use ($request) {
                 $query->where('email', $request->username);
@@ -69,7 +71,30 @@ final class AuthController extends ApiController
         $user = $request->user();
 
         return $this->success(new UserResource(
-            $user->loadMissing(['person', 'businessRoles'])
+            $user->loadMissing(['person.distributor.category', 'businessRoles'])
         ));
+    }
+
+    public function changePassword(ChangePasswordRequest $request, AuditLogger $audit): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        if (! Hash::check($request->current_password, $user->getAuthPassword())) {
+            return $this->error('Current password is incorrect', 422);
+        }
+
+        $user->update(['password_hash' => Hash::make($request->password)]);
+
+        // Si la contrasena actual provenia de una activacion de distribuidora
+        // pendiente, este cambio la marca como completada.
+        DistributorActivation::query()
+            ->where('user_id', $user->id)
+            ->whereNull('used_at')
+            ->update(['used_at' => now()]);
+
+        $audit->record($request, 'PASSWORD_CHANGED', 'auth', 'Cambio de contrasena por el propio usuario.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
+
+        return $this->success(message: 'Password changed successfully');
     }
 }

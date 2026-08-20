@@ -5,23 +5,17 @@ declare(strict_types=1);
 namespace App\Services\Vouchers;
 
 use App\Enums\CustomerDistributorRelationshipStatus;
+use App\Enums\CustomerStatus;
 use App\Enums\VoucherRequestStatus;
 use App\Enums\VoucherStatus;
-use App\Models\BranchSetting;
 use App\Models\CustomerDistributor;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherRequest;
-use App\Services\Financial\FinancialCalculationService;
 use Illuminate\Support\Facades\DB;
 
 final class ApproveVoucherService
 {
-    public function __construct(
-        private readonly FinancialCalculationService $financial,
-    ) {
-    }
-
     public function execute(User $user, VoucherRequest $voucherRequest): Voucher
     {
         return DB::transaction(function () use ($user, $voucherRequest): Voucher {
@@ -34,31 +28,12 @@ final class ApproveVoucherService
 
             $distributor = $voucherRequest->distributor;
             $snapshot = $voucherRequest->snapshot_json ?? [];
-
-            $availableCredit = (float) $distributor->available_credit;
             $totalDebt = (float) ($snapshot['total_debt_amount'] ?? $voucherRequest->requested_amount);
 
-            if ($availableCredit < $totalDebt) {
-                abort(422, 'El crédito disponible de la distribuidora es insuficiente para aprobar el vale.');
-            }
-
-            $branchSetting = BranchSetting::query()
-                ->firstOrCreate(['branch_id' => $distributor->branch_id])
-                ->refresh();
-
-            $preValeResult = $this->financial->validatePreVale(
-                requestedAmount: (float) $voucherRequest->requested_amount,
-                availableCredit: $availableCredit,
-                totalCreditLimit: (float) $distributor->credit_limit,
-                maxPercentage: (float) $branchSetting->pre_vale_max_percentage,
-                toleranceAmount: (float) $branchSetting->pre_vale_tolerance_amount,
-            );
-
-            if (! $preValeResult->allowed) {
-                abort(422, $preValeResult->reason ?? 'El monto excede el máximo permitido para el primer vale.');
-            }
-
-            $distributor->decrement('available_credit', $totalDebt);
+            // El credito ya se reservo cuando la distribuidora pidio el vale
+            // (ver RequestVoucherService), asi que aqui no se vuelve a descontar
+            // ni se revalida la regla del prevale (ya se evaluo con el estado del
+            // credito previo a la reserva).
 
             $voucherNumber = 'V-' . ((int) Voucher::query()->max('id') + 1);
 
@@ -103,6 +78,18 @@ final class ApproveVoucherService
                     ->where('customer_id', $voucherRequest->customer_id)
                     ->where('relationship_status', CustomerDistributorRelationshipStatus::ACTIVA->value)
                     ->update(['prevale_approved' => true]);
+
+                // Un cliente sin verificar por la cajera pudo solicitar este vale
+                // precisamente por ser un prevale (ver RequestVoucherService); al
+                // aprobarse, el cliente queda activo sin esperar la verificacion manual.
+                $customer = $voucherRequest->customer;
+                if ($customer->status !== CustomerStatus::ACTIVO) {
+                    $customer->update([
+                        'status' => CustomerStatus::ACTIVO,
+                        'verified_at' => $customer->verified_at ?? now(),
+                        'verified_by_user_id' => $customer->verified_by_user_id ?? $user->id,
+                    ]);
+                }
             }
 
             return $voucher;

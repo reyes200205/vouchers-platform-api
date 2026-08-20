@@ -21,7 +21,7 @@ final class DecideApplicationService
 {
     /**
      * @param array{decision: string, credit_limit?: string|null, category_id?: int|null, coordinator_user_id?: int|null, rejection_reason?: string|null} $data
-    * @return array{application: Application, distributor: Distributor|null, distributor_username: string|null}
+    * @return array{application: Application, distributor: Distributor|null, distributor_username: string|null, temporary_password: string|null}
      */
     public function execute(Application $application, User $manager, array $data): array
     {
@@ -45,7 +45,7 @@ final class DecideApplicationService
                     'event_type' => ManagerDecisionEventType::RECHAZO,
                 ]);
 
-                return ['application' => $application->fresh(), 'distributor' => null, 'distributor_username' => null];
+                return ['application' => $application->fresh(), 'distributor' => null, 'distributor_username' => null, 'temporary_password' => null];
             }
 
             $creditLimit = $data['credit_limit'];
@@ -96,7 +96,12 @@ final class DecideApplicationService
                 'new_amount' => $creditLimit,
             ]);
 
-            return ['application' => $application->fresh(), 'distributor' => $distributor, 'distributor_username' => $user->username];
+            return [
+                'application' => $application->fresh(),
+                'distributor' => $distributor,
+                'distributor_username' => $user->username,
+                'temporary_password' => $activationToken,
+            ];
         });
     }
 

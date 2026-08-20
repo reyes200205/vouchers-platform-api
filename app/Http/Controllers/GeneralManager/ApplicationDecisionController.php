@@ -25,6 +25,10 @@ final class ApplicationDecisionController extends ApiController
             'application' => $result['application'],
             'distributor' => $result['distributor'],
             'distributor_username' => $result['distributor_username'],
+            // Contrasena temporal en texto plano: solo se muestra en esta respuesta,
+            // nunca se persiste ni se vuelve a exponer. El gerente debe comunicarla
+            // a la distribuidora para su primer inicio de sesion.
+            'temporary_password' => $result['temporary_password'],
         ]);
     }
 }

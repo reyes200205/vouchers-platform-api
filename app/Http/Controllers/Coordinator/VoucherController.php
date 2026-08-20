@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Coordinator;
 
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Vouchers\ApproveVoucherRequest;
+use App\Http\Requests\Vouchers\RejectVoucherRequest;
 use App\Http\Resources\VoucherRequestResource;
 use App\Http\Resources\VoucherResource;
 use App\Models\User;
@@ -13,6 +14,7 @@ use App\Models\Voucher;
 use App\Models\VoucherRequest;
 use App\Services\Audit\AuditLogger;
 use App\Services\Vouchers\ApproveVoucherService;
+use App\Services\Vouchers\RejectVoucherService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -56,5 +58,21 @@ final class VoucherController extends ApiController
         );
 
         return $this->success(new VoucherResource($voucher->load(['customer.person'])));
+    }
+
+    public function reject(RejectVoucherRequest $request, VoucherRequest $voucherRequest, RejectVoucherService $service, AuditLogger $audit): JsonResponse
+    {
+        $voucherRequest = $service->execute($request->user(), $voucherRequest, $request->validated('reason'));
+
+        $audit->record(
+            $request,
+            'VOUCHER_REJECTED',
+            'vouchers',
+            'Solicitud de vale rechazada; credito reservado devuelto a la distribuidora.',
+            $voucherRequest->branch_id,
+            ['voucher_request_id' => $voucherRequest->id, 'reason' => $voucherRequest->rejection_reason]
+        );
+
+        return $this->success(new VoucherRequestResource($voucherRequest->load(['customer.person', 'financialProduct'])));
     }
 }

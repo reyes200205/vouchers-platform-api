@@ -18,9 +18,12 @@ namespace App\Services\Financial;
  * Ejemplo del documento: $15,000 a 8 quincenas, comision 10%, seguro $100,
  * interes 5% => $15,000 + $1,500 + $100 + $6,000 = $22,600 ($2,825 por quincena).
  *
- * Regla del pre-vale: cuando la distribuidora tiene el 100% de su credito
- * disponible, el primer vale no puede superar el 50% del disponible mas una
- * tolerancia de redondeo (default $500) para respetar multiplos de 100/500.
+ * Regla del pre-vale: aplica unicamente cuando el CLIENTE es nuevo (nunca
+ * antes se le aprobo un vale, sin importar su estado actual). Ese primer vale
+ * del cliente no puede superar el 50% del limite de credito de la
+ * distribuidora mas una tolerancia de redondeo (default $500). En cuanto ese
+ * primer vale se paga por completo y el cliente pide otro, ya no es pre-vale
+ * sino un vale digital normal, sin este tope.
  */
 final class FinancialCalculationService
 {
@@ -63,33 +66,33 @@ final class FinancialCalculationService
     }
 
     /**
-     * Valida la regla del pre-vale. La regla solo aplica cuando el credito
-     * disponible es exactamente el total (100% disponible).
+     * Valida la regla del pre-vale. La regla solo aplica cuando el cliente es
+     * nuevo (nunca antes tuvo un vale aprobado con esta distribuidora).
      *
+     * @param  bool  $isNewCustomer  false si el cliente ya tuvo al menos un vale aprobado antes.
      * @param  float  $maxPercentage  Porcentaje maximo del pre-vale (default 50).
      * @param  float  $toleranceAmount  Tolerancia de redondeo en pesos (default 500).
      */
     public function validatePreVale(
         float $requestedAmount,
+        bool $isNewCustomer,
         float $availableCredit,
         float $totalCreditLimit,
         float $maxPercentage,
         float $toleranceAmount,
     ): PreValeValidationResult {
-        $hasFullCreditAvailable = $totalCreditLimit > 0 && abs($availableCredit - $totalCreditLimit) < 0.01;
-
-        if (! $hasFullCreditAvailable) {
+        if (! $isNewCustomer) {
             return PreValeValidationResult::allowed();
         }
 
         $maxAllowedAmount = min(
             $availableCredit,
-            round($availableCredit * $maxPercentage / 100 + $toleranceAmount, 2)
+            round($totalCreditLimit * $maxPercentage / 100 + $toleranceAmount, 2)
         );
 
         if ($requestedAmount > $maxAllowedAmount) {
             return PreValeValidationResult::denied(
-                'El monto supera el máximo permitido para el primer vale (50% del crédito disponible).',
+                'El monto supera el máximo permitido para el primer vale del cliente (50% del límite de crédito de la distribuidora).',
                 $maxAllowedAmount
             );
         }

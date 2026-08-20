@@ -11,8 +11,10 @@ use App\Http\Requests\Applications\StoreApplicationVerificationRequest;
 use App\Models\Application;
 use App\Models\ApplicationVerification;
 use App\Models\User;
+use App\Notifications\ApplicationVerifiedByVerifierNotification;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Notification;
 
 final class VerificadorController extends ApiController
 {
@@ -58,6 +60,10 @@ final class VerificadorController extends ApiController
         ]);
 
         $audit->record($request, 'APPLICATION_VERIFIED', 'applications', 'Verificacion de solicitud registrada.', $application->branch_id, ['application_id' => $application->id, 'result' => $verification->result->value]);
+
+        if ($application->coordinator) {
+            Notification::send($application->coordinator, new ApplicationVerifiedByVerifierNotification($application, $verification));
+        }
 
         return $this->success($verification->load('application'));
     }

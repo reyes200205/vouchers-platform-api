@@ -172,10 +172,13 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
         Route::get('/vouchers', [CoordinatorVoucherController::class, 'index'])->name('vouchers.index');
         Route::get('/vouchers/{voucher}', [CoordinatorVoucherController::class, 'show'])->name('vouchers.show');
         Route::get('/distributor/vouchers', [DistributorVoucherController::class, 'index'])->name('distributor.vouchers.index');
+        Route::get('/distributor/voucher-requests', [DistributorVoucherController::class, 'requests'])->name('distributor.voucher-requests.index');
     });
 
     Route::middleware('business.ability:vouchers.pre-issue')->post('/vouchers', [DistributorVoucherController::class, 'store'])->name('vouchers.pre-issue');
+    Route::middleware('business.ability:vouchers.pre-issue')->get('/distributor/pre-vale-limit', [DistributorVoucherController::class, 'preValeLimit'])->name('distributor.pre-vale-limit');
     Route::middleware('business.ability:vouchers.approve,voucherRequest')->post('/voucher-requests/{voucherRequest}/approve', [CoordinatorVoucherController::class, 'approve'])->name('vouchers.approve');
+    Route::middleware('business.ability:vouchers.reject,voucherRequest')->post('/voucher-requests/{voucherRequest}/reject', [CoordinatorVoucherController::class, 'reject'])->name('vouchers.reject');
     Route::middleware('business.ability:vouchers.disburse,voucher')->post('/vouchers/{voucher}/disburse', [CashierVoucherController::class, 'disburse'])->name('vouchers.disburse');
 
     Route::middleware('business.ability:credit-increase.view')->get('/credit-increase-requests', [GeneralManagerCreditIncreaseController::class, 'index'])->name('credit-increase-requests.index');
@@ -239,5 +242,6 @@ Route::prefix('auth')->group(function (): void {
     Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function (): void {
         Route::post('logout', [AuthController::class, 'logout'])->name('api.v1.logout');
         Route::get('me', [AuthController::class, 'me'])->name('api.v1.me');
+        Route::post('change-password', [AuthController::class, 'changePassword'])->name('api.v1.change-password');
     });
 });

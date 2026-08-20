@@ -25,7 +25,7 @@ final class CoordinadorController extends ApiController
         $user = $request->user();
 
         $applications = Application::query()
-            ->with(['applicant', 'branch', 'assignedVerifier', 'verification'])
+            ->with(['applicant', 'branch', 'assignedVerifier.person', 'verification'])
             ->when(! $user->hasGlobalBusinessRole(), fn ($query) => $query->whereIn('branch_id', $user->activeBusinessBranchIds()))
             ->when($request->filled('branch_id'), fn ($query) => $query->where('branch_id', $request->integer('branch_id')))
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))

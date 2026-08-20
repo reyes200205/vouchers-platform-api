@@ -45,6 +45,31 @@ final class UserResource extends JsonResource
                 'postal_code' => $this->person?->postal_code,
                 'email' => $this->person?->email,
             ]),
+            // Solo aplica a usuarios con rol `distributor`: el vinculo real es
+            // User -> person -> Distributor (person_id), no una FK directa en users.
+            'distributor' => $this->whenLoaded('person', function () {
+                $distributor = $this->person?->distributor;
+                if ($distributor === null) {
+                    return null;
+                }
+
+                return [
+                    'id' => $distributor->id,
+                    'distributor_number' => $distributor->distributor_number,
+                    'branch_id' => $distributor->branch_id,
+                    'status' => $distributor->status?->value,
+                    'credit_limit' => $distributor->credit_limit,
+                    'available_credit' => $distributor->available_credit,
+                    'unlimited_credit' => $distributor->unlimited_credit,
+                    'current_points' => $distributor->current_points,
+                    'can_issue_vouchers' => $distributor->can_issue_vouchers,
+                    'category' => $distributor->category ? [
+                        'id' => $distributor->category->id,
+                        'code' => $distributor->category->code,
+                        'name' => $distributor->category->name,
+                    ] : null,
+                ];
+            }),
             'roles' => $this->whenLoaded('businessRoles', function () {
                 $branchIds = $this->businessRoles
                     ->pluck('pivot.branch_id')

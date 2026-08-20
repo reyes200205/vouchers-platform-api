@@ -54,9 +54,6 @@ function customerPayload(): array
             'street' => 'Calle Uno',
             'external_number' => '12',
         ],
-        'bank_account' => '1234567890',
-        'bank_clabe' => '012345678901234567',
-        'account_holder_name' => 'Juan Perez Lopez',
     ];
 }
 
@@ -84,6 +81,24 @@ describe('Customer lifecycle', function (): void {
             'distributor_id' => $distributor->id,
             'relationship_status' => 'ACTIVA',
         ]);
+    });
+
+    it('lets a distributor list its own customers in the paginated shape the frontend expects', function (): void {
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
+        $customer = Customer::factory()->create(['branch_id' => $branch->id]);
+        CustomerDistributor::query()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'relationship_status' => CustomerDistributorRelationshipStatus::ACTIVA,
+        ]);
+        $distributorUser = User::factory()->create();
+        signInAsDistributor($distributorUser, $distributor);
+
+        $this->getJson("/api/v1/customers?distributor_id={$distributor->id}")
+            ->assertOk()
+            ->assertJsonPath('data.data.0.id', $customer->id)
+            ->assertJsonPath('data.meta.total', 1);
     });
 
     it('forbids a coordinator from creating customers', function (): void {

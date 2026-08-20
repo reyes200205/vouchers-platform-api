@@ -75,9 +75,12 @@ final class UpdateStaffService
                 }
             }
 
+            // No filtramos por is_primary: usuarios sembrados via UserSeeder/syncRoles()
+            // nunca marcaron su pivot como primario (Spatie::syncRoles no setea columnas
+            // extra), y un miembro del modulo de personal solo tiene un rol de negocio
+            // activo a la vez, asi que el primero no revocado es, de facto, el primario.
             $primaryPivot = $staff->businessRoles()
                 ->wherePivotNull('revoked_at')
-                ->where('model_has_roles.is_primary', true)
                 ->whereIn('roles.name', ListStaffService::STAFF_ROLES)
                 ->first();
 

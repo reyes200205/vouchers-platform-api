@@ -14,6 +14,7 @@ use App\Models\CustomerDistributor;
 use App\Models\Distributor;
 use App\Models\FinancialProduct;
 use App\Models\User;
+use App\Models\Voucher;
 use App\Models\VoucherRequest;
 use App\Services\Financial\FinancialCalculationService;
 use Illuminate\Support\Facades\DB;
@@ -39,7 +40,6 @@ final class RequestVoucherService
             $customer = Customer::query()->findOrFail($data['customer_id']);
 
             $this->assertCustomerBelongsToDistributor($distributor, $customer);
-            $this->assertCustomerVerified($customer);
             $this->assertNoActiveVoucher($customer);
             $this->assertProductActive($product);
 
@@ -68,8 +68,13 @@ final class RequestVoucherService
                 abort(422, 'El crédito disponible de la distribuidora es insuficiente para cubrir la deuda total del vale.');
             }
 
+            // El prevale es exclusivo del primer vale del cliente (nunca antes se le
+            // aprobo uno, sin importar el estado actual de ese vale previo).
+            $isNewCustomer = ! Voucher::query()->where('customer_id', $customer->id)->exists();
+
             $preValeResult = $this->financial->validatePreVale(
                 requestedAmount: (float) $product->principal_amount,
+                isNewCustomer: $isNewCustomer,
                 availableCredit: $availableCredit,
                 totalCreditLimit: (float) $distributor->credit_limit,
                 maxPercentage: (float) $branchSetting->pre_vale_max_percentage,
@@ -79,6 +84,19 @@ final class RequestVoucherService
             if (! $preValeResult->allowed) {
                 abort(422, $preValeResult->reason ?? 'El monto excede el máximo permitido para el primer vale.');
             }
+
+            // Un cliente sin verificar por la cajera solo puede recibir una solicitud
+            // de vale si esta califica como prevale (es su primer vale). Al aprobarse
+            // ese prevale, el cliente pasa a ACTIVO automaticamente (ver
+            // ApproveVoucherService). Fuera de ese caso, se exige la verificacion normal.
+            $this->assertCustomerVerified($customer, $preValeResult->ruleApplied);
+
+            // El credito se reserva desde que se pide el vale (no hasta que se aprueba),
+            // para que la distribuidora no pueda comprometer mas credito del que tiene
+            // mientras hay solicitudes pendientes. Si la cajera rechaza la solicitud,
+            // RejectVoucherService devuelve este monto (ver tambien ApproveVoucherService,
+            // que ya no descuenta de nuevo al aprobar).
+            $distributor->decrement('available_credit', $snapshot->totalDebt);
 
             return VoucherRequest::query()->create([
                 'distributor_id' => $distributor->id,
@@ -107,17 +125,33 @@ final class RequestVoucherService
         }
     }
 
-    private function assertCustomerVerified(Customer $customer): void
+    private function assertCustomerVerified(Customer $customer, bool $isPreVale): void
     {
-        if ($customer->status !== CustomerStatus::ACTIVO || $customer->verified_at === null) {
-            abort(422, 'El cliente debe estar activo y verificado por la cajera para solicitar un vale.');
+        if ($customer->status === CustomerStatus::ACTIVO && $customer->verified_at !== null) {
+            return;
         }
+
+        if ($isPreVale && $customer->status === CustomerStatus::EN_VERIFICACION) {
+            return;
+        }
+
+        abort(422, 'El cliente debe estar activo y verificado por la cajera para solicitar un vale.');
     }
 
     private function assertNoActiveVoucher(Customer $customer): void
     {
+        $hasPendingRequest = VoucherRequest::query()
+            ->where('customer_id', $customer->id)
+            ->where('status', VoucherRequestStatus::PENDIENTE)
+            ->exists();
+
+        if ($hasPendingRequest) {
+            abort(422, 'El cliente ya tiene una solicitud de vale pendiente de aprobación.');
+        }
+
         $hasActiveVoucher = $customer->vouchers()
             ->whereIn('status', [
+                VoucherStatus::APROBADO->value,
                 VoucherStatus::ACTIVO->value,
                 VoucherStatus::PAGO_PARCIAL->value,
                 VoucherStatus::MOROSO->value,

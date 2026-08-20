@@ -35,9 +35,6 @@ final class StoreCustomerService
                 'branch_id' => $distributor->branch_id,
                 'customer_code' => $customerCode,
                 'status' => CustomerStatus::EN_VERIFICACION,
-                'bank_account' => $data['bank_account'] ?? null,
-                'bank_clabe' => $data['bank_clabe'] ?? null,
-                'account_holder_name' => $data['account_holder_name'] ?? null,
                 'notes' => $data['notes'] ?? null,
             ]);
 

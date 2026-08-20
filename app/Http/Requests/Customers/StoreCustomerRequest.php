@@ -41,9 +41,6 @@ final class StoreCustomerRequest extends FormRequest
             'person.latitude' => ['nullable', 'decimal:0,7'],
             'person.longitude' => ['nullable', 'decimal:0,7'],
             'person.notes' => ['nullable', 'string'],
-            'bank_account' => ['nullable', 'string', 'max:30'],
-            'bank_clabe' => ['nullable', 'string', 'size:18'],
-            'account_holder_name' => ['nullable', 'string', 'max:150'],
             'notes' => ['nullable', 'string'],
         ];
     }

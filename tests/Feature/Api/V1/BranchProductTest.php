@@ -237,6 +237,35 @@ describe('Branch products', function (): void {
             ->assertJsonPath('data.insurance_amount', '0.00');
     });
 
+    it('lets a distributor view products of their own branch but not another branch', function (): void {
+        $myBranch = Branch::factory()->create();
+        $otherBranch = Branch::factory()->create();
+        FinancialProduct::query()->create([
+            'branch_id' => $myBranch->id,
+            'code' => 'VAL-MIO-0001',
+            'name' => 'Mi vale',
+            'principal_amount' => 5000.00,
+            'number_of_fortnights' => 2,
+            'disbursement_method' => 'TRANSFERENCIA',
+        ]);
+        productSignIn('distributor', $myBranch);
+
+        $this->getJson("/api/v1/branches/{$myBranch->id}/products")
+            ->assertOk()
+            ->assertJsonCount(1, 'data.data');
+
+        $this->getJson("/api/v1/branches/{$otherBranch->id}/products")
+            ->assertForbidden();
+    });
+
+    it('forbids a distributor from creating products', function (): void {
+        $branch = Branch::factory()->create();
+        productSignIn('distributor', $branch);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/products", productPayload())
+            ->assertForbidden();
+    });
+
     it('includes global products in the branch catalog marked as global', function (): void {
         $branch = Branch::factory()->create();
         productSignIn('branch_manager', $branch);
