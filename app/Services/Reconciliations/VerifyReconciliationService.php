@@ -49,8 +49,10 @@ final class VerifyReconciliationService
                     : CutoffRelationStatus::PARCIAL,
             ]);
 
-            $relation->distributor()->increment('available_credit', (float) $payment->amount);
-
+            // El crédito disponible ya NO se libera aquí por el monto pagado: se
+            // descontó por el principal del vale al aprobarlo y se libera completo
+            // hasta que el vale se termina de pagar (ver SettleCutoffRelationService,
+            // que es quien de verdad decide si un vale quedó liquidado).
             // Solo hace algo si la relación quedó PAGADA: avanza los vales detrás
             // de ella y le otorga los puntos a la distribuidora (nunca al cliente).
             $this->settleCutoffRelationService->execute($relation->refresh());

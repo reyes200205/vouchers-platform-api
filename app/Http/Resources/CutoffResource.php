@@ -23,6 +23,7 @@ final class CutoffResource extends JsonResource
             'branch_id' => $this->branch_id,
             'cutoff_type' => $this->cutoff_type?->value,
             'base_day_of_month' => $this->base_day_of_month,
+            'period_start' => $this->period_start?->toDateString(),
             'base_time' => $this->base_time,
             'scheduled_at' => $this->scheduled_at?->toIso8601String(),
             'executed_at' => $this->executed_at?->toIso8601String(),

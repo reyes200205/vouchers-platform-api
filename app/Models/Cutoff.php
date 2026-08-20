@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'branch_id',
     'cutoff_type',
     'base_day_of_month',
+    'period_start',
     'base_time',
     'scheduled_at',
     'executed_at',
@@ -33,6 +34,7 @@ final class Cutoff extends Model
     protected $casts = [
         'cutoff_type' => CutoffType::class,
         'status' => CutoffStatus::class,
+        'period_start' => 'date',
         'scheduled_at' => 'datetime',
         'executed_at' => 'datetime',
         'keep_date_on_holiday' => 'boolean',

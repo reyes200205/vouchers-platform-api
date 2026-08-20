@@ -58,8 +58,17 @@ final class VoucherResource extends JsonResource
             'customer' => $this->whenLoaded('customer', fn () => [
                 'id' => $this->customer->id,
                 'customer_code' => $this->customer->customer_code,
+                'status' => $this->customer->status?->value,
+                'verified_at' => $this->customer->verified_at?->toIso8601String(),
                 'person' => new PersonResource($this->customer->person),
             ]),
+            'distributor' => $this->whenLoaded('distributor', fn () => $this->distributor ? [
+                'id' => $this->distributor->id,
+                'distributor_number' => $this->distributor->distributor_number,
+                'person' => $this->distributor->relationLoaded('person') && $this->distributor->person
+                    ? new PersonResource($this->distributor->person)
+                    : null,
+            ] : null),
         ];
     }
 }

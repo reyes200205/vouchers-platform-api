@@ -66,9 +66,13 @@ final class RequestVoucherService
                 abort(422, 'El monto del producto no es múltiplo del paso configurado en la sucursal.');
             }
 
+            // El crédito disponible mide cuánto CAPITAL (principal) puede tener
+            // prestado la distribuidora a la vez -- no el total a cobrar al
+            // cliente, que ya trae intereses, seguro y comisión encima. Por eso
+            // se compara contra el principal del producto, no contra totalDebt.
             $availableCredit = (float) $distributor->available_credit;
-            if ($availableCredit < $snapshot->totalDebt) {
-                abort(422, 'El crédito disponible de la distribuidora es insuficiente para cubrir la deuda total del vale.');
+            if ($availableCredit < (float) $product->principal_amount) {
+                abort(422, 'El crédito disponible de la distribuidora es insuficiente para cubrir el monto del vale.');
             }
 
             $preValeResult = $this->financial->validatePreVale(

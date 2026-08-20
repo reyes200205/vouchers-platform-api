@@ -181,7 +181,49 @@ describe('Cutoffs', function (): void {
         $this->assertDatabaseCount('cutoff_relations', 0);
     });
 
-    it('reprocesses a cutoff creating a new executed one', function (): void {
+    it('reprocesses a cutoff in place, adding relations for distributors that did not have one yet, without duplicating it', function (): void {
+        $branch = Branch::factory()->create();
+        $distributorA = Distributor::factory()->create(['branch_id' => $branch->id]);
+        cutoffVoucher($branch, $distributorA, now()->toDateString());
+
+        $manager = User::factory()->create();
+        cutoffSignInBusinessRole($manager, 'branch_manager', $branch);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+            'period_start' => now()->subDays(15)->toDateString(),
+            'period_end' => now()->toDateString(),
+        ])->assertCreated();
+
+        $cutoff = Cutoff::query()->firstOrFail();
+        $this->assertDatabaseCount('cutoff_relations', 1);
+
+        // Una distribuidora nueva (con vale en el mismo periodo) se da de alta
+        // DESPUÉS de generado el corte -- reprocesar debe encontrarla sin crear
+        // un corte nuevo ni tocar la relación que ya existía.
+        $distributorB = Distributor::factory()->create(['branch_id' => $branch->id]);
+        cutoffVoucher($branch, $distributorB, now()->toDateString());
+
+        $gm = User::factory()->create();
+        cutoffSignInBusinessRole($gm, 'general_manager', $branch);
+
+        $this->postJson("/api/v1/cutoffs/{$cutoff->id}/reprocess")
+            ->assertOk()
+            ->assertJsonPath('data.id', $cutoff->id)
+            ->assertJsonPath('data.status', 'EJECUTADO');
+
+        $this->assertDatabaseCount('cutoffs', 1);
+        $this->assertDatabaseCount('cutoff_relations', 2);
+        $this->assertDatabaseHas('cutoff_relations', [
+            'cutoff_id' => $cutoff->id,
+            'distributor_id' => $distributorB->id,
+        ]);
+
+        // Reprocesar de nuevo sin distribuidoras nuevas no debe duplicar nada.
+        $this->postJson("/api/v1/cutoffs/{$cutoff->id}/reprocess")->assertOk();
+        $this->assertDatabaseCount('cutoff_relations', 2);
+    });
+
+    it('refuses to reprocess a cutoff generated before period_start existed', function (): void {
         $branch = Branch::factory()->create();
         $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
         cutoffVoucher($branch, $distributor, now()->toDateString());
@@ -195,34 +237,13 @@ describe('Cutoffs', function (): void {
         ])->assertCreated();
 
         $cutoff = Cutoff::query()->firstOrFail();
-        $originalRelation = CutoffRelation::query()->where('cutoff_id', $cutoff->id)->firstOrFail();
+        $cutoff->update(['period_start' => null]);
 
         $gm = User::factory()->create();
         cutoffSignInBusinessRole($gm, 'general_manager', $branch);
 
-        $response = $this->postJson("/api/v1/cutoffs/{$cutoff->id}/reprocess")
-            ->assertCreated()
-            ->assertJsonPath('data.status', 'EJECUTADO');
-
-        $this->assertDatabaseHas('cutoffs', [
-            'id' => $cutoff->id,
-            'status' => 'REPROCESADO',
-        ]);
-
-        $newCutoffId = $response->json('data.id');
-        $newRelation = CutoffRelation::query()
-            ->where('cutoff_id', $newCutoffId)
-            ->where('distributor_id', $distributor->id)
-            ->firstOrFail();
-
-        // previous_relation_id es una FK a cutoff_relations.id, no a cutoffs.id:
-        // debe apuntar a la relación original de esta distribuidora, y esa
-        // relación original debe quedar cerrada para no contar el saldo doble.
-        expect($newRelation->previous_relation_id)->toBe($originalRelation->id);
-        $this->assertDatabaseHas('cutoff_relations', [
-            'id' => $originalRelation->id,
-            'status' => 'CERRADA',
-        ]);
+        $this->postJson("/api/v1/cutoffs/{$cutoff->id}/reprocess")
+            ->assertStatus(422);
     });
 
     it('marks overdue relations as VENCIDA', function (): void {
@@ -248,5 +269,80 @@ describe('Cutoffs', function (): void {
             'id' => $relation->id,
             'status' => 'VENCIDA',
         ]);
+    });
+
+    it('charges the distributor the full quincena (commission not kept) plus the late fee when a relation goes overdue', function (): void {
+        // Quincena 2825.00 (ya incluye la comision de categoria, 150.00 de esos
+        // 2825 son la comision -- ver primera prueba de este archivo). A tiempo
+        // la distribuidora solo remite 2675.00 (2825 - 150 de comision que se
+        // queda). Si no paga, ya no gana esa comision: debe remitir la quincena
+        // COMPLETA (2825, sin restarle nada) MAS la multa (300) = 3125.00.
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
+        $voucher = cutoffVoucher($branch, $distributor, now()->subDays(25)->toDateString(), 300.00);
+
+        $manager = User::factory()->create();
+        cutoffSignInBusinessRole($manager, 'branch_manager', $branch);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+            'period_start' => now()->subDays(30)->toDateString(),
+            'period_end' => now()->subDays(20)->toDateString(),
+        ])->assertCreated();
+
+        $relation = CutoffRelation::query()->firstOrFail();
+
+        (new App\Services\Cutoffs\MarkOverdueRelationsService())->execute();
+
+        $this->assertDatabaseHas('cutoff_relation_items', [
+            'cutoff_relation_id' => $relation->id,
+            'voucher_id' => $voucher->id,
+            'is_late_payment' => 1,
+            'commission_amount' => 0.00,
+            'late_fee_amount' => 300.00,
+            'line_total_amount' => 3125.00,
+        ]);
+
+        $this->assertDatabaseHas('cutoff_relations', [
+            'id' => $relation->id,
+            'status' => 'VENCIDA',
+            'total_commission' => 0.00,
+            'total_late_fees' => 300.00,
+            'total_amount_due' => 3125.00,
+        ]);
+    });
+
+    it('closes a cutoff manually, marking unpaid relations as VENCIDA even before their due date', function (): void {
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
+        cutoffVoucher($branch, $distributor, now()->addDays(5)->toDateString(), 300.00);
+
+        $manager = User::factory()->create();
+        cutoffSignInBusinessRole($manager, 'branch_manager', $branch);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+            'period_start' => now()->subDays(15)->toDateString(),
+            'period_end' => now()->toDateString(),
+        ])->assertCreated();
+
+        $cutoff = Cutoff::query()->firstOrFail();
+        $relation = CutoffRelation::query()->firstOrFail();
+        expect($relation->payment_due_date->isFuture())->toBeTrue();
+
+        $gm = User::factory()->create();
+        cutoffSignInBusinessRole($gm, 'general_manager', $branch);
+
+        $this->postJson("/api/v1/cutoffs/{$cutoff->id}/close")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'CERRADO');
+
+        $this->assertDatabaseHas('cutoffs', ['id' => $cutoff->id, 'status' => 'CERRADO']);
+        $this->assertDatabaseHas('cutoff_relations', [
+            'id' => $relation->id,
+            'status' => 'VENCIDA',
+            'total_amount_due' => 3125.00,
+        ]);
+
+        // Ya cerrado, no se puede volver a cerrar.
+        $this->postJson("/api/v1/cutoffs/{$cutoff->id}/close")->assertStatus(422);
     });
 });

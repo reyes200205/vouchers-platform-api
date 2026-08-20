@@ -83,8 +83,8 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
             ->assertJsonPath('data.is_pre_vale', true)
             ->assertJsonPath('data.status', 'PENDIENTE')
             ->assertJsonPath('data.requested_amount', '15000.00')
-            ->assertJsonPath('data.snapshot.total_debt_amount', 21400)
-            ->assertJsonPath('data.snapshot.fortnightly_payment_amount', 2675);
+            ->assertJsonPath('data.snapshot.total_debt_amount', 22600)
+            ->assertJsonPath('data.snapshot.fortnightly_payment_amount', 2825);
 
         $this->assertDatabaseHas('voucher_requests', [
             'distributor_id' => $distributor->id,
@@ -328,9 +328,10 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
         ])->assertCreated();
     });
 
-    it('rejects a request when available credit is not enough for the total debt', function (): void {
+    it('rejects a request when available credit is not enough to cover the voucher principal', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
-        $distributor->update(['credit_limit' => 30000, 'available_credit' => 20000]);
+        // Producto por default: principal 15,000 -- 10,000 disponibles no alcanzan.
+        $distributor->update(['credit_limit' => 30000, 'available_credit' => 10000]);
         $user = User::factory()->create();
         signInDistributor($user, $distributor);
 
@@ -338,7 +339,7 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
             'customer_id' => $customer->id,
             'financial_product_id' => $product->id,
         ])->assertStatus(422)
-            ->assertJsonPath('message', 'El crédito disponible de la distribuidora es insuficiente para cubrir la deuda total del vale.');
+            ->assertJsonPath('message', 'El crédito disponible de la distribuidora es insuficiente para cubrir el monto del vale.');
 
         $this->assertDatabaseCount('voucher_requests', 0);
     });
@@ -363,8 +364,8 @@ describe('Voucher approval (cajera/gerente)', function (): void {
             ->assertJsonPath('data.status', 'APROBADO')
             ->assertJsonPath('data.is_pre_vale', true)
             ->assertJsonPath('data.voucher_number', 'V-1')
-            ->assertJsonPath('data.total_debt_amount', '21400.00')
-            ->assertJsonPath('data.fortnightly_payment_amount', '2675.00')
+            ->assertJsonPath('data.total_debt_amount', '22600.00')
+            ->assertJsonPath('data.fortnightly_payment_amount', '2825.00')
             ->assertJsonPath('data.approved_by_user_id', $cashier->id);
 
         $this->assertDatabaseHas('vouchers', [
@@ -373,12 +374,12 @@ describe('Voucher approval (cajera/gerente)', function (): void {
             'customer_id' => $customer->id,
             'status' => 'APROBADO',
             'is_pre_vale' => true,
-            'current_balance' => 21400.00,
+            'current_balance' => 22600.00,
         ]);
 
         $this->assertDatabaseHas('distributors', [
             'id' => $distributor->id,
-            'available_credit' => 8600.00,
+            'available_credit' => 15000.00,
         ]);
 
         $this->assertDatabaseHas('voucher_requests', [
@@ -418,7 +419,7 @@ describe('Voucher approval (cajera/gerente)', function (): void {
             ->assertJsonPath('data.is_pre_vale', true);
 
         expect($distributor->refresh()->prevale_required_after_credit_increase_at)->toBeNull();
-        expect((float) $distributor->available_credit)->toBe(10700.00);
+        expect((float) $distributor->available_credit)->toBe(15000.00);
     });
 
     it('rejects approval when the distributor no longer has enough credit', function (): void {
@@ -565,6 +566,37 @@ describe('Voucher disbursement (cajera)', function (): void {
             'status' => 'ACTIVO',
             'transfer_reference' => 'SPEI-20260816-001',
             'authorized_number' => 'AUT-0001',
+        ]);
+    });
+
+    it('rolls the first payment_due_date to the NEXT cutoff period, never the current one', function (): void {
+        // El dia 27 cae en el periodo 16-31 (branch_settings.cutoff_day = 15 por
+        // default). El vale se acaba de pedir, asi que el primer pago NO debe
+        // caer el 30/31 de ESTE mes (el periodo actual, a solo unos dias) --
+        // debe caer hasta el 15 del mes SIGUIENTE. Ver CutoffPeriodCalculator.
+        $this->travelTo(now()->setDate(2026, 8, 27)->setTime(10, 0, 0));
+
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $voucher = Voucher::factory()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'financial_product_id' => $product->id,
+            'status' => VoucherStatus::APROBADO,
+        ]);
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260827-777',
+            'authorized_number' => 'AUT-0777',
+        ])->assertOk()
+            ->assertJsonPath('data.payment_due_date', '2026-09-15');
+
+        $this->assertDatabaseHas('vouchers', [
+            'id' => $voucher->id,
+            'payment_due_date' => '2026-09-15',
         ]);
     });
 
