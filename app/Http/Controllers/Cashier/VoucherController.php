@@ -32,6 +32,6 @@ final class VoucherController extends ApiController
             ]
         );
 
-        return $this->success(new VoucherResource($voucher->load(['customer.person'])));
+        return $this->success(new VoucherResource($voucher->load(['customer.person', 'distributor.person'])));
     }
 }

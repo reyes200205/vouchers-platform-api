@@ -8,6 +8,7 @@ use App\Http\Controllers\ApiController;
 use App\Http\Resources\CutoffResource;
 use App\Models\Cutoff;
 use App\Services\Audit\AuditLogger;
+use App\Services\Cutoffs\CloseCutoffService;
 use App\Services\Cutoffs\ReprocessCutoffService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,20 +17,37 @@ final class CutoffController extends ApiController
 {
     public function reprocess(Request $request, Cutoff $cutoff, ReprocessCutoffService $service, AuditLogger $audit): JsonResponse
     {
-        $newCutoff = $service->execute($cutoff);
+        $cutoff = $service->execute($cutoff);
 
         $audit->record(
             $request,
             'CUTOFF_REPROCESSED',
             'cutoffs',
-            'Corte reprocesado.',
+            'Corte reprocesado (mismo periodo, se revisó si había nuevas relaciones).',
             $cutoff->branch_id,
             [
-                'origin_cutoff_id' => $cutoff->id,
-                'new_cutoff_id' => $newCutoff->id,
+                'cutoff_id' => $cutoff->id,
             ]
         );
 
-        return $this->created(new CutoffResource($newCutoff->load('relations.distributor', 'relations.items')));
+        return $this->success(new CutoffResource($cutoff->load('relations.distributor', 'relations.items')));
+    }
+
+    public function close(Request $request, Cutoff $cutoff, CloseCutoffService $service, AuditLogger $audit): JsonResponse
+    {
+        $cutoff = $service->execute($cutoff);
+
+        $audit->record(
+            $request,
+            'CUTOFF_CLOSED',
+            'cutoffs',
+            'Corte cerrado manualmente; las relaciones sin pagar quedaron vencidas.',
+            $cutoff->branch_id,
+            [
+                'cutoff_id' => $cutoff->id,
+            ]
+        );
+
+        return $this->success(new CutoffResource($cutoff->load('relations.distributor', 'relations.items')));
     }
 }

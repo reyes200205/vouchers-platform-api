@@ -177,6 +177,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     });
 
     Route::middleware('business.ability:vouchers.pre-issue')->post('/vouchers', [DistributorVoucherController::class, 'store'])->name('vouchers.pre-issue');
+    Route::middleware('business.ability:vouchers.approve')->get('/voucher-requests', [CoordinatorVoucherController::class, 'pendingRequests'])->name('voucher-requests.index');
     Route::middleware('business.ability:vouchers.approve,voucherRequest')->post('/voucher-requests/{voucherRequest}/approve', [CoordinatorVoucherController::class, 'approve'])->name('vouchers.approve');
     Route::middleware('business.ability:vouchers.reject,voucherRequest')->post('/voucher-requests/{voucherRequest}/reject', [CoordinatorVoucherController::class, 'reject'])->name('vouchers.reject');
     Route::middleware('business.ability:vouchers.disburse,voucher')->post('/vouchers/{voucher}/disburse', [CashierVoucherController::class, 'disburse'])->name('vouchers.disburse');
@@ -195,6 +196,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:cutoffs.view,cutoff')->get('/cutoffs/{cutoff}', [BranchManagerCutoffController::class, 'show'])->name('cutoffs.show');
     Route::middleware('business.ability:cutoffs.manage,branch')->post('/branches/{branch}/cutoffs/generate', [BranchManagerCutoffController::class, 'generate'])->name('cutoffs.generate');
     Route::middleware('business.ability:cutoffs.manage,cutoff')->post('/cutoffs/{cutoff}/reprocess', [GeneralManagerCutoffController::class, 'reprocess'])->name('cutoffs.reprocess');
+    Route::middleware('business.ability:cutoffs.manage,cutoff')->post('/cutoffs/{cutoff}/close', [GeneralManagerCutoffController::class, 'close'])->name('cutoffs.close');
 
     Route::middleware('business.ability:reconciliations.import,branch')->post('/branches/{branch}/reconciliations/import', [CashierReconciliationController::class, 'import'])->name('reconciliations.import');
     Route::middleware('business.ability:reconciliations.view')->get('/reconciliations/bank-transactions', [CashierReconciliationController::class, 'bankTransactions'])->name('reconciliations.bank-transactions');

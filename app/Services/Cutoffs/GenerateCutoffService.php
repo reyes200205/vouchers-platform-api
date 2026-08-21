@@ -56,6 +56,7 @@ final class GenerateCutoffService
                 'cutoff_type' => CutoffType::PAGOS,
                 'base_day_of_month' => $periodEnd->day,
                 'base_time' => $periodEnd->format('H:i:s'),
+                'period_start' => $periodStart->toDateString(),
                 'scheduled_at' => $periodEnd,
                 'executed_at' => now(),
                 'status' => CutoffStatus::EJECUTADO,
@@ -81,7 +82,12 @@ final class GenerateCutoffService
         });
     }
 
-    private function generateRelation(Cutoff $cutoff, Distributor $distributor, Carbon $periodStart, Carbon $periodEnd): void
+    /**
+     * Publico porque ReprocessCutoffService reutiliza esta misma logica para
+     * generar la relacion de una distribuidora que todavia no tiene una en un
+     * corte ya existente (sin crear un Cutoff duplicado).
+     */
+    public function generateRelation(Cutoff $cutoff, Distributor $distributor, Carbon $periodStart, Carbon $periodEnd): void
     {
         $previousRelation = CutoffRelation::query()
             ->where('distributor_id', $distributor->id)
@@ -144,6 +150,14 @@ final class GenerateCutoffService
                 'is_late_payment' => false,
                 'installment_number' => $voucher->payments_made + 1,
                 'accumulated_late_installments' => 0,
+                // payment_amount es la quincena COMPLETA que la distribuidora ya le
+                // cobró al cliente (incluye su comisión de categoría — ver
+                // FinancialCalculationService, ya no se descuenta ahí). Aquí, en el
+                // corte de relación, sí se descuenta: la distribuidora no le va a
+                // pagar su propia comisión a la sucursal, se la queda como
+                // ganancia. Por eso line_total_amount = payment_amount - commission.
+                // Si no paga a tiempo, MarkOverdueRelationsService le suma de vuelta
+                // esa comisión (ya no gana nada) más la multa.
                 'commission_amount' => $commission,
                 'payment_amount' => $paymentAmount,
                 'late_fee_amount' => 0.00,
@@ -193,6 +207,9 @@ final class GenerateCutoffService
             'total_commission' => round($totalCommission, 2),
             'total_late_fees' => 0.00,
             'total_carryover_received' => round($carryover, 2),
+            // Lo que la distribuidora debe remitir: la suma de sus quincenas
+            // completas menos su comisión total (se la queda) más el arrastre de
+            // periodos anteriores sin pagar (que ya viene neto, ver abajo).
             'total_amount_due' => round($totalPayment - $totalCommission + $carryover, 2),
         ]);
     }

@@ -13,11 +13,20 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Marca como vencidas las relaciones de corte que nadie pagó a tiempo, y le
- * aplica a la distribuidora las consecuencias del atraso: multa/interés
- * (branch_settings, vía el snapshot del vale) sobre cada quincena vencida, y
- * se le quita la comisión que le tocaba por esas quincenas. Esto es lo que
- * después arrastra el siguiente corte como "quincena atrasada + multa" junto
- * (pero aparte) de la quincena normal del periodo — ver GenerateCutoffService.
+ * aplica a la distribuidora las consecuencias del atraso.
+ *
+ * Cuando el pago es a tiempo, la distribuidora cobra la quincena completa del
+ * cliente (payment_amount, ya incluye su comisión de categoría — ver
+ * FinancialCalculationService) pero solo remite a la sucursal
+ * payment_amount - comisión (ver GenerateCutoffService::calculateDistributorCommission)
+ * — se queda con esa comisión como ganancia. Si NO paga a tiempo, la
+ * distribuidora ya no gana nada: debe remitir la quincena COMPLETA
+ * (payment_amount, que ya trae la comisión incluida — no hay que volver a
+ * sumarla) más la multa fija del producto.
+ *
+ * Esto es lo que después arrastra el siguiente corte como "quincena atrasada
+ * + multa" junto (pero aparte, como item propio) de la quincena normal del
+ * periodo — ver GenerateCutoffService.
  */
 final class MarkOverdueRelationsService
 {
@@ -35,14 +44,19 @@ final class MarkOverdueRelationsService
                 ->get();
 
             foreach ($relations as $relation) {
-                $this->applyOverdueCharges($relation);
+                $this->closeRelation($relation);
             }
 
             return $relations->count();
         });
     }
 
-    private function applyOverdueCharges(CutoffRelation $relation): void
+    /**
+     * Publico porque CloseCutoffService reutiliza esta misma logica para
+     * cerrar manualmente una relacion antes de su payment_due_date (cuando un
+     * gerente cierra el corte a la fuerza sin esperar a que se venza sola).
+     */
+    public function closeRelation(CutoffRelation $relation): void
     {
         $items = $relation->items()->get();
         $totalLateFees = 0.0;
@@ -56,6 +70,10 @@ final class MarkOverdueRelationsService
             // configuración actual de la sucursal ni del producto en vivo.
             $lateFee = round((float) ($voucher?->late_fee_amount_snapshot ?? 0.0), 2);
 
+            // payment_amount ya es la quincena COMPLETA (con la comisión de la
+            // distribuidora incluida — ver FinancialCalculationService), así que no
+            // hay que volver a sumarle la comisión aquí: nada más se pone la
+            // comisión en 0 (ya no se la queda) y se le agrega la multa.
             $item->update([
                 'is_late_payment' => true,
                 'commission_amount' => 0.00,
@@ -75,6 +93,10 @@ final class MarkOverdueRelationsService
             }
         }
 
+        // Igual que por item: total_payment ya es la suma de las quincenas
+        // completas (con comisión incluida), así que total_amount_due no debe
+        // volver a sumar la comisión — solo se pone en 0 (ya no se la queda) y se
+        // agrega la multa total.
         $relation->update([
             'status' => CutoffRelationStatus::VENCIDA,
             'total_late_fees' => round($totalLateFees, 2),

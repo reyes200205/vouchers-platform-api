@@ -7,23 +7,33 @@ namespace App\Services\Financial;
 /**
  * Motor de calculo financiero puro (sin estado, sin BD).
  *
- * Formula del vale (documento del proyecto):
+ * Formula del vale (documento del proyecto, corregida):
  *   Comision empresa   = Principal x comision%
  *   Seguro             = monto de seguro
  *   Interes quincenal  = Principal x interes%  (solo sobre el principal)
  *   Utilidad dist.     = Principal x comision de la categoria
- *   Total deuda        = Principal + Comision + Seguro + (Interes quincenal x quincenas) - Utilidad dist.
+ *   Total deuda        = Principal + Comision + Seguro + (Interes quincenal x quincenas)
  *   Pago quincenal     = floor(Total deuda / quincenas)
  *
- * La utilidad de la distribuidora NO se le cobra al cliente aparte: sale de
- * lo que ya cobra la empresa, asi que se resta del total antes de dividir
- * entre quincenas (y el pago quincenal siempre se redondea al piso, nunca al
- * mas cercano).
+ * La utilidad de la distribuidora NO se resta aqui: la distribuidora le
+ * cobra al cliente la quincena COMPLETA (con su comision incluida) para
+ * poder ganarsela. La comision solo se descuenta despues, cuando la
+ * distribuidora le rinde cuentas a la sucursal en el corte de relacion
+ * (GenerateCutoffService) -- ahi si le corresponde remitir nada mas el
+ * neto, porque no le va a pagar su propia comision a la sucursal. Este
+ * servicio solo calcula el total deuda y calcula el pago quincenal
+ * COMPLETO; la utilidad de la distribuidora (distributorProfitTotal /
+ * distributorProfitPerFortnight) se sigue calculando aparte, mas que nada
+ * como dato informativo y para que otros servicios (limite de credito,
+ * corte de relacion) sepan cuanto le corresponde descontar despues.
  *
  * Ejemplo: $15,000 a 8 quincenas, comision 10% ($1,500), seguro $100,
- * interes 3% ($3,600 en 8 quincenas), categoria 6% ($900 de utilidad
- * distribuidora) => $15,000 + $1,500 + $100 + $3,600 - $900 = $19,300
- * ($2,412.50 -> $2,412 por quincena, redondeado al piso).
+ * interes 3% ($3,600 en 8 quincenas) => $15,000 + $1,500 + $100 + $3,600 =
+ * $20,200 ($2,525.00 por quincena, lo que la distribuidora le cobra
+ * completo al cliente). Si la categoria de la distribuidora es 6% ($900 de
+ * utilidad total, $112.50 por quincena), en el corte de relacion remite
+ * $2,525 - $112.50 = $2,412.50 -> $2,412 (redondeado al piso), quedandose
+ * ella con los $112.50 de comision.
  *
  * Regla del pre-vale: cuando la distribuidora tiene el 100% de su credito
  * disponible, el primer vale no puede superar el 50% del disponible mas una
@@ -49,11 +59,13 @@ final class FinancialCalculationService
         $interestAmount = round($interestPerFortnight * $totalFortnights, 2);
         $distributorProfitTotal = round($principal * $categoryCommissionPercentage / 100, 2);
         $distributorProfitPerFortnight = round($distributorProfitTotal / $totalFortnights, 2);
-        // La utilidad de la distribuidora sale de lo que ya cobra la empresa: no es
-        // un cargo adicional para el cliente, asi que se resta del total que el
-        // cliente realmente debe.
+        // Total deuda: lo que el cliente debe pagar en total (completo, con la
+        // comision de la distribuidora incluida -- la distribuidora se la cobra al
+        // cliente para poder ganarsela). NO se resta aqui la utilidad de la
+        // distribuidora; eso se descuenta despues, solo cuando la distribuidora le
+        // rinde cuentas a la sucursal (ver GenerateCutoffService).
         $totalDebt = round(
-            $principal + $companyCommissionAmount + $insuranceAmount + $interestAmount - $distributorProfitTotal,
+            $principal + $companyCommissionAmount + $insuranceAmount + $interestAmount,
             2
         );
         // El pago quincenal siempre se redondea al piso, al peso entero (regla de

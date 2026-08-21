@@ -79,6 +79,16 @@ final class SettleCutoffRelationService
                 'early_payment_start_date' => $nextDueDate->copy()->subDays($dueDays - 1)->toDateString(),
                 'early_payment_end_date' => $nextDueDate->copy()->subDays($dueDays - $frequencyDays)->toDateString(),
             ]);
+
+            // El crédito disponible de la distribuidora se descontó por el
+            // PRINCIPAL del vale al aprobarlo (ver ApproveVoucherService) -- no
+            // se va liberando quincena a quincena, porque cada pago trae mezclado
+            // interés/seguro/comisión y no hay forma de saber qué parte de eso es
+            // "principal ya recuperado". Se libera completo, de una sola vez,
+            // hasta que el vale termina de pagarse por completo.
+            if ($isSettled) {
+                $voucher->distributor()->increment('available_credit', (float) $voucher->amount);
+            }
         }
     }
 
