@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\LoginChannel;
+use App\Enums\OtpVerificationResult;
+use App\Services\Auth\OneTimePasswordService;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
@@ -40,6 +41,7 @@ final class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens;
+
     use HasFactory;
     use HasRoles;
     use Notifiable;
@@ -67,8 +69,6 @@ final class User extends Authenticatable
 
     /**
      * Roles de negocio asignados (vía tabla pivot de Spatie `model_has_roles`).
-     *
-     * @return MorphToMany
      */
     public function businessRoles(): MorphToMany
     {
@@ -141,7 +141,7 @@ final class User extends Authenticatable
                 if ($allowedGlobalRoles !== []) {
                     $q->orWhere(function ($sq) use ($allowedGlobalRoles) {
                         $sq->whereNull('model_has_roles.branch_id')
-                           ->whereIn('roles.name', $allowedGlobalRoles);
+                            ->whereIn('roles.name', $allowedGlobalRoles);
                     });
                 }
             })->exists();
@@ -157,6 +157,7 @@ final class User extends Authenticatable
         $registrar->setPermissionsTeamId(null);
         $hasGlobal = $this->hasAnyRole(config('business-authorization.global_role_codes', []));
         $registrar->setPermissionsTeamId($originalTeamId);
+
         return $hasGlobal;
     }
 
@@ -167,7 +168,33 @@ final class User extends Authenticatable
         $registrar->setPermissionsTeamId(null);
         $isGm = $this->hasRole('general_manager');
         $registrar->setPermissionsTeamId($originalTeamId);
+
         return $isGm;
+    }
+
+    /**
+     * Si el rol del usuario exige verificar un codigo OTP por correo
+     * ademas de la contrasena para iniciar sesion (ver AuthController).
+     */
+    public function requiresOtp(): bool
+    {
+        $registrar = app(\Spatie\Permission\PermissionRegistrar::class);
+        $originalTeamId = $registrar->getPermissionsTeamId();
+        $registrar->setPermissionsTeamId(null);
+        $requires = $this->hasAnyRole(config('business-authorization.otp_required_role_codes', []));
+        $registrar->setPermissionsTeamId($originalTeamId);
+
+        return $requires;
+    }
+
+    public function sendOneTimePassword(): void
+    {
+        app(OneTimePasswordService::class)->generateAndSend($this);
+    }
+
+    public function consumeOneTimePassword(string $code): OtpVerificationResult
+    {
+        return app(OneTimePasswordService::class)->verify($this, $code);
     }
 
     /**

@@ -2,14 +2,26 @@
 
 declare(strict_types=1);
 
+use App\Mail\OtpCodeMail;
 use App\Models\AuditLog;
 use App\Models\Branch;
 use App\Models\Distributor;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 
 uses(RefreshDatabase::class);
+
+function attachSuperAdminRole(User $user): void
+{
+    $role = Role::query()->firstOrCreate(['code' => 'super-admin'], ['name' => 'super-admin']);
+    $user->businessRoles()->attach($role, [
+        'branch_id' => null,
+        'assigned_at' => now(),
+        'is_primary' => true,
+    ]);
+}
 
 describe('Login', function (): void {
     it('logs in with valid credentials', function (): void {
@@ -145,8 +157,8 @@ describe('Login', function (): void {
         config(['services.turnstile.enabled' => true]);
         config(['services.turnstile.secret_key' => 'fake-secret']);
 
-        \Illuminate\Support\Facades\Http::fake([
-            'challenges.cloudflare.com/turnstile/v0/siteverify' => \Illuminate\Support\Facades\Http::response([
+        Illuminate\Support\Facades\Http::fake([
+            'challenges.cloudflare.com/turnstile/v0/siteverify' => Illuminate\Support\Facades\Http::response([
                 'success' => false,
             ], 200),
         ]);
@@ -169,8 +181,8 @@ describe('Login', function (): void {
         config(['services.turnstile.enabled' => true]);
         config(['services.turnstile.secret_key' => 'fake-secret']);
 
-        \Illuminate\Support\Facades\Http::fake([
-            'challenges.cloudflare.com/turnstile/v0/siteverify' => \Illuminate\Support\Facades\Http::response([
+        Illuminate\Support\Facades\Http::fake([
+            'challenges.cloudflare.com/turnstile/v0/siteverify' => Illuminate\Support\Facades\Http::response([
                 'success' => true,
             ], 200),
         ]);
@@ -186,6 +198,157 @@ describe('Login', function (): void {
         ]);
 
         $response->assertStatus(200);
+    });
+});
+
+describe('OTP / MFA', function (): void {
+    it('does not require OTP for a role outside otp_required_role_codes', function (): void {
+        $branch = Branch::factory()->create();
+        $role = Role::query()->firstOrCreate(['code' => 'branch_manager'], ['name' => 'branch_manager']);
+        $user = User::factory()->create(['password_hash' => bcrypt('password123')]);
+        $user->businessRoles()->attach($role, [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'username' => $user->username,
+            'password' => 'password123',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.token', fn ($token) => is_string($token) && $token !== '')
+            ->assertJsonMissingPath('data.requires_otp');
+    });
+
+    it('returns a challenge instead of a token when the role requires OTP', function (): void {
+        Mail::fake();
+
+        $user = User::factory()->create(['password_hash' => bcrypt('password123')]);
+        attachSuperAdminRole($user);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'username' => $user->username,
+            'password' => 'password123',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson(['data' => ['requires_otp' => true]])
+            ->assertJsonPath('data.challenge_id', fn ($id) => is_string($id) && $id !== '')
+            ->assertJsonMissingPath('data.token');
+
+        Mail::assertSent(OtpCodeMail::class, fn ($mail) => $mail->hasTo($user->person->email));
+
+        expect(AuditLog::query()->where('event_type', 'MFA_CHALLENGE_SENT')->where('user_id', $user->id)->exists())->toBeTrue();
+    });
+
+    it('verifies the OTP and completes login', function (): void {
+        Mail::fake();
+
+        $user = User::factory()->create(['password_hash' => bcrypt('password123')]);
+        attachSuperAdminRole($user);
+
+        $challengeId = $this->postJson('/api/v1/auth/login', [
+            'username' => $user->username,
+            'password' => 'password123',
+        ])->json('data.challenge_id');
+
+        $code = null;
+        Mail::assertSent(OtpCodeMail::class, function ($mail) use (&$code) {
+            $code = $mail->code;
+
+            return true;
+        });
+
+        $response = $this->postJson('/api/v1/auth/mfa/verify', [
+            'challenge_id' => $challengeId,
+            'code' => $code,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.token', fn ($token) => is_string($token) && $token !== '');
+
+        $user->refresh();
+        expect($user->last_login_at)->not->toBeNull();
+
+        expect(AuditLog::query()->where('event_type', 'MFA_VERIFIED')->where('user_id', $user->id)->exists())->toBeTrue();
+        expect(AuditLog::query()->where('event_type', 'LOGIN')->where('user_id', $user->id)->exists())->toBeTrue();
+    });
+
+    it('rejects an incorrect OTP code and keeps the challenge alive', function (): void {
+        Mail::fake();
+
+        $user = User::factory()->create(['password_hash' => bcrypt('password123')]);
+        attachSuperAdminRole($user);
+
+        $challengeId = $this->postJson('/api/v1/auth/login', [
+            'username' => $user->username,
+            'password' => 'password123',
+        ])->json('data.challenge_id');
+
+        $response = $this->postJson('/api/v1/auth/mfa/verify', [
+            'challenge_id' => $challengeId,
+            'code' => '000000',
+        ]);
+
+        $response->assertStatus(422);
+
+        expect(AuditLog::query()->where('event_type', 'MFA_FAILED')->where('user_id', $user->id)->exists())->toBeTrue();
+
+        // El challenge sigue vivo: reintentar con el codigo correcto todavia funciona.
+        $code = null;
+        Mail::assertSent(OtpCodeMail::class, function ($mail) use (&$code) {
+            $code = $mail->code;
+
+            return true;
+        });
+
+        $this->postJson('/api/v1/auth/mfa/verify', [
+            'challenge_id' => $challengeId,
+            'code' => $code,
+        ])->assertStatus(200);
+    });
+
+    it('rejects verification with an unknown or expired challenge_id', function (): void {
+        $response = $this->postJson('/api/v1/auth/mfa/verify', [
+            'challenge_id' => 'nonexistent-challenge',
+            'code' => '123456',
+        ]);
+
+        $response->assertStatus(401);
+    });
+
+    it('resend issues a new code and invalidates the previous one', function (): void {
+        Mail::fake();
+
+        $user = User::factory()->create(['password_hash' => bcrypt('password123')]);
+        attachSuperAdminRole($user);
+
+        $challengeId = $this->postJson('/api/v1/auth/login', [
+            'username' => $user->username,
+            'password' => 'password123',
+        ])->json('data.challenge_id');
+
+        $firstCode = null;
+        Mail::assertSent(OtpCodeMail::class, function ($mail) use (&$firstCode) {
+            $firstCode = $mail->code;
+
+            return true;
+        });
+
+        $resendResponse = $this->postJson('/api/v1/auth/mfa/resend', ['challenge_id' => $challengeId]);
+        $resendResponse->assertStatus(200);
+
+        Mail::assertSent(OtpCodeMail::class, 2);
+
+        expect(AuditLog::query()->where('event_type', 'MFA_CHALLENGE_RESENT')->where('user_id', $user->id)->exists())->toBeTrue();
+
+        // El codigo anterior ya no sirve.
+        $this->postJson('/api/v1/auth/mfa/verify', [
+            'challenge_id' => $challengeId,
+            'code' => $firstCode,
+        ])->assertStatus(422);
     });
 });
 
