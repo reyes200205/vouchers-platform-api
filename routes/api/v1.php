@@ -270,5 +270,6 @@ Route::prefix('auth')->group(function (): void {
         Route::post('logout', [AuthController::class, 'logout'])->name('api.v1.logout');
         Route::get('me', [AuthController::class, 'me'])->name('api.v1.me');
         Route::post('change-password', [AuthController::class, 'changePassword'])->name('api.v1.change-password');
+        Route::post('confirm-password', [AuthController::class, 'confirmPassword'])->name('api.v1.confirm-password');
     });
 });

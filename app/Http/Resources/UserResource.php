@@ -23,6 +23,11 @@ final class UserResource extends JsonResource
             'username' => $this->username,
             'is_active' => $this->is_active,
             'requires_vpn' => $this->requires_vpn,
+            // true mientras el usuario nunca haya confirmado o cambiado la
+            // contrasena temporal (CURP) que se le asigno al darlo de alta —
+            // el frontend usa esto para mostrar el modal de "deja esta
+            // contrasena o cambiala" en su primer login.
+            'requires_password_confirmation' => $this->password_confirmed_at === null,
             'login_channel' => $this->login_channel?->value,
             'person' => $this->whenLoaded('person', fn () => [
                 'id' => $this->person?->id,

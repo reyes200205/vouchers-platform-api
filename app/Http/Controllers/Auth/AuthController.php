@@ -13,7 +13,6 @@ use App\Http\Requests\Auth\ResendMfaRequest;
 use App\Http\Requests\Auth\VerifyMfaRequest;
 use App\Http\Resources\UserResource;
 use App\Models\BranchSetting;
-use App\Models\DistributorActivation;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Auth\MfaChallengeStore;
@@ -139,18 +138,32 @@ final class AuthController extends ApiController
             return $this->error('Current password is incorrect', 422);
         }
 
-        $user->update(['password_hash' => Hash::make($request->password)]);
-
-        // Si la contrasena actual provenia de una activacion de distribuidora
-        // pendiente, este cambio la marca como completada.
-        DistributorActivation::query()
-            ->where('user_id', $user->id)
-            ->whereNull('used_at')
-            ->update(['used_at' => now()]);
+        $user->update([
+            'password_hash' => Hash::make($request->password),
+            'password_confirmed_at' => now(),
+        ]);
 
         $audit->record($request, 'PASSWORD_CHANGED', 'auth', 'Cambio de contrasena por el propio usuario.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
 
         return $this->success(message: 'Password changed successfully');
+    }
+
+    /**
+     * Para cuando el usuario decide QUEDARSE con la contrasena temporal
+     * (CURP) que se le asigno al darlo de alta, en vez de cambiarla: el
+     * modal de "primer login" del frontend llama esto en ese caso. No
+     * cambia el hash, solo apaga la bandera que obliga a mostrar el modal.
+     */
+    public function confirmPassword(Request $request, AuditLogger $audit): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $user->update(['password_confirmed_at' => now()]);
+
+        $audit->record($request, 'PASSWORD_CONFIRMED', 'auth', 'El usuario conservo su contrasena temporal.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
+
+        return $this->success(message: 'Password confirmed successfully');
     }
 
     private static function maskEmail(?string $email): ?string
