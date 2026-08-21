@@ -8,6 +8,7 @@ use App\Enums\CustomerDistributorRelationshipStatus;
 use App\Enums\CustomerStatus;
 use App\Enums\VoucherRequestStatus;
 use App\Enums\VoucherStatus;
+use App\Mail\VoucherIssuedMail;
 use App\Models\BranchSetting;
 use App\Models\Customer;
 use App\Models\CustomerDistributor;
@@ -17,6 +18,9 @@ use App\Models\User;
 use App\Models\VoucherRequest;
 use App\Services\Financial\FinancialCalculationService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Throwable;
 
 final class RequestVoucherService
 {
@@ -29,7 +33,7 @@ final class RequestVoucherService
      */
     public function execute(User $user, array $data): VoucherRequest
     {
-        return DB::transaction(function () use ($user, $data): VoucherRequest {
+        $voucherRequest = DB::transaction(function () use ($user, $data): VoucherRequest {
             $distributor = Distributor::query()
                 ->where('person_id', $user->person_id)
                 ->firstOrFail();
@@ -100,6 +104,52 @@ final class RequestVoucherService
                 'created_by_user_id' => $user->id,
             ]);
         });
+
+        $this->sendIssuedMail($voucherRequest);
+
+        return $voucherRequest;
+    }
+
+    /**
+     * El cliente necesita esta informacion para poder presentarse con la
+     * cajera a "ferear" el vale, asi que se manda apenas la distribuidora lo
+     * pide -- no se espera a que la cajera lo apruebe (ver
+     * ApproveVoucherService, que ya NO manda correo). Se envia fuera de la
+     * transaccion y con su propio try/catch: un fallo de SMTP no debe
+     * revertir la solicitud, que ya quedo en firme en la BD.
+     */
+    private function sendIssuedMail(VoucherRequest $voucherRequest): void
+    {
+        $voucherRequest->loadMissing(['customer.person', 'distributor.person', 'branch.setting']);
+
+        $email = $voucherRequest->customer?->person?->email;
+        if ($email === null || $email === '') {
+            return;
+        }
+
+        $branchSetting = $voucherRequest->branch?->setting;
+        $expirationDate = $branchSetting?->voucher_expiration_days !== null
+            ? $voucherRequest->created_at->copy()->addDays((int) $branchSetting->voucher_expiration_days)
+            : null;
+
+        $person = $voucherRequest->customer?->person;
+        $distributorPerson = $voucherRequest->distributor?->person;
+
+        try {
+            Mail::to($email)->send(new VoucherIssuedMail(
+                customerName: trim(($person?->first_name ?? '').' '.($person?->last_name ?? '')) ?: 'Cliente',
+                distributorName: trim(($distributorPerson?->first_name ?? '').' '.($distributorPerson?->last_name ?? '')) ?: 'Tu distribuidora',
+                voucherNumber: 'V-'.$voucherRequest->id,
+                issuedAt: $voucherRequest->created_at,
+                expirationDate: $expirationDate,
+                amount: (float) $voucherRequest->requested_amount,
+            ));
+        } catch (Throwable $e) {
+            Log::error('No se pudo enviar el correo de vale emitido.', [
+                'voucher_request_id' => $voucherRequest->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function assertCustomerBelongsToDistributor(Distributor $distributor, Customer $customer): void

@@ -15,6 +15,7 @@ use App\Http\Controllers\Cashier\ReconciliationController as CashierReconciliati
 use App\Http\Controllers\Cashier\VoucherController as CashierVoucherController;
 use App\Http\Controllers\Checker\VerificadorController;
 use App\Http\Controllers\Checker\VerificationPhotoController;
+use App\Http\Controllers\Coordinator\ApplicationDocumentController;
 use App\Http\Controllers\Coordinator\CoordinadorController;
 use App\Http\Controllers\Coordinator\CreditIncreaseController as CoordinatorCreditIncreaseController;
 use App\Http\Controllers\Coordinator\CustomerController;
@@ -44,6 +45,7 @@ use App\Http\Controllers\Staff\StaffController;
 use App\Http\Controllers\System\AuditLogController;
 use App\Http\Controllers\System\RolesController;
 use App\Http\Controllers\System\SpacesTestController;
+use App\Http\Middleware\ForceJsonResponse;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -95,7 +97,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
         Route::get('/branches/available-managers', [BranchController::class, 'availableManagers'])->name('branches.available-managers');
     });
 
-    Route::middleware('business.ability:inbox.view')->get('/general/inbox', [InboxController::class, 'index'])->name('general.inbox');
+    Route::middleware(['business.ability:inbox.view', 'vpn.restrict:general_manager,branch_manager'])->get('/general/inbox', [InboxController::class, 'index'])->name('general.inbox');
 
     Route::middleware('business.ability:platform.view')->get('/stats/dashboard', [DashboardController::class, 'index'])->name('stats.dashboard');
 
@@ -151,10 +153,11 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:applications.view')->get('/applications', [CoordinadorController::class, 'index'])->name('applications.index');
     Route::middleware('business.ability:applications.view,application')->get('/applications/{application}', [CoordinadorController::class, 'show'])->name('applications.show');
     Route::post('/applications', [CoordinadorController::class, 'store'])->name('applications.store');
+    Route::post('/applications/documents', [ApplicationDocumentController::class, 'store'])->name('applications.documents.store');
     Route::middleware('business.ability:applications.assign-verifier,application')->patch('/applications/{application}/verifier', [CoordinadorController::class, 'assignVerifier'])->name('applications.assign-verifier');
     Route::middleware('business.ability:applications.verify,application')->post('/applications/{application}/verification', [VerificadorController::class, 'verify'])->name('applications.verify');
     Route::middleware('business.ability:applications.verify,application')->post('/applications/{application}/verification-photos', [VerificationPhotoController::class, 'store'])->name('applications.verification-photos.store');
-    Route::middleware('business.ability:applications.decide,application')->post('/applications/{application}/decision', [ApplicationDecisionController::class, 'decide'])->name('applications.decide');
+    Route::middleware(['business.ability:applications.decide,application', 'vpn.restrict:general_manager,branch_manager'])->post('/applications/{application}/decision', [ApplicationDecisionController::class, 'decide'])->name('applications.decide');
 
     Route::middleware('business.ability:customers.view')->group(function (): void {
         Route::get('/customers', [CustomerController::class, 'index'])->name('customers.index');
@@ -165,8 +168,8 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:customers.verify,customer')->patch('/customers/{customer}/verify', [CashierCustomerController::class, 'verify'])->name('customers.verify');
     Route::middleware('business.ability:customers.update.request,customer')->post('/customers/{customer}/change-requests', [CashierCustomerController::class, 'storeChangeRequest'])->name('customers.change-requests.store');
 
-    Route::middleware('business.ability:customers.update.approve')->get('/customer-change-requests', [CustomerChangeRequestController::class, 'index'])->name('customer-change-requests.index');
-    Route::middleware('business.ability:customers.update.approve,customerChangeRequest')->post('/customer-change-requests/{customerChangeRequest}/decision', [CustomerChangeRequestController::class, 'decide'])->name('customer-change-requests.decide');
+    Route::middleware(['business.ability:customers.update.approve', 'vpn.restrict:general_manager,branch_manager'])->get('/customer-change-requests', [CustomerChangeRequestController::class, 'index'])->name('customer-change-requests.index');
+    Route::middleware(['business.ability:customers.update.approve,customerChangeRequest', 'vpn.restrict:general_manager,branch_manager'])->post('/customer-change-requests/{customerChangeRequest}/decision', [CustomerChangeRequestController::class, 'decide'])->name('customer-change-requests.decide');
 
     Route::middleware('business.ability:customers.transfer.view')->group(function (): void {
         Route::get('/customer-transfer-requests', [CustomerTransferController::class, 'index'])->name('customer-transfer-requests.index');
@@ -175,7 +178,11 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
 
     Route::middleware('business.ability:customers.transfer.request,customer')->post('/customers/{customer}/transfer-requests', [DistributorCustomerTransferController::class, 'store'])->name('customers.transfer-requests.store');
     Route::middleware('business.ability:customers.transfer.cancel,customerTransferRequest')->post('/customer-transfer-requests/{customerTransferRequest}/cancel', [DistributorCustomerTransferController::class, 'cancel'])->name('customer-transfer-requests.cancel');
-    Route::middleware('business.ability:customers.transfer.decide,customerTransferRequest')->post('/customer-transfer-requests/{customerTransferRequest}/decision', [CustomerTransferController::class, 'decide'])->name('customer-transfer-requests.decide');
+    // customers.transfer.decide tambien la usa coordinador (ver
+    // config/business-authorization.php) — a diferencia de las demas
+    // decisiones de este bloque, aqui vpn.restrict solo debe frenar al
+    // gerente general, no al coordinador que decide desde el canal publico.
+    Route::middleware(['business.ability:customers.transfer.decide,customerTransferRequest', 'vpn.restrict:general_manager'])->post('/customer-transfer-requests/{customerTransferRequest}/decision', [CustomerTransferController::class, 'decide'])->name('customer-transfer-requests.decide');
 
     Route::middleware('business.ability:vouchers.view')->group(function (): void {
         Route::get('/vouchers', [CoordinatorVoucherController::class, 'index'])->name('vouchers.index');
@@ -193,7 +200,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:credit-increase.view')->get('/credit-increase-requests', [GeneralManagerCreditIncreaseController::class, 'index'])->name('credit-increase-requests.index');
     Route::middleware('business.ability:credit-increase.request')->post('/credit-increase-requests', [CoordinatorCreditIncreaseController::class, 'store'])->name('credit-increase-requests.store');
     Route::middleware('business.ability:credit-increase.pre-authorize,creditIncreaseRequest')->post('/credit-increase-requests/{creditIncreaseRequest}/pre-authorize', [CoordinatorCreditIncreaseController::class, 'preAuthorize'])->name('credit-increase-requests.pre-authorize');
-    Route::middleware('business.ability:credit-increase.decide,creditIncreaseRequest')->post('/credit-increase-requests/{creditIncreaseRequest}/decision', [GeneralManagerCreditIncreaseController::class, 'decide'])->name('credit-increase-requests.decide');
+    Route::middleware(['business.ability:credit-increase.decide,creditIncreaseRequest', 'vpn.restrict:general_manager,branch_manager'])->post('/credit-increase-requests/{creditIncreaseRequest}/decision', [GeneralManagerCreditIncreaseController::class, 'decide'])->name('credit-increase-requests.decide');
 
     Route::middleware('business.ability:distributors.view')->get('/distributors', [CoordinatorDistributorController::class, 'index'])->name('distributors.index');
 
@@ -210,6 +217,14 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
 
     Route::middleware('business.ability:distributor-statements.view')->get('/distributor/relations', [DistributorRelationController::class, 'index'])->name('distributor.relations.index');
     Route::middleware('business.ability:distributor-statements.view')->get('/distributor/relations/{cutoffRelation}', [DistributorRelationController::class, 'show'])->name('distributor.relations.show');
+    // El PDF es contenido binario, no JSON: ForceJsonResponse intenta
+    // json_encode() cualquier respuesta que no sea JsonResponse y truena con
+    // "Malformed UTF-8 characters" al toparse con los bytes del PDF -- esta
+    // ruta necesita salirse de ese middleware global (ver bootstrap/app.php).
+    Route::withoutMiddleware(ForceJsonResponse::class)
+        ->middleware('business.ability:distributor-statements.view')
+        ->get('/distributor/relations/{cutoffRelation}/pdf', [DistributorRelationController::class, 'pdf'])
+        ->name('distributor.relations.pdf');
 
     Route::middleware('business.ability:reconciliations.import,branch')->post('/branches/{branch}/reconciliations/import', [CashierReconciliationController::class, 'import'])->name('reconciliations.import');
     Route::middleware('business.ability:reconciliations.view')->get('/reconciliations/bank-transactions', [CashierReconciliationController::class, 'bankTransactions'])->name('reconciliations.bank-transactions');
@@ -221,7 +236,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:points.redeem.request,distributor')->post('/distributors/{distributor}/points/redeem', [DistributorPointController::class, 'redeem'])->name('points.redeem.request');
     Route::middleware('business.ability:points.view,distributor')->get('/distributors/{distributor}/points/redemptions', [DistributorPointController::class, 'myRedemptions'])->name('points.redemptions.mine');
     Route::middleware('business.ability:points.view')->get('/point-redemptions', [GeneralManagerPointController::class, 'index'])->name('point-redemptions.index');
-    Route::middleware('business.ability:points.redeem.decide,pointRedemption')->post('/point-redemptions/{pointRedemption}/decision', [GeneralManagerPointController::class, 'decide'])->name('point-redemptions.decide');
+    Route::middleware(['business.ability:points.redeem.decide,pointRedemption', 'vpn.restrict:general_manager,branch_manager'])->post('/point-redemptions/{pointRedemption}/decision', [GeneralManagerPointController::class, 'decide'])->name('point-redemptions.decide');
     Route::middleware('business.ability:points.category,distributor')->patch('/distributors/{distributor}/category', [GeneralManagerPointController::class, 'updateCategory'])->name('distributors.category.update');
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
@@ -262,5 +277,6 @@ Route::prefix('auth')->group(function (): void {
         Route::post('logout', [AuthController::class, 'logout'])->name('api.v1.logout');
         Route::get('me', [AuthController::class, 'me'])->name('api.v1.me');
         Route::post('change-password', [AuthController::class, 'changePassword'])->name('api.v1.change-password');
+        Route::post('confirm-password', [AuthController::class, 'confirmPassword'])->name('api.v1.confirm-password');
     });
 });

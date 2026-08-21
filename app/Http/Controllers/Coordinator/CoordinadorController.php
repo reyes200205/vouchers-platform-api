@@ -12,6 +12,7 @@ use App\Models\Person;
 use App\Models\User;
 use App\Notifications\ApplicationAssignedToVerifierNotification;
 use App\Services\Audit\AuditLogger;
+use App\Services\Storage\SpacesStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +43,7 @@ final class CoordinadorController extends ApiController
      * se visitó, la verificación en sitio (incluida la foto de fachada). Se
      * usa desde la Bandeja de Aprobaciones al decidir una solicitud.
      */
-    public function show(Request $request, Application $application): JsonResponse
+    public function show(Request $request, Application $application, SpacesStorageService $storage): JsonResponse
     {
         $application->load([
             'applicant',
@@ -52,6 +53,12 @@ final class CoordinadorController extends ApiController
             'verification.verifier.person',
         ]);
 
+        // id_front_path / id_back_path / proof_of_address_path aún no tienen un
+        // endpoint de carga (el formulario del coordinador siempre los manda en
+        // null); se mantienen como ruta local por ahora. Las fotos de la visita
+        // del verificador (verification->*_photo) sí se guardan en Spaces desde
+        // VerificationPhotoController, así que su URL debe salir firmada de ahí,
+        // no como ruta de /storage local.
         $baseUrl = $request->getSchemeAndHttpHost().'/storage/';
         $toUrl = fn (?string $path): ?string => $path ? $baseUrl.$path : null;
 
@@ -61,9 +68,9 @@ final class CoordinadorController extends ApiController
         $data['proof_of_address_url'] = $toUrl($application->proof_of_address_path);
 
         if ($application->verification !== null) {
-            $data['verification']['front_photo_url'] = $toUrl($application->verification->front_photo);
-            $data['verification']['id_with_person_photo_url'] = $toUrl($application->verification->id_with_person_photo);
-            $data['verification']['proof_of_address_photo_url'] = $toUrl($application->verification->proof_of_address_photo);
+            $data['verification']['front_photo_url'] = $storage->temporaryUrlFor($application->verification->front_photo);
+            $data['verification']['id_with_person_photo_url'] = $storage->temporaryUrlFor($application->verification->id_with_person_photo);
+            $data['verification']['proof_of_address_photo_url'] = $storage->temporaryUrlFor($application->verification->proof_of_address_photo);
         }
 
         return $this->success($data);

@@ -29,6 +29,10 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TURNSTILE_ENABLED" value="false"/>
+        <!-- Las peticiones de prueba llegan como 127.0.0.1/::1 (no hay proxy real
+             en tests); sin esto, todo endpoint con vpn.restrict le regresaria 403
+             a cualquier test que actue como general_manager/branch_manager. -->
+        <env name="VPN_TRUSTED_CIDRS" value="127.0.0.1/32,::1/128"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

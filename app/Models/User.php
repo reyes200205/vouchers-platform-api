@@ -32,6 +32,7 @@ use Spatie\Permission\Traits\HasRoles;
     'requires_vpn',
     'login_channel',
     'last_login_at',
+    'password_confirmed_at',
 ])]
 #[Hidden([
     'password_hash',
@@ -223,6 +224,7 @@ final class User extends Authenticatable
             'requires_vpn' => 'boolean',
             'login_channel' => LoginChannel::class,
             'last_login_at' => 'datetime',
+            'password_confirmed_at' => 'datetime',
         ];
     }
 }

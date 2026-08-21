@@ -35,7 +35,13 @@ final class CancelExpiredVouchersService
                         'notes' => trim(($voucher->notes ?? '') . ' [Cancelado automáticamente por vencimiento]'),
                     ]);
 
-                    $voucher->distributor->increment('available_credit', $voucher->total_debt_amount);
+                    // available_credit mide CAPITAL (principal) prestado, no el total a
+                    // cobrar (que ya trae intereses, seguro y comisión encima) -- ver
+                    // ApproveVoucherService, que descuenta solo el principal al aprobar.
+                    // Devolver total_debt_amount aquí inflaba el crédito disponible de
+                    // la distribuidora por encima de lo que en realidad se le había
+                    // descontado.
+                    $voucher->distributor->increment('available_credit', $voucher->amount);
                     $canceledCount++;
                 }
             }
