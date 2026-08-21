@@ -29,7 +29,6 @@ use App\Http\Controllers\Distributor\PointController as DistributorPointControll
 use App\Http\Controllers\Distributor\RelationController as DistributorRelationController;
 use App\Http\Controllers\Distributor\VoucherController as DistributorVoucherController;
 use App\Http\Controllers\Employees\EmployeesController;
-use App\Http\Middleware\ForceJsonResponse;
 use App\Http\Controllers\GeneralManager\ApplicationDecisionController;
 use App\Http\Controllers\GeneralManager\BranchController;
 use App\Http\Controllers\GeneralManager\CreditIncreaseController as GeneralManagerCreditIncreaseController;
@@ -46,6 +45,7 @@ use App\Http\Controllers\Staff\StaffController;
 use App\Http\Controllers\System\AuditLogController;
 use App\Http\Controllers\System\RolesController;
 use App\Http\Controllers\System\SpacesTestController;
+use App\Http\Middleware\ForceJsonResponse;
 use Illuminate\Support\Facades\Route;
 
 /*
