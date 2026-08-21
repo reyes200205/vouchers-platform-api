@@ -17,7 +17,7 @@ final class RolesAndPermissionSeeder extends Seeder
     public function run(): void
     {
         $roles = [
-            'administrator' => 'Administrador',
+            'super-admin' => 'Super Administrador',
             'general_manager' => 'Gerente General',
             'branch_manager' => 'Gerente de Sucursal',
             'coordinator' => 'Coordinador',

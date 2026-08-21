@@ -176,9 +176,9 @@ describe('Distributor categories', function (): void {
             ->assertJsonPath('data.points_per_1200', 5);
     });
 
-    it('forbids an administrator from managing categories but allows viewing', function (): void {
-        $administrator = User::factory()->create();
-        loginWithBusinessRole($administrator, 'administrator');
+    it('forbids a coordinator from managing categories but allows viewing', function (): void {
+        $coordinator = User::factory()->create();
+        loginWithBusinessRole($coordinator, 'coordinator');
         $branch = Branch::factory()->create();
         $category = DistributorCategory::query()->create(categoryPayload($branch->id));
 
@@ -299,9 +299,9 @@ describe('Point settings (globales)', function (): void {
         ]);
     });
 
-    it('forbids an administrator from updating point settings', function (): void {
-        $administrator = User::factory()->create();
-        loginWithBusinessRole($administrator, 'administrator');
+    it('forbids a branch manager from updating point settings', function (): void {
+        $branchManager = User::factory()->create();
+        loginWithBusinessRole($branchManager, 'branch_manager');
         PointSetting::query()->create(['point_divisor_factor' => 1200]);
 
         $this->patchJson('/api/v1/point-settings', ['point_multiplier' => 9])->assertForbidden();

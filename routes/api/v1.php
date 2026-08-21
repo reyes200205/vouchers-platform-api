@@ -39,6 +39,7 @@ use App\Http\Controllers\GeneralManager\PointSettingController;
 use App\Http\Controllers\GeneralManager\ReconciliationController as GeneralManagerReconciliationController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Staff\StaffController;
+use App\Http\Controllers\System\AuditLogController;
 use App\Http\Controllers\System\RolesController;
 use Illuminate\Support\Facades\Route;
 
@@ -232,6 +233,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
 */
 Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function (): void {
     Route::get('system/roles', [RolesController::class, 'index'])->name('system.roles.index');
+    Route::middleware('business.ability:audit-logs.view')->get('system/audit-logs', [AuditLogController::class, 'index'])->name('system.audit-logs.index');
 });
 
 Route::prefix('auth')->group(function (): void {

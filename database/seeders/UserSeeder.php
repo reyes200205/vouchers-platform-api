@@ -48,9 +48,9 @@ final class UserSeeder extends Seeder
                 'role' => 'distributor',
             ],
             [
-                'name' => 'Administrator',
-                'email' => 'administrator@example.com',
-                'role' => 'administrator',
+                'name' => 'Super Admin',
+                'email' => 'super-admin@example.com',
+                'role' => 'super-admin',
             ],
         ];
 

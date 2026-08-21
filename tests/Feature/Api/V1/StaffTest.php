@@ -140,7 +140,7 @@ describe('Staff management', function (): void {
             'username' => 'jose.perez',
             'password' => 'secret123',
             'curp' => 'PEPS921201MNERRR05',
-            'role_code' => 'administrator',
+            'role_code' => 'super-admin',
             'branch_id' => $branch->id,
         ])->assertStatus(422);
     });

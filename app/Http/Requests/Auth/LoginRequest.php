@@ -28,6 +28,20 @@ final class LoginRequest extends FormRequest
             'username' => ['required', 'string', 'max:100'],
             'password' => ['required', 'string'],
             'channel' => ['nullable', 'string', 'in:WEB,VPN_WEB,MOVIL'],
+            'cf-turnstile-response' => [
+                config('services.turnstile.enabled') ? 'required' : 'nullable',
+                new \App\Rules\Turnstile,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'cf-turnstile-response.required' => 'Por favor, completa el captcha de seguridad.',
         ];
     }
 }

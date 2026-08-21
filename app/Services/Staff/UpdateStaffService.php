@@ -42,7 +42,7 @@ final class UpdateStaffService
             abort(422, 'El usuario no pertenece al módulo de personal.');
         }
 
-        if (! $actor->isGeneralManager()) {
+        if (! $actor->isGeneralManager() && ! $actor->hasRole('super-admin')) {
             $allowedBranchIds = $actor->activeBusinessBranchIds();
             $staffBranchIds = $staff->activeBusinessBranchIds();
 

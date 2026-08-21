@@ -39,7 +39,7 @@ final class ListStaffService
                 ->whereNull('model_has_roles.revoked_at'));
         }
 
-        if (! $actor->isGeneralManager()) {
+        if (! $actor->isGeneralManager() && ! $actor->hasRole('super-admin')) {
             $branchIds = $actor->activeBusinessBranchIds();
             $perPage = (int) ($filters['per_page'] ?? 15);
             $query = User::query()
