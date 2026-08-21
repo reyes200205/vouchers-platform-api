@@ -404,4 +404,67 @@ describe('Cutoffs', function (): void {
         $ids = collect($response->json('data.data'))->pluck('id')->all();
         expect($ids)->toContain($matrizCutoff->id)->not->toContain($otherCutoff->id);
     });
+
+    it('does not double-charge the late fee when a carried-over relation goes overdue again', function (): void {
+        // Bug reportado: un arrastre que YA incluía la multa de su relación
+        // original (porque esa relación se venció) se le volvía a sumar la
+        // misma multa si la relación que lo recibió TAMBIÉN se vencía sin
+        // pagarse -- la multa es una sola por vale, nunca una por cada corte
+        // que sigue sin pagarse.
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
+        cutoffVoucher($branch, $distributor, now()->subDays(20)->toDateString(), 300.00);
+
+        $manager = User::factory()->create();
+        cutoffSignInBusinessRole($manager, 'branch_manager', $branch);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+            'period_start' => now()->subDays(30)->toDateString(),
+            'period_end' => now()->subDays(20)->toDateString(),
+        ])->assertCreated();
+
+        $relation1 = CutoffRelation::query()->firstOrFail();
+        (new App\Services\Cutoffs\MarkOverdueRelationsService())->execute();
+
+        $this->assertDatabaseHas('cutoff_relation_items', [
+            'cutoff_relation_id' => $relation1->id,
+            'late_fee_amount' => 300.00,
+            'line_total_amount' => 3125.00,
+        ]);
+
+        // Se genera el siguiente corte: la deuda de relation1 (ya VENCIDA) se
+        // arrastra tal cual a relation2, multa incluida.
+        $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+            'period_start' => now()->subDays(19)->toDateString(),
+            'period_end' => now()->subDays(10)->toDateString(),
+        ])->assertCreated();
+
+        $relation2 = CutoffRelation::query()->where('id', '!=', $relation1->id)->firstOrFail();
+        expect($relation2->previous_relation_id)->toBe($relation1->id);
+
+        $this->assertDatabaseHas('cutoff_relation_items', [
+            'cutoff_relation_id' => $relation2->id,
+            'origin_relation_id' => $relation1->id,
+            'late_fee_amount' => 300.00,
+            'line_total_amount' => 3125.00,
+        ]);
+
+        // relation2 también se vence sin pagarse -- la multa NO debe
+        // duplicarse sobre el arrastre que ya la traía incluida.
+        (new App\Services\Cutoffs\MarkOverdueRelationsService())->execute();
+
+        $this->assertDatabaseHas('cutoff_relation_items', [
+            'cutoff_relation_id' => $relation2->id,
+            'origin_relation_id' => $relation1->id,
+            'late_fee_amount' => 300.00,
+            'line_total_amount' => 3125.00,
+        ]);
+
+        $this->assertDatabaseHas('cutoff_relations', [
+            'id' => $relation2->id,
+            'status' => 'VENCIDA',
+            'total_late_fees' => 300.00,
+            'total_amount_due' => 3125.00,
+        ]);
+    });
 });

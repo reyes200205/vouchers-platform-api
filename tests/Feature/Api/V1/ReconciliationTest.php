@@ -76,6 +76,19 @@ describe('Reconciliations', function (): void {
         $this->assertDatabaseCount('distributor_payments', 1);
         $this->assertDatabaseCount('reconciliations', 1);
 
+        // Cada transacción importada debe quedar ligada a la sucursal del
+        // import: antes no se guardaba y una conciliación manual posterior
+        // sobre esa transacción podía dar "Forbidden" (ver
+        // EnsureBusinessAbility/ImportBankDepositsService).
+        $this->assertDatabaseHas('bank_transactions', [
+            'reference' => $relation->payment_reference,
+            'branch_id' => $branch->id,
+        ]);
+        $this->assertDatabaseHas('bank_transactions', [
+            'reference' => 'SIN-REFERENCIA',
+            'branch_id' => $branch->id,
+        ]);
+
         $this->assertDatabaseHas('reconciliations', [
             'status' => 'CONCILIADA',
             'reconciled_amount' => 2599.00,
@@ -934,5 +947,74 @@ describe('Reconciliations', function (): void {
             'id' => $distributor->id,
             'current_points' => 9.00,
         ]);
+    });
+
+    it('does not Forbidden a manual match just because the transaction id happens to differ from the user branch id (legacy transaction without branch_id)', function (): void {
+        // Reproduce el bug reportado: una BankTransaction "legacy" (sin
+        // branch_id, como las importadas antes de este fix, o creadas a mano
+        // como en las pruebas de arriba) hacía que EnsureBusinessAbility
+        // usara el ID NUMÉRICO PROPIO de la transacción como si fuera un
+        // branch id. Esta sucursal "de relleno" fuerza a que el id real de la
+        // sucursal del usuario (2) no coincida con el id de la transacción
+        // (1), para que el escenario reportado (transacción #14 vs. una
+        // sucursal con otro id) quede cubierto sin depender de que ambos IDs
+        // coincidan por casualidad.
+        Branch::factory()->create();
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create([
+            'branch_id' => $branch->id,
+            'available_credit' => 10000,
+        ]);
+        $relation = reconciliationOpenRelation($branch, $distributor);
+
+        $transaction = BankTransaction::query()->create([
+            'reference' => 'REF-LEGACY',
+            'transaction_date' => now()->subDay()->toDateString(),
+            'amount' => 2599.00,
+            'transaction_type' => 'DEPOSITO',
+        ]);
+
+        expect($transaction->branch_id)->toBeNull();
+        expect($branch->id)->not->toBe($transaction->id);
+
+        $cashier = User::factory()->create();
+        reconciliationSignIn($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/reconciliations/bank-transactions/{$transaction->id}/manual-match", [
+            'cutoff_relation_id' => $relation->id,
+        ])->assertCreated()
+            ->assertJsonPath('data.status', 'PENDIENTE_VERIFICACION');
+    });
+
+    it('still enforces branch scoping for manual match when the bank transaction does have a branch_id', function (): void {
+        $branchA = Branch::factory()->create();
+        $branchB = Branch::factory()->create();
+        $distributor = Distributor::factory()->create([
+            'branch_id' => $branchA->id,
+            'available_credit' => 10000,
+        ]);
+        $relation = reconciliationOpenRelation($branchA, $distributor);
+
+        $transaction = BankTransaction::query()->create([
+            'branch_id' => $branchA->id,
+            'reference' => 'REF-SCOPED',
+            'transaction_date' => now()->subDay()->toDateString(),
+            'amount' => 2599.00,
+            'transaction_type' => 'DEPOSITO',
+        ]);
+
+        $cashierOtherBranch = User::factory()->create();
+        reconciliationSignIn($cashierOtherBranch, 'cashier', $branchB);
+
+        $this->postJson("/api/v1/reconciliations/bank-transactions/{$transaction->id}/manual-match", [
+            'cutoff_relation_id' => $relation->id,
+        ])->assertForbidden();
+
+        $cashierSameBranch = User::factory()->create();
+        reconciliationSignIn($cashierSameBranch, 'cashier', $branchA);
+
+        $this->postJson("/api/v1/reconciliations/bank-transactions/{$transaction->id}/manual-match", [
+            'cutoff_relation_id' => $relation->id,
+        ])->assertCreated();
     });
 });
