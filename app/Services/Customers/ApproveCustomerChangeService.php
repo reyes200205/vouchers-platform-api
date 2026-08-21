@@ -6,6 +6,7 @@ namespace App\Services\Customers;
 
 use App\Enums\ChangeRequestStatus;
 use App\Models\CustomerChangeRequest;
+use App\Models\Person;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
@@ -32,8 +33,21 @@ final class ApproveCustomerChangeService
                 return $changeRequest;
             }
 
-            $person = $changeRequest->customer->person;
+            $person = $changeRequest->customer?->person;
+
+            if ($person === null) {
+                abort(Response::HTTP_UNPROCESSABLE_ENTITY, 'No se encontro la persona asociada al cliente.');
+            }
+
             $newValues = (array) $changeRequest->new_values_json;
+
+            if (isset($newValues['curp']) && Person::query()->where('curp', $newValues['curp'])->where('id', '!=', $person->id)->exists()) {
+                abort(Response::HTTP_UNPROCESSABLE_ENTITY, 'La CURP ya esta en uso por otra persona.');
+            }
+
+            if (isset($newValues['rfc']) && Person::query()->where('rfc', $newValues['rfc'])->where('id', '!=', $person->id)->exists()) {
+                abort(Response::HTTP_UNPROCESSABLE_ENTITY, 'El RFC ya esta en uso por otra persona.');
+            }
 
             foreach ($newValues as $field => $value) {
                 $person->{$field} = $value;

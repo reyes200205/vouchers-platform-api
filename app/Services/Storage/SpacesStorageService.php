@@ -1,0 +1,84 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services\Storage;
+
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use RuntimeException;
+use Throwable;
+
+final class SpacesStorageService
+{
+    /**
+     * @return array{path: string, temporary_url: string, expires_at: string, size: int, mime_type: string}
+     */
+    public function uploadTestFile(UploadedFile $file): array
+    {
+        $path = 'testing/'.now()->format('Y/m/d').'/'.Str::uuid().'.'.($file->extension() ?: 'bin');
+
+        return [
+            ...$this->storeAndSign($file, $path, expiresInMinutes: 10),
+            'size' => $file->getSize() ?: 0,
+            'mime_type' => $file->getMimeType() ?: 'application/octet-stream',
+        ];
+    }
+
+    /**
+     * Guarda una fotografia de evidencia de una visita de verificacion (fachada, INE con
+     * la persona o comprobante de domicilio) en el bucket privado de Spaces, agrupada por
+     * solicitud y tipo para poder auditar cada visita.
+     *
+     * @return array{path: string, temporary_url: string, expires_at: string}
+     */
+    public function uploadVerificationPhoto(UploadedFile $file, int $applicationId, string $type): array
+    {
+        $path = "verifications/{$applicationId}/{$type}/".Str::uuid().'.'.($file->extension() ?: 'jpg');
+
+        return $this->storeAndSign($file, $path, expiresInMinutes: 30);
+    }
+
+    /**
+     * @return array{path: string, temporary_url: string, expires_at: string}
+     */
+    private function storeAndSign(UploadedFile $file, string $path, int $expiresInMinutes): array
+    {
+        $this->assertConfigured();
+
+        try {
+            $storedPath = Storage::disk('spaces')->putFileAs(
+                dirname($path),
+                $file,
+                basename($path),
+                ['visibility' => 'private']
+            );
+
+            if ($storedPath === false) {
+                throw new RuntimeException('DigitalOcean Spaces did not return an object path.');
+            }
+
+            $expiresAt = now()->addMinutes($expiresInMinutes);
+
+            return [
+                'path' => $storedPath,
+                'temporary_url' => Storage::disk('spaces')->temporaryUrl($storedPath, $expiresAt),
+                'expires_at' => $expiresAt->toIso8601String(),
+            ];
+        } catch (Throwable $exception) {
+            report($exception);
+
+            throw new RuntimeException('No se pudo guardar el archivo en DigitalOcean Spaces. Revisa la configuración y los permisos de la llave.', previous: $exception);
+        }
+    }
+
+    private function assertConfigured(): void
+    {
+        foreach (['key', 'secret', 'region', 'bucket', 'endpoint'] as $key) {
+            if (blank(config("filesystems.disks.spaces.{$key}"))) {
+                throw new RuntimeException('DigitalOcean Spaces no está configurado. Revisa las variables DO_SPACES_* del entorno.');
+            }
+        }
+    }
+}

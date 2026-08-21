@@ -39,7 +39,11 @@ final class DisburseVoucherService
         // default si la sucursal no configuro un dia de corte distinto).
         $dueDate = $periods->nextPeriodEnd(now(), $branchSetting->cutoff_day);
 
+<<<<<<< HEAD
         return DB::transaction(static function () use ($user, $voucher, $data, $dueDays, $frequencyDays, $dueDate): Voucher {
+=======
+        return DB::transaction(static function () use ($user, $voucher, $data, $dueDays, $frequencyDays, $dueDate, $branchSetting): Voucher {
+>>>>>>> d6b66417c8e06f9d1a5c4b9d61c9e602cf0b9ff8
             if ($voucher->status !== VoucherStatus::APROBADO) {
                 abort(422, 'El vale debe estar aprobado para poder dispersarse.');
             }

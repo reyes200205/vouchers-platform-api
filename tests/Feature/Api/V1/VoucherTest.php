@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Enums\CustomerDistributorRelationshipStatus;
 use App\Enums\CustomerStatus;
 use App\Enums\VoucherStatus;
+use App\Mail\VoucherIssuedMail;
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\CustomerDistributor;
@@ -15,6 +16,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\Voucher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
@@ -393,6 +395,63 @@ describe('Voucher approval (cajera/gerente)', function (): void {
             'distributor_id' => $distributor->id,
             'prevale_approved' => true,
         ]);
+    });
+
+    it('emails the customer when their voucher is approved, with distributor name, number, dates and amount', function (): void {
+        Mail::fake();
+
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        \App\Models\BranchSetting::query()->updateOrCreate(
+            ['branch_id' => $branch->id],
+            ['voucher_expiration_days' => 15]
+        );
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")->assertOk();
+
+        $voucher = Voucher::query()->where('voucher_request_id', $request['id'])->firstOrFail();
+
+        Mail::assertSent(VoucherIssuedMail::class, function (VoucherIssuedMail $mail) use ($voucher, $customer, $distributor, $branch) {
+            $rendered = $mail->render();
+
+            return $mail->hasTo($customer->person->email)
+                && $mail->voucher->id === $voucher->id
+                && str_contains($rendered, $voucher->voucher_number)
+                && str_contains($rendered, $distributor->person->first_name)
+                && str_contains($rendered, $voucher->issued_at->translatedFormat('d/m/Y'))
+                && str_contains($rendered, $voucher->issued_at->copy()->addDays(15)->translatedFormat('d/m/Y'))
+                && str_contains($rendered, number_format((float) $voucher->amount, 2));
+        });
+    });
+
+    it('does not fail the approval when the customer has no email on file', function (): void {
+        Mail::fake();
+
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $customer->person->update(['email' => null]);
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")->assertOk();
+
+        Mail::assertNothingSent();
     });
 
     it('clears the credit-increase reactivation flag once the next voucher is approved', function (): void {

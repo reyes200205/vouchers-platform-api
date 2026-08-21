@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Staff;
 
+use App\Rules\ValidCurp;
+use App\Rules\ValidRfc;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -54,8 +56,8 @@ final class UpdateStaffRequest extends FormRequest
             'second_last_name' => ['sometimes', 'nullable', 'string', 'max:100'],
             'gender' => ['sometimes', 'nullable', 'in:M,F,OTHER'],
             'birth_date' => ['sometimes', 'nullable', 'date'],
-            'curp' => ['sometimes', 'nullable', 'string', 'size:18', Rule::unique('people', 'curp')->ignore($person?->id)],
-            'rfc' => ['sometimes', 'nullable', 'string', 'max:13', Rule::unique('people', 'rfc')->ignore($person?->id)],
+            'curp' => ['sometimes', 'nullable', 'string', 'size:18', new ValidCurp(), Rule::unique('people', 'curp')->ignore($person?->id)],
+            'rfc' => ['sometimes', 'nullable', 'string', 'max:13', new ValidRfc(), Rule::unique('people', 'rfc')->ignore($person?->id)],
             'home_phone' => ['sometimes', 'nullable', 'string', 'max:20'],
             'mobile_phone' => ['sometimes', 'nullable', 'string', 'max:20'],
             'email' => ['sometimes', 'nullable', 'email', 'max:150'],

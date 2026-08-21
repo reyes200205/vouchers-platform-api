@@ -64,9 +64,9 @@ describe('Financial products', function (): void {
         ]);
     });
 
-    it('allows an administrator to view plans but not manage them', function (): void {
-        $administrator = User::factory()->create();
-        authenticateWithBusinessRole($administrator, 'administrator');
+    it('allows a distributor to view plans but not manage them', function (): void {
+        $distributor = User::factory()->create();
+        authenticateWithBusinessRole($distributor, 'distributor');
         $product = FinancialProduct::query()->create(financialProductPayload());
 
         $this->getJson('/api/v1/financial-products')

@@ -47,7 +47,7 @@ final class StoreStaffService
             abort(422, 'El rol seleccionado no es administrable desde el módulo de personal.');
         }
 
-        if (! $actor->isGeneralManager()) {
+        if (! $actor->isGeneralManager() && ! $actor->hasRole('super-admin')) {
             abort_unless(
                 in_array($role->name, ListStaffService::BRANCH_MANAGER_ROLES, true),
                 403,

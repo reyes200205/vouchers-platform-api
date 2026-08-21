@@ -19,6 +19,7 @@ use App\Http\Controllers\Coordinator\CoordinadorController;
 use App\Http\Controllers\Coordinator\CreditIncreaseController as CoordinatorCreditIncreaseController;
 use App\Http\Controllers\Coordinator\CustomerController;
 use App\Http\Controllers\Coordinator\CustomerTransferController;
+use App\Http\Controllers\Coordinator\DistributorController as CoordinatorDistributorController;
 use App\Http\Controllers\Coordinator\PaymentController as CoordinatorPaymentController;
 use App\Http\Controllers\Coordinator\VoucherController as CoordinatorVoucherController;
 use App\Http\Controllers\Distributor\CustomerController as DistributorCustomerController;
@@ -40,7 +41,9 @@ use App\Http\Controllers\GeneralManager\PointSettingController;
 use App\Http\Controllers\GeneralManager\ReconciliationController as GeneralManagerReconciliationController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Staff\StaffController;
+use App\Http\Controllers\System\AuditLogController;
 use App\Http\Controllers\System\RolesController;
+use App\Http\Controllers\System\SpacesTestController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -71,6 +74,10 @@ Route::get('ping', fn () => response()->json([
 | Routes for
 */
 Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function (): void {
+    Route::middleware('business.ability:storage.spaces.test')
+        ->post('/system/storage/spaces/test-upload', [SpacesTestController::class, 'store'])
+        ->name('system.storage.spaces.test-upload');
+
     Route::middleware('business.ability:users.manage')->group(function (): void {
         Route::post('/general-managers', [GeneralManagerController::class, 'store'])->name('general-managers.store');
     });
@@ -188,6 +195,8 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:credit-increase.pre-authorize,creditIncreaseRequest')->post('/credit-increase-requests/{creditIncreaseRequest}/pre-authorize', [CoordinatorCreditIncreaseController::class, 'preAuthorize'])->name('credit-increase-requests.pre-authorize');
     Route::middleware('business.ability:credit-increase.decide,creditIncreaseRequest')->post('/credit-increase-requests/{creditIncreaseRequest}/decision', [GeneralManagerCreditIncreaseController::class, 'decide'])->name('credit-increase-requests.decide');
 
+    Route::middleware('business.ability:distributors.view')->get('/distributors', [CoordinatorDistributorController::class, 'index'])->name('distributors.index');
+
     Route::middleware('business.ability:payments.view')->get('/customer-payments', [CoordinatorPaymentController::class, 'index'])->name('customer-payments.index');
     Route::middleware('business.ability:payments.view,voucher')->get('/vouchers/{voucher}/payments', [CoordinatorPaymentController::class, 'voucherPayments'])->name('vouchers.payments.index');
     Route::middleware('business.ability:payments.create')->post('/customer-payments', [CashierPaymentController::class, 'store'])->name('customer-payments.store');
@@ -236,12 +245,15 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
 */
 Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function (): void {
     Route::get('system/roles', [RolesController::class, 'index'])->name('system.roles.index');
+    Route::middleware('business.ability:audit-logs.view')->get('system/audit-logs', [AuditLogController::class, 'index'])->name('system.audit-logs.index');
 });
 
 Route::prefix('auth')->group(function (): void {
     // Public routes (5/min - brute force protection)
     Route::middleware('throttle:auth')->group(function (): void {
         Route::post('login', [AuthController::class, 'login'])->name('api.v1.login');
+        Route::post('mfa/verify', [AuthController::class, 'verifyMfa'])->name('api.v1.mfa.verify');
+        Route::post('mfa/resend', [AuthController::class, 'resendMfa'])->name('api.v1.mfa.resend');
     });
 
     // Protected routes with authenticated rate limiter (120/min)

@@ -24,8 +24,8 @@ final class CreateAdministratorCommand extends Command
         $password = $this->option('password') ?: Str::random(16);
 
         $role = Role::query()->firstOrCreate(
-            ['name' => 'administrator', 'guard_name' => 'web'],
-            ['code' => 'administrator', 'description' => 'Administrador', 'is_active' => true]
+            ['name' => 'super-admin', 'guard_name' => 'web'],
+            ['code' => 'super-admin', 'description' => 'Super Administrador', 'is_active' => true]
         );
 
         $existing = User::query()->where('username', $username)->first();

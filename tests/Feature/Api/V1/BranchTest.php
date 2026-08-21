@@ -10,19 +10,21 @@ use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
 
-function actingAsBusinessRole(User $user, string $roleCode): void
-{
-    $role = Role::query()->firstOrCreate(
-        ['name' => $roleCode, 'guard_name' => 'web'],
-        ['code' => $roleCode]
-    );
+if (! function_exists('actingAsBusinessRole')) {
+    function actingAsBusinessRole(User $user, string $roleCode): void
+    {
+        $role = Role::query()->firstOrCreate(
+            ['name' => $roleCode, 'guard_name' => 'web'],
+            ['code' => $roleCode]
+        );
 
-    $user->businessRoles()->attach($role, [
-        'assigned_at' => now(),
-        'is_primary' => true,
-    ]);
+        $user->businessRoles()->attach($role, [
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
 
-    Sanctum::actingAs($user);
+        Sanctum::actingAs($user);
+    }
 }
 
 describe('Branches', function (): void {
@@ -49,10 +51,20 @@ describe('Branches', function (): void {
         ]);
     });
 
-    it('allows an administrator to view but not modify a branch', function (): void {
-        $administrator = User::factory()->create();
-        actingAsBusinessRole($administrator, 'administrator');
+    it('allows a coordinator to view but not modify a branch', function (): void {
+        $coordinator = User::factory()->create();
         $branch = Branch::factory()->create();
+
+        $role = Role::query()->firstOrCreate(
+            ['name' => 'coordinator', 'guard_name' => 'web'],
+            ['code' => 'coordinator']
+        );
+        $coordinator->businessRoles()->attach($role, [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($coordinator);
 
         $this->getJson("/api/v1/branches/{$branch->id}")->assertOk();
         $this->patchJson("/api/v1/branches/{$branch->id}", ['name' => 'No permitido'])->assertForbidden();
