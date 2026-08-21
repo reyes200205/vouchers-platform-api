@@ -41,6 +41,21 @@ final class SpacesStorageService
     }
 
     /**
+     * Guarda un documento (INE frente/reverso, comprobante de domicilio) que el
+     * coordinador captura al dar de alta una solicitud. Se sube antes de que exista
+     * el ID de la Application, por eso se agrupa solo por tipo con un UUID propio;
+     * el path resultante se manda de vuelta en el alta y ahi queda ligado al folio real.
+     *
+     * @return array{path: string, temporary_url: string, expires_at: string}
+     */
+    public function uploadApplicationDocument(UploadedFile $file, string $type): array
+    {
+        $path = "applications/pending/{$type}/".Str::uuid().'.'.($file->extension() ?: 'jpg');
+
+        return $this->storeAndSign($file, $path, expiresInMinutes: 30);
+    }
+
+    /**
      * Firma una URL temporal para un objeto ya guardado en Spaces (por ejemplo,
      * la ruta de una foto de verificación persistida en ApplicationVerification).
      * Usar al leer/mostrar evidencia, no al subirla.
