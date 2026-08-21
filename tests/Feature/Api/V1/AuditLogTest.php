@@ -45,6 +45,45 @@ describe('Audit Logs API', function (): void {
             ->assertJsonPath('data.data.0.event_type', 'TEST_EVENT');
     });
 
+    it('allows a super-admin to filter audit logs by search, level, and module', function (): void {
+        $superAdmin = User::factory()->create();
+        actingAsBusinessRole($superAdmin, 'super-admin');
+
+        AuditLog::query()->create([
+            'event_type' => 'LOGIN',
+            'level' => 'info',
+            'user_name' => 'alice',
+            'module' => 'auth',
+            'description' => 'User logged in',
+        ]);
+
+        AuditLog::query()->create([
+            'event_type' => 'VOUCHER_CREATE',
+            'level' => 'warning',
+            'user_name' => 'bob',
+            'module' => 'vouchers',
+            'description' => 'Voucher created with override',
+        ]);
+
+        // Filter by level
+        $this->getJson('/api/v1/system/audit-logs?level=warning')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.event_type', 'VOUCHER_CREATE');
+
+        // Filter by module
+        $this->getJson('/api/v1/system/audit-logs?module=auth')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.event_type', 'LOGIN');
+
+        // Filter by search
+        $this->getJson('/api/v1/system/audit-logs?search=bob')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.event_type', 'VOUCHER_CREATE');
+    });
+
     it('forbids other roles from viewing audit logs', function (): void {
         $manager = User::factory()->create();
         actingAsBusinessRole($manager, 'general_manager');

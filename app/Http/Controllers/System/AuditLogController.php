@@ -14,9 +14,28 @@ final class AuditLogController extends ApiController
 {
     public function index(Request $request): JsonResponse
     {
-        $logs = AuditLog::query()
-            ->with(['branch'])
-            ->orderBy('created_at', 'desc')
+        $query = AuditLog::query()
+            ->with(['branch']);
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('user_name', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhere('ip_address', 'like', "%{$search}%")
+                    ->orWhere('event_type', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('level')) {
+            $query->where('level', $request->input('level'));
+        }
+
+        if ($request->filled('module')) {
+            $query->where('module', $request->input('module'));
+        }
+
+        $logs = $query->orderBy('created_at', 'desc')
             ->paginate($request->integer('per_page', 15))
             ->appends($request->query());
 
