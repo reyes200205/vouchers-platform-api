@@ -17,10 +17,35 @@ final class SpacesStorageService
      */
     public function uploadTestFile(UploadedFile $file): array
     {
-        $this->assertConfigured();
+        $path = 'testing/'.now()->format('Y/m/d').'/'.Str::uuid().'.'.($file->extension() ?: 'bin');
 
-        $extension = $file->extension() ?: 'bin';
-        $path = 'testing/'.now()->format('Y/m/d').'/'.Str::uuid().'.'.$extension;
+        return [
+            ...$this->storeAndSign($file, $path, expiresInMinutes: 10),
+            'size' => $file->getSize() ?: 0,
+            'mime_type' => $file->getMimeType() ?: 'application/octet-stream',
+        ];
+    }
+
+    /**
+     * Guarda una fotografia de evidencia de una visita de verificacion (fachada, INE con
+     * la persona o comprobante de domicilio) en el bucket privado de Spaces, agrupada por
+     * solicitud y tipo para poder auditar cada visita.
+     *
+     * @return array{path: string, temporary_url: string, expires_at: string}
+     */
+    public function uploadVerificationPhoto(UploadedFile $file, int $applicationId, string $type): array
+    {
+        $path = "verifications/{$applicationId}/{$type}/".Str::uuid().'.'.($file->extension() ?: 'jpg');
+
+        return $this->storeAndSign($file, $path, expiresInMinutes: 30);
+    }
+
+    /**
+     * @return array{path: string, temporary_url: string, expires_at: string}
+     */
+    private function storeAndSign(UploadedFile $file, string $path, int $expiresInMinutes): array
+    {
+        $this->assertConfigured();
 
         try {
             $storedPath = Storage::disk('spaces')->putFileAs(
@@ -34,14 +59,12 @@ final class SpacesStorageService
                 throw new RuntimeException('DigitalOcean Spaces did not return an object path.');
             }
 
-            $expiresAt = now()->addMinutes(10);
+            $expiresAt = now()->addMinutes($expiresInMinutes);
 
             return [
                 'path' => $storedPath,
                 'temporary_url' => Storage::disk('spaces')->temporaryUrl($storedPath, $expiresAt),
                 'expires_at' => $expiresAt->toIso8601String(),
-                'size' => $file->getSize() ?: 0,
-                'mime_type' => $file->getMimeType() ?: 'application/octet-stream',
             ];
         } catch (Throwable $exception) {
             report($exception);

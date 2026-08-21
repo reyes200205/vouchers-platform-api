@@ -38,8 +38,8 @@ use App\Http\Controllers\GeneralManager\PointController as GeneralManagerPointCo
 use App\Http\Controllers\GeneralManager\PointSettingController;
 use App\Http\Controllers\GeneralManager\ReconciliationController as GeneralManagerReconciliationController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\System\RolesController;
 use App\Http\Controllers\Staff\StaffController;
+use App\Http\Controllers\System\RolesController;
 use App\Http\Controllers\System\SpacesTestController;
 use Illuminate\Support\Facades\Route;
 

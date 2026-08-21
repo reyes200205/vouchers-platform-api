@@ -6,26 +6,32 @@ namespace App\Http\Controllers\Checker;
 
 use App\Http\Controllers\ApiController;
 use App\Models\Application;
+use App\Services\Storage\SpacesStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use RuntimeException;
 
 final class VerificationPhotoController extends ApiController
 {
-    public function store(Request $request, Application $application): JsonResponse
+    public function store(Request $request, Application $application, SpacesStorageService $storage): JsonResponse
     {
         $data = $request->validate([
             'type' => ['required', 'in:front_photo,id_with_person_photo,proof_of_address_photo'],
             'photo' => ['required', 'image', 'max:10240'],
         ]);
 
-        $path = $request->file('photo')->store("verifications/{$application->id}", 'public');
+        try {
+            $upload = $storage->uploadVerificationPhoto($request->file('photo'), $application->id, $data['type']);
+        } catch (RuntimeException $exception) {
+            return $this->error($exception->getMessage(), 503);
+        }
 
         return $this->success([
             'type' => $data['type'],
-            'path' => $path,
-            // Se construye a partir del host de la peticion (no de APP_URL) para que
-            // funcione igual en cualquier entorno local sin depender de ese valor.
-            'url' => $request->getSchemeAndHttpHost() . '/storage/' . $path,
+            'path' => $upload['path'],
+            // URL firmada y temporal (bucket privado): solo sirve para la vista previa
+            // inmediata en el modal de verificacion, no se persiste en la base de datos.
+            'url' => $upload['temporary_url'],
         ]);
     }
 }
