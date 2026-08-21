@@ -350,4 +350,58 @@ describe('Cutoffs', function (): void {
         // Ya cerrado, no se puede volver a cerrar.
         $this->postJson("/api/v1/cutoffs/{$cutoff->id}/close")->assertStatus(422);
     });
+
+    it('lets a general manager list cutoffs of any branch, not just the one their own role is attached to', function (): void {
+        // El general_manager es un rol global: activeBusinessBranchIds() solo
+        // le devuelve la sucursal donde quedó su vínculo (su "matriz"), pero
+        // eso no debe limitar qué sucursales puede CONSULTAR -- antes el
+        // listado se filtraba siempre por esa sucursal sin importar el rol,
+        // así que seleccionar otra sucursal en el frontend nunca mostraba
+        // nada.
+        $matriz = Branch::factory()->create();
+        $otherBranch = Branch::factory()->create();
+
+        $distributorMatriz = Distributor::factory()->create(['branch_id' => $matriz->id]);
+        cutoffVoucher($matriz, $distributorMatriz, now()->toDateString());
+
+        $distributorOther = Distributor::factory()->create(['branch_id' => $otherBranch->id]);
+        cutoffVoucher($otherBranch, $distributorOther, now()->toDateString());
+
+        $branchManagerMatriz = User::factory()->create();
+        cutoffSignInBusinessRole($branchManagerMatriz, 'branch_manager', $matriz);
+        $this->postJson("/api/v1/branches/{$matriz->id}/cutoffs/generate", [
+            'period_start' => now()->subDays(15)->toDateString(),
+            'period_end' => now()->toDateString(),
+        ])->assertCreated();
+
+        $branchManagerOther = User::factory()->create();
+        cutoffSignInBusinessRole($branchManagerOther, 'branch_manager', $otherBranch);
+        $this->postJson("/api/v1/branches/{$otherBranch->id}/cutoffs/generate", [
+            'period_start' => now()->subDays(15)->toDateString(),
+            'period_end' => now()->toDateString(),
+        ])->assertCreated();
+
+        $matrizCutoff = Cutoff::query()->where('branch_id', $matriz->id)->firstOrFail();
+        $otherCutoff = Cutoff::query()->where('branch_id', $otherBranch->id)->firstOrFail();
+
+        $gm = User::factory()->create();
+        cutoffSignInBusinessRole($gm, 'general_manager', $matriz);
+
+        // Sin branch_id: el gerente general ve los cortes de AMBAS sucursales.
+        $response = $this->getJson('/api/v1/cutoffs?per_page=50')->assertOk();
+        $ids = collect($response->json('data.data'))->pluck('id')->all();
+        expect($ids)->toContain($matrizCutoff->id)->toContain($otherCutoff->id);
+
+        // Pidiendo explícitamente la sucursal que NO es la suya, la ve.
+        $response = $this->getJson("/api/v1/cutoffs?per_page=50&branch_id={$otherBranch->id}")->assertOk();
+        $ids = collect($response->json('data.data'))->pluck('id')->all();
+        expect($ids)->toContain($otherCutoff->id)->not->toContain($matrizCutoff->id);
+
+        // Un branch_manager, en cambio, sigue restringido a su propia
+        // sucursal aunque pida el branch_id de otra.
+        Sanctum::actingAs($branchManagerMatriz);
+        $response = $this->getJson("/api/v1/cutoffs?per_page=50&branch_id={$otherBranch->id}")->assertOk();
+        $ids = collect($response->json('data.data'))->pluck('id')->all();
+        expect($ids)->toContain($matrizCutoff->id)->not->toContain($otherCutoff->id);
+    });
 });

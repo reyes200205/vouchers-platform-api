@@ -216,6 +216,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:reconciliations.view')->get('/reconciliations', [CashierReconciliationController::class, 'reconciliations'])->name('reconciliations.index');
     Route::middleware('business.ability:reconciliations.manual,bankTransaction')->post('/reconciliations/bank-transactions/{bankTransaction}/manual-match', [GeneralManagerReconciliationController::class, 'manualMatch'])->name('reconciliations.manual-match');
     Route::middleware('business.ability:reconciliations.verify,reconciliation')->post('/reconciliations/{reconciliation}/verify', [GeneralManagerReconciliationController::class, 'verify'])->name('reconciliations.verify');
+    Route::middleware('business.ability:reconciliations.verify,reconciliation')->post('/reconciliations/{reconciliation}/reject', [GeneralManagerReconciliationController::class, 'reject'])->name('reconciliations.reject');
 
     Route::middleware('business.ability:points.redeem.request,distributor')->post('/distributors/{distributor}/points/redeem', [DistributorPointController::class, 'redeem'])->name('points.redeem.request');
     Route::middleware('business.ability:points.view,distributor')->get('/distributors/{distributor}/points/redemptions', [DistributorPointController::class, 'myRedemptions'])->name('points.redemptions.mine');

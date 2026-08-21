@@ -29,7 +29,12 @@ return [
         'branch-settings.view' => ['general_manager', 'branch_manager'],
         'branch-settings.manage' => ['general_manager', 'branch_manager'],
         'products.view' => ['general_manager', 'branch_manager', 'distributor'],
-        'products.manage' => ['general_manager', 'branch_manager'],
+        // Solo el gerente general crea/edita productos-vale (tanto los de
+        // catálogo global como los de una sucursal específica); el gerente de
+        // sucursal únicamente los consulta (products.view). Antes
+        // branch_manager también tenía esta ability y podía crear/editar los
+        // vales de su propia sucursal.
+        'products.manage' => ['general_manager'],
         // Catálogo global (sin sucursal): solo el gerente general lo administra.
         // No reutilizar 'products.manage' aquí: esa ability también protege la ruta
         // por sucursal (/branches/{branch}/products) y, al no llevar el parámetro
@@ -78,7 +83,14 @@ return [
         'payments.view' => ['general_manager', 'branch_manager', 'coordinator', 'distributor'],
         'payments.create' => ['cashier', 'branch_manager', 'general_manager'],
         'payments.reverse' => ['cashier', 'branch_manager', 'general_manager'],
-        'cutoffs.view' => ['general_manager', 'branch_manager', 'coordinator', 'distributor'],
+        // La cajera necesita 'cutoffs.view' para el selector de corte/relación
+        // del modal "Conciliar depósito" (ManualMatchModal): sin ella,
+        // GET /cutoffs y GET /cutoffs/{cutoff} le regresaban Forbidden y no
+        // podía elegir a qué relación corresponde una transacción bancaria.
+        // El scoping por sucursal ya lo hace el middleware business.ability
+        // (,cutoff / activeBusinessBranchIds()), así que solo ve los cortes
+        // de su propia sucursal, igual que coordinator/distributor.
+        'cutoffs.view' => ['general_manager', 'branch_manager', 'coordinator', 'distributor', 'cashier'],
         'cutoffs.manage' => ['branch_manager', 'general_manager'],
         'distributor-statements.view' => ['distributor'],
         'reconciliations.import' => ['cashier', 'general_manager'],

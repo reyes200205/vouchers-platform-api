@@ -22,6 +22,7 @@ final class ReconciliationResource extends JsonResource
             'id' => $this->id,
             'distributor_payment_id' => $this->distributor_payment_id,
             'bank_transaction_id' => $this->bank_transaction_id,
+            'original_cutoff_relation_id' => $this->original_cutoff_relation_id,
             'reconciled_by_user_id' => $this->reconciled_by_user_id,
             'verified_by_user_id' => $this->verified_by_user_id,
             'verified_at' => $this->verified_at?->toIso8601String(),
@@ -29,6 +30,8 @@ final class ReconciliationResource extends JsonResource
             'reconciled_amount' => $this->reconciled_amount,
             'amount_difference' => $this->amount_difference,
             'status' => $this->status?->value,
+            'is_retroactive_correction' => (bool) $this->is_retroactive_correction,
+            'waived_late_fees_total' => $this->waived_late_fees_total,
             'notes' => $this->notes,
             'distributor_payment' => $this->whenLoaded('distributorPayment', fn () => [
                 'id' => $this->distributorPayment->id,

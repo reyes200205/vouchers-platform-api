@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'distributor_payment_id',
     'bank_transaction_id',
+    'original_cutoff_relation_id',
     'reconciled_by_user_id',
     'verified_by_user_id',
     'verified_at',
@@ -19,6 +20,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'reconciled_amount',
     'amount_difference',
     'status',
+    'is_retroactive_correction',
+    'waived_late_fees_total',
     'notes',
 ])]
 final class Reconciliation extends Model
@@ -31,6 +34,8 @@ final class Reconciliation extends Model
         'reconciled_amount' => 'decimal:2',
         'amount_difference' => 'decimal:2',
         'status' => ReconciliationStatus::class,
+        'is_retroactive_correction' => 'boolean',
+        'waived_late_fees_total' => 'decimal:2',
     ];
 
     /**
@@ -39,6 +44,14 @@ final class Reconciliation extends Model
     public function distributorPayment(): BelongsTo
     {
         return $this->belongsTo(DistributorPayment::class);
+    }
+
+    /**
+     * @return BelongsTo<CutoffRelation, $this>
+     */
+    public function originalCutoffRelation(): BelongsTo
+    {
+        return $this->belongsTo(CutoffRelation::class, 'original_cutoff_relation_id');
     }
 
     /**
