@@ -7,6 +7,7 @@ use App\Models\DistributorCategory;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
@@ -87,6 +88,17 @@ describe('Distributor onboarding', function (): void {
     });
 
     it('shows the full application detail with applicant info and photo URLs for the branch manager deciding it', function (): void {
+        // La foto de verificación se guarda en Spaces (ver VerificationPhotoController);
+        // el detalle debe leerla de ahí con una URL firmada, no como ruta local.
+        Storage::fake('spaces');
+        config()->set('filesystems.disks.spaces', array_merge(config('filesystems.disks.spaces'), [
+            'key' => 'test-key',
+            'secret' => 'test-secret',
+            'region' => 'nyc3',
+            'bucket' => 'test-bucket',
+            'endpoint' => 'https://nyc3.digitaloceanspaces.com',
+        ]));
+
         $branch = Branch::factory()->create();
         $coordinator = User::factory()->create();
         $verifier = User::factory()->create();
@@ -133,7 +145,9 @@ describe('Distributor onboarding', function (): void {
             ->assertJsonPath('data.family_data_json.applicant_age', 28)
             ->assertJsonPath('data.id_front_url', fn ($url) => str_ends_with($url, '/storage/applications/1/id_front.jpg'))
             ->assertJsonPath('data.proof_of_address_url', fn ($url) => str_ends_with($url, '/storage/applications/1/comprobante.jpg'))
-            ->assertJsonPath('data.verification.front_photo_url', fn ($url) => str_ends_with($url, '/storage/verifications/1/fachada.jpg'));
+            ->assertJsonPath('data.verification.front_photo_url', fn ($url) => is_string($url)
+                && str_contains($url, 'verifications/1/fachada.jpg')
+                && ! str_contains($url, '/storage/verifications'));
     });
 
     it('forbids a branch manager from viewing an application of another branch', function (): void {

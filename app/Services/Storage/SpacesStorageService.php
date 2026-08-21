@@ -41,6 +41,33 @@ final class SpacesStorageService
     }
 
     /**
+     * Firma una URL temporal para un objeto ya guardado en Spaces (por ejemplo,
+     * la ruta de una foto de verificación persistida en ApplicationVerification).
+     * Usar al leer/mostrar evidencia, no al subirla.
+     *
+     * A diferencia de storeAndSign, aquí NO se relanza la excepción: esto se usa
+     * al armar el detalle de una solicitud junto con otras fotos, y una llave de
+     * Spaces vencida o mal configurada no debe tumbar toda la pantalla de
+     * revisión de la Bandeja de Aprobaciones, solo esa URL en particular.
+     */
+    public function temporaryUrlFor(?string $path, int $expiresInMinutes = 30): ?string
+    {
+        if (blank($path)) {
+            return null;
+        }
+
+        try {
+            $this->assertConfigured();
+
+            return Storage::disk('spaces')->temporaryUrl($path, now()->addMinutes($expiresInMinutes));
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return null;
+        }
+    }
+
+    /**
      * @return array{path: string, temporary_url: string, expires_at: string}
      */
     private function storeAndSign(UploadedFile $file, string $path, int $expiresInMinutes): array
