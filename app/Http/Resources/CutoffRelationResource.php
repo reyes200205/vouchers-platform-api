@@ -39,11 +39,15 @@ final class CutoffRelationResource extends JsonResource
             'status' => $this->status?->value,
             'closed_by_carryover_at' => $this->closed_by_carryover_at?->toIso8601String(),
             'generated_at' => $this->generated_at?->toIso8601String(),
-            'distributor' => $this->whenLoaded('distributor', fn () => [
+            // El Distributor no tiene columna business_name (el nombre sale de su
+            // Person relacionado) -- antes esto siempre resolvía null.
+            'distributor' => $this->whenLoaded('distributor', fn () => $this->distributor ? [
                 'id' => $this->distributor->id,
                 'distributor_number' => $this->distributor->distributor_number,
-                'business_name' => $this->distributor->business_name,
-            ]),
+                'person' => $this->distributor->relationLoaded('person') && $this->distributor->person
+                    ? new PersonResource($this->distributor->person)
+                    : null,
+            ] : null),
             'items' => $this->whenLoaded('items', fn () => CutoffRelationItemResource::collection($this->items)),
         ];
     }

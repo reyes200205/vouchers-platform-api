@@ -318,4 +318,83 @@ describe('Reconciliations', function (): void {
             'available_credit' => 20000.00,
         ]);
     });
+
+    it('releases the distributor credit incrementally per fortnight settled, not the full principal at once', function (): void {
+        // Vale de $15,000 a 8 quincenas: cada quincena liquidada debe liberar
+        // 15,000 / 8 = $1,875 de crédito -- ni la quincena completa que pagó la
+        // distribuidora (que trae intereses/seguro/comisión mezclados), ni el
+        // principal completo de golpe hasta que se termine de pagar el vale.
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create([
+            'branch_id' => $branch->id,
+            'credit_limit' => 30000,
+            'available_credit' => 15000, // ya usó 15,000 de principal en este vale
+        ]);
+        $voucher = \App\Models\Voucher::factory()->create([
+            'branch_id' => $branch->id,
+            'distributor_id' => $distributor->id,
+            'status' => \App\Enums\VoucherStatus::ACTIVO,
+            'amount' => 15000.00,
+            'payment_due_date' => now()->addDays(10)->toDateString(),
+            'distributor_profit_amount' => 900.00,
+            'total_debt_amount' => 20200.00,
+            'fortnightly_payment_amount' => 2525.00,
+            'total_fortnights' => 8,
+            'payments_made' => 0,
+            'current_balance' => 20200.00,
+        ]);
+
+        $cutoff = \App\Models\Cutoff::factory()->create(['branch_id' => $branch->id]);
+        $relation = CutoffRelation::query()->create([
+            'cutoff_id' => $cutoff->id,
+            'distributor_id' => $distributor->id,
+            'relation_number' => 'REL-TEST-PARTIAL',
+            'payment_reference' => 'REF-TEST-PARTIAL',
+            'payment_due_date' => now()->addDays(10)->toDateString(),
+            'credit_limit_snapshot' => 30000,
+            'available_credit_snapshot' => 15000,
+            'total_payment' => 2525.00,
+            'total_commission' => 0.00,
+            'total_late_fees' => 0.00,
+            'total_amount_due' => 2525.00,
+            'status' => CutoffRelationStatus::GENERADA,
+            'generated_at' => now(),
+        ]);
+        \App\Models\CutoffRelationItem::query()->create([
+            'cutoff_relation_id' => $relation->id,
+            'voucher_id' => $voucher->id,
+            'customer_id' => $voucher->customer_id,
+            'product_name_snapshot' => 'Producto',
+            'payments_made' => 0,
+            'total_payments' => 8,
+            'is_late_payment' => false,
+            'installment_number' => 1,
+            'accumulated_late_installments' => 0,
+            'commission_amount' => 0.00,
+            'payment_amount' => 2525.00,
+            'late_fee_amount' => 0.00,
+            'line_total_amount' => 2525.00,
+        ]);
+
+        $csv = "fecha,referencia,concepto,importe\n"
+            . now()->subDay()->format('Y-m-d') . ",{$relation->payment_reference},Pago de corte,2525.00";
+
+        $file = UploadedFile::fake()->createWithContent('estado-cuenta.csv', $csv);
+
+        $cashier = User::factory()->create();
+        reconciliationSignIn($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/reconciliations/import", [
+            'file' => $file,
+        ])->assertCreated()->assertJsonPath('data.auto_matched', 1);
+
+        $this->assertDatabaseHas('vouchers', ['id' => $voucher->id, 'status' => 'ACTIVO', 'payments_made' => 1]);
+
+        // 15,000 (disponible antes) + 1,875 (1/8 del principal) = 16,875 -- NO
+        // 30,000, que sería liberar el principal completo de una sola quincena.
+        $this->assertDatabaseHas('distributors', [
+            'id' => $distributor->id,
+            'available_credit' => 16875.00,
+        ]);
+    });
 });

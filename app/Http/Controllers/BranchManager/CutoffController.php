@@ -39,7 +39,7 @@ final class CutoffController extends ApiController
 
     public function show(Request $request, Cutoff $cutoff): JsonResponse
     {
-        $cutoff->load('relations.distributor', 'relations.items');
+        $cutoff->load('relations.distributor.person', 'relations.items.customer.person');
 
         return $this->success(new CutoffResource($cutoff));
     }
@@ -61,6 +61,6 @@ final class CutoffController extends ApiController
             ]
         );
 
-        return $this->created(new CutoffResource($cutoff->load('relations.distributor', 'relations.items')));
+        return $this->created(new CutoffResource($cutoff->load('relations.distributor.person', 'relations.items.customer.person')));
     }
 }

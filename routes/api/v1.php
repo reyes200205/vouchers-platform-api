@@ -24,6 +24,7 @@ use App\Http\Controllers\Coordinator\VoucherController as CoordinatorVoucherCont
 use App\Http\Controllers\Distributor\CustomerController as DistributorCustomerController;
 use App\Http\Controllers\Distributor\CustomerTransferController as DistributorCustomerTransferController;
 use App\Http\Controllers\Distributor\PointController as DistributorPointController;
+use App\Http\Controllers\Distributor\RelationController as DistributorRelationController;
 use App\Http\Controllers\Distributor\VoucherController as DistributorVoucherController;
 use App\Http\Controllers\Employees\EmployeesController;
 use App\Http\Controllers\GeneralManager\ApplicationDecisionController;
@@ -197,6 +198,9 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:cutoffs.manage,branch')->post('/branches/{branch}/cutoffs/generate', [BranchManagerCutoffController::class, 'generate'])->name('cutoffs.generate');
     Route::middleware('business.ability:cutoffs.manage,cutoff')->post('/cutoffs/{cutoff}/reprocess', [GeneralManagerCutoffController::class, 'reprocess'])->name('cutoffs.reprocess');
     Route::middleware('business.ability:cutoffs.manage,cutoff')->post('/cutoffs/{cutoff}/close', [GeneralManagerCutoffController::class, 'close'])->name('cutoffs.close');
+
+    Route::middleware('business.ability:distributor-statements.view')->get('/distributor/relations', [DistributorRelationController::class, 'index'])->name('distributor.relations.index');
+    Route::middleware('business.ability:distributor-statements.view')->get('/distributor/relations/{cutoffRelation}', [DistributorRelationController::class, 'show'])->name('distributor.relations.show');
 
     Route::middleware('business.ability:reconciliations.import,branch')->post('/branches/{branch}/reconciliations/import', [CashierReconciliationController::class, 'import'])->name('reconciliations.import');
     Route::middleware('business.ability:reconciliations.view')->get('/reconciliations/bank-transactions', [CashierReconciliationController::class, 'bankTransactions'])->name('reconciliations.bank-transactions');

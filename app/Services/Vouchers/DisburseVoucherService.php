@@ -30,7 +30,6 @@ final class DisburseVoucherService
         $dueDays = (int) ($branchSetting->payment_due_days ?? 15);
         $frequencyDays = (int) ($branchSetting->payment_frequency_days ?? 14);
 
-<<<<<<< HEAD
         // La primera quincena de un vale recien dispersado SIEMPRE cae en el
         // periodo de corte que sigue al periodo donde se dispersa (nunca en el
         // periodo actual, sin importar que tan temprano en el periodo se pida):
@@ -41,9 +40,6 @@ final class DisburseVoucherService
         $dueDate = $periods->nextPeriodEnd(now(), $branchSetting->cutoff_day);
 
         return DB::transaction(static function () use ($user, $voucher, $data, $dueDays, $frequencyDays, $dueDate): Voucher {
-=======
-        return DB::transaction(static function () use ($user, $voucher, $data, $dueDays, $frequencyDays, $branchSetting): Voucher {
->>>>>>> 50944d4f000b3720198042eb5e900cf47ec69b3a
             if ($voucher->status !== VoucherStatus::APROBADO) {
                 abort(422, 'El vale debe estar aprobado para poder dispersarse.');
             }

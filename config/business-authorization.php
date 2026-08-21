@@ -68,8 +68,15 @@ return [
         'payments.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator', 'distributor'],
         'payments.create' => ['cashier', 'branch_manager', 'general_manager'],
         'payments.reverse' => ['cashier', 'branch_manager', 'general_manager'],
-        'cutoffs.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator', 'distributor'],
+        // 'cutoffs.view' es de sucursal completa (BranchManagerCutoffController no
+        // filtra por distribuidora), así que NO incluye 'distributor' -- si no,
+        // cualquier distribuidora podría ver las relaciones (y datos de clientes)
+        // de las demás distribuidoras de su sucursal. Lo suyo lo ve con
+        // 'distributor-statements.view' (Distributor\RelationController), que
+        // siempre resuelve su propia distribuidora por person_id.
+        'cutoffs.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator'],
         'cutoffs.manage' => ['branch_manager', 'general_manager'],
+        'distributor-statements.view' => ['distributor'],
         'reconciliations.import' => ['cashier', 'general_manager'],
         'reconciliations.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator', 'cashier'],
         'reconciliations.verify' => ['branch_manager', 'general_manager'],

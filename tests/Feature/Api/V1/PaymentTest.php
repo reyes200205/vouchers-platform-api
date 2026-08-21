@@ -41,7 +41,11 @@ function paymentActiveVoucher(Branch $branch, Distributor $distributor, float $b
 }
 
 describe('Customer payments', function (): void {
-    it('records a partial payment, updates the voucher balance and grants points', function (): void {
+    it('records a partial payment as a log entry without touching the voucher balance or points', function (): void {
+        // La única fuente de verdad para el saldo del vale y los puntos de la
+        // distribuidora es el corte (GenerateCutoffService / SettleCutoffRelationService)
+        // — ver el docblock de RecordCustomerPaymentService. Este endpoint solo
+        // deja una bitácora de que la cajera capturó el pago.
         $branch = Branch::factory()->create();
         $category = DistributorCategory::factory()->create(['points_per_1200' => 1]);
         $distributor = Distributor::factory()->create([
@@ -65,44 +69,19 @@ describe('Customer payments', function (): void {
 
         $this->assertDatabaseHas('vouchers', [
             'id' => $voucher->id,
-            'current_balance' => 19775.00,
-            'payments_made' => 1,
-            'status' => 'PAGO_PARCIAL',
+            'current_balance' => 22600.00,
+            'payments_made' => 0,
+            'status' => 'ACTIVO',
         ]);
 
         $payment = CustomerPayment::query()->firstOrFail();
-        $this->assertDatabaseHas('point_movements', [
-            'distributor_id' => $distributor->id,
-            'voucher_id' => $voucher->id,
+        $this->assertDatabaseMissing('point_movements', [
             'customer_payment_id' => $payment->id,
-            'transaction_type' => 'GANADO_PUNTUAL',
-            'points' => 2,
         ]);
 
         $this->assertDatabaseHas('distributors', [
             'id' => $distributor->id,
-            'current_points' => 2,
-        ]);
-    });
-
-    it('marks the voucher as PAGADO when the payment settles the balance', function (): void {
-        $branch = Branch::factory()->create();
-        $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
-        $voucher = paymentActiveVoucher($branch, $distributor, 2825.00);
-
-        $cashier = User::factory()->create();
-        paymentSignInBusinessRole($cashier, 'cashier', $branch);
-
-        $this->postJson('/api/v1/customer-payments', [
-            'voucher_id' => $voucher->id,
-            'amount' => '2825.00',
-        ])->assertCreated()
-            ->assertJsonPath('data.is_partial', false);
-
-        $this->assertDatabaseHas('vouchers', [
-            'id' => $voucher->id,
-            'current_balance' => 0.00,
-            'status' => 'PAGADO',
+            'current_points' => 0,
         ]);
     });
 
@@ -136,13 +115,11 @@ describe('Customer payments', function (): void {
         ])->assertStatus(422);
     });
 
-    it('reverses a payment and restores the voucher balance and points', function (): void {
+    it('reverses a payment log entry without touching the voucher balance or points', function (): void {
         $branch = Branch::factory()->create();
-        $category = DistributorCategory::factory()->create(['points_per_1200' => 1]);
         $distributor = Distributor::factory()->create([
             'branch_id' => $branch->id,
-            'category_id' => $category->id,
-            'current_points' => 2,
+            'current_points' => 0,
         ]);
         $voucher = paymentActiveVoucher($branch, $distributor);
 
@@ -154,22 +131,6 @@ describe('Customer payments', function (): void {
             'amount' => 2825.00,
             'payment_method' => PaymentMethod::EFECTIVO,
             'is_partial' => true,
-        ]);
-
-        \App\Models\PointMovement::query()->create([
-            'distributor_id' => $distributor->id,
-            'voucher_id' => $voucher->id,
-            'customer_payment_id' => $payment->id,
-            'transaction_type' => \App\Enums\PointMovementType::GANADO_PUNTUAL,
-            'points' => 2,
-            'point_value_snapshot' => 2.00,
-            'reason' => 'Pago de cliente registrado.',
-        ]);
-
-        $voucher->update([
-            'payments_made' => 1,
-            'current_balance' => 19775.00,
-            'status' => VoucherStatus::PAGO_PARCIAL,
         ]);
 
         $cashier = User::factory()->create();
@@ -184,13 +145,6 @@ describe('Customer payments', function (): void {
             'id' => $voucher->id,
             'current_balance' => 22600.00,
             'payments_made' => 0,
-        ]);
-
-        $this->assertDatabaseHas('point_movements', [
-            'distributor_id' => $distributor->id,
-            'customer_payment_id' => $payment->id,
-            'transaction_type' => 'REVERSO',
-            'points' => -2,
         ]);
 
         $this->assertDatabaseHas('distributors', [

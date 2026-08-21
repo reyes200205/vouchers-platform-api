@@ -11,7 +11,6 @@ use App\Models\CutoffRelation;
 use App\Models\PointMovement;
 use App\Models\PointSetting;
 use App\Models\Voucher;
-use Illuminate\Support\Carbon;
 
 /**
  * Se ejecuta cuando una CutoffRelation (deuda de una distribuidora con la
@@ -21,10 +20,14 @@ use Illuminate\Support\Carbon;
  * de cliente: eso ya no existe como fuente de verdad.
  *
  * Hace dos cosas, ambas a nivel de la relación (no del cliente):
- *  1. Avanza cada vale detrás de la relación (payments_made/current_balance/
- *     payment_due_date), una vez por cada item de la relación — un vale puede
- *     tener dos items en el mismo corte (su quincena normal + el arrastre de
- *     una quincena atrasada), y en ese caso avanza dos quincenas de una vez.
+ *  1. Registra el pago de cada vale detrás de la relación (payments_made/
+ *     current_balance/status), una vez por cada item de la relación — un
+ *     vale puede tener dos items en el mismo corte (su quincena normal + el
+ *     arrastre de una quincena atrasada), y en ese caso liquida dos
+ *     quincenas de una vez. El calendario del vale (payment_due_date,
+ *     early_payment_start/end_date, installments_billed) NO se toca aquí:
+ *     eso ya avanzó al facturarse en GenerateCutoffService, independientemente
+ *     de si se pagó.
  *  2. Otorga los puntos a la distribuidora (nunca al cliente), aplicando el
  *     -20% (configurable) si la relación llegó a tener multa por atraso, o el
  *     bono por conciliación anticipada si se resolvió dentro de la ventana.
@@ -64,31 +67,44 @@ final class SettleCutoffRelationService
             $remaining = round((float) $voucher->current_balance - $paid, 2);
             $paymentsMade = $voucher->payments_made + 1;
 
-            $branchSetting = $voucher->branch?->branchSetting;
-            $dueDays = (int) ($branchSetting?->payment_due_days ?? 15);
-            $frequencyDays = (int) ($branchSetting?->payment_frequency_days ?? 14);
-            $nextDueDate = Carbon::parse($voucher->payment_due_date ?? now())->addDays($dueDays);
-
             $isSettled = $remaining <= 0.005 || $paymentsMade >= $voucher->total_fortnights;
 
+            // El calendario del vale (payment_due_date, early_payment_start/
+            // end_date, installments_billed) YA avanzó cuando se facturó
+            // esta quincena en GenerateCutoffService — sin importar si se
+            // pagaba a tiempo, atrasada, o se seguía arrastrando. Aquí, al
+            // liquidarse, solo se registra que el pago SÍ llegó: cuántas
+            // quincenas lleva pagadas la distribuidora y cuánto le queda de
+            // saldo.
             $voucher->update([
                 'payments_made' => $paymentsMade,
                 'current_balance' => max($remaining, 0.0),
                 'status' => $isSettled ? VoucherStatus::PAGADO : VoucherStatus::ACTIVO,
-                'payment_due_date' => $nextDueDate->toDateString(),
-                'early_payment_start_date' => $nextDueDate->copy()->subDays($dueDays - 1)->toDateString(),
-                'early_payment_end_date' => $nextDueDate->copy()->subDays($dueDays - $frequencyDays)->toDateString(),
             ]);
 
-            // El crédito disponible de la distribuidora se descontó por el
-            // PRINCIPAL del vale al aprobarlo (ver ApproveVoucherService) -- no
-            // se va liberando quincena a quincena, porque cada pago trae mezclado
-            // interés/seguro/comisión y no hay forma de saber qué parte de eso es
-            // "principal ya recuperado". Se libera completo, de una sola vez,
-            // hasta que el vale termina de pagarse por completo.
+            // El crédito disponible de la distribuidora se descuenta por el
+            // PRINCIPAL del vale al aprobarlo (ver ApproveVoucherService), y se
+            // va liberando en la misma proporción: cada quincena que se liquida
+            // recupera 1/total_fortnights del PRINCIPAL (nunca lo que se pagó
+            // realmente, que trae mezclado interés/seguro/comisión) -- ej. un
+            // vale de $15,000 a 8 quincenas libera $1,875 por cada quincena
+            // pagada, no la quincena completa que cobró la distribuidora. Antes
+            // no se liberaba nada hasta que el vale se terminaba de pagar por
+            // completo, dejando el credito disponible de la distribuidora
+            // bloqueado de mas durante todo el plazo.
+            $principalPerFortnight = round((float) $voucher->amount / $voucher->total_fortnights, 2);
+
             if ($isSettled) {
-                $voucher->distributor()->increment('available_credit', (float) $voucher->amount);
+                // En la ultima quincena se libera lo que falte para sumar
+                // exactamente el principal completo, para no perder ni pasarse
+                // por el redondeo acumulado de las quincenas anteriores.
+                $alreadyReleased = round($principalPerFortnight * ($paymentsMade - 1), 2);
+                $release = round((float) $voucher->amount - $alreadyReleased, 2);
+            } else {
+                $release = $principalPerFortnight;
             }
+
+            $voucher->distributor()->increment('available_credit', $release);
         }
     }
 

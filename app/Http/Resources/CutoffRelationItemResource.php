@@ -36,6 +36,13 @@ final class CutoffRelationItemResource extends JsonResource
             'previous_paid_amount' => $this->previous_paid_amount,
             'origin_cutoff_id' => $this->origin_cutoff_id,
             'origin_relation_id' => $this->origin_relation_id,
+            'customer' => $this->whenLoaded('customer', fn () => $this->customer ? [
+                'id' => $this->customer->id,
+                'customer_code' => $this->customer->customer_code,
+                'person' => $this->customer->relationLoaded('person') && $this->customer->person
+                    ? new PersonResource($this->customer->person)
+                    : null,
+            ] : null),
         ];
     }
 }

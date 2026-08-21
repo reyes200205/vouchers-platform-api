@@ -38,6 +38,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'fortnightly_payment_amount',
     'total_fortnights',
     'payments_made',
+    'installments_billed',
     'current_balance',
     'transfer_reference',
     'authorized_number',

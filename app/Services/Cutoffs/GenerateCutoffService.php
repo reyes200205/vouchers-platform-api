@@ -50,6 +50,32 @@ final class GenerateCutoffService
             abort(422, 'El periodo final no puede ser anterior al periodo inicial.');
         }
 
+        // Los periodos de una sucursal tienen que ser consecutivos, sin huecos ni
+        // traslapes: si se salta un periodo (ej. genera directo el corte de
+        // "dentro de dos quincenas" sin generar antes el de la quincena
+        // intermedia), el arrastre de un corte vencido termina pegado al
+        // siguiente corte que sí se generó -- el que sea, sin importar que tan
+        // lejos esté -- y tanto el adeudo como el atraso aparecen ahí, en vez de
+        // en el periodo que en realidad seguía. Forzar periodos consecutivos
+        // evita esa clase de bug de raíz.
+        $lastCutoff = Cutoff::query()
+            ->where('branch_id', $branch->id)
+            ->orderByDesc('scheduled_at')
+            ->first();
+
+        if ($lastCutoff !== null) {
+            $lastPeriodEnd = Carbon::parse($lastCutoff->scheduled_at)->startOfDay();
+            $expectedStart = $lastPeriodEnd->copy()->addDay();
+
+            if (! $periodStart->isSameDay($expectedStart)) {
+                abort(422, sprintf(
+                    'El periodo debe iniciar el %s, justo el día después de que terminó el corte anterior (%s). No se pueden saltar ni traslapar periodos.',
+                    $expectedStart->toDateString(),
+                    $lastPeriodEnd->toDateString(),
+                ));
+            }
+        }
+
         return DB::transaction(function () use ($branch, $periodStart, $periodEnd): Cutoff {
             $cutoff = Cutoff::query()->create([
                 'branch_id' => $branch->id,
@@ -111,9 +137,14 @@ final class GenerateCutoffService
             return;
         }
 
-        // Los dias limite para que la distribuidora liquide el corte los define
-        // la sucursal (branch_settings.payment_due_days/payment_frequency_days),
-        // igual que para las quincenas de cada vale — nunca un numero fijo aqui.
+        // payment_due_days ("dias de gracia") ya NO se le suma a la fecha limite
+        // de pago de la relacion: la distribuidora debe liquidar el corte para
+        // el mismo dia/hora en que cierra su periodo (periodEnd), sin dias
+        // extra — no era parte de la especificacion del proyecto, solo se
+        // habia asumido asi. payment_due_days se sigue usando abajo, pero
+        // solo para calcular la ventana de "pago anticipado" del calendario
+        // de cada VALE (ver DisburseVoucherService/ApproveVoucherService),
+        // que es un concepto aparte del vencimiento del corte.
         $dueDays = (int) ($cutoff->branch->branchSetting?->payment_due_days ?? 15);
         $frequencyDays = (int) ($cutoff->branch->branchSetting?->payment_frequency_days ?? 14);
 
@@ -123,9 +154,12 @@ final class GenerateCutoffService
             'previous_relation_id' => $previousRelation?->id,
             'relation_number' => 'REL-'.$cutoff->id.'-'.$distributor->id,
             'payment_reference' => 'REF-'.mb_strtoupper(mb_substr(md5(uniqid((string) $distributor->id, true)), 0, 10)),
-            'payment_due_date' => $periodEnd->copy()->addDays($dueDays)->toDateString(),
-            'early_payment_start_date' => $periodEnd->copy()->addDay()->toDateString(),
-            'early_payment_end_date' => $periodEnd->copy()->addDays($frequencyDays)->toDateString(),
+            'payment_due_date' => $periodEnd->toDateString(),
+            // El "periodo" que se le muestra a la distribuidora para esta
+            // relacion es el mismo periodo del corte (periodStart-periodEnd),
+            // no una ventana aparte despues del cierre.
+            'early_payment_start_date' => $periodStart->toDateString(),
+            'early_payment_end_date' => $periodEnd->toDateString(),
             'credit_limit_snapshot' => $distributor->credit_limit,
             'available_credit_snapshot' => $distributor->available_credit,
             'points_snapshot' => $distributor->current_points,
@@ -135,10 +169,20 @@ final class GenerateCutoffService
 
         $totalPayment = 0.0;
         $totalCommission = 0.0;
+        $totalLineAmount = 0.0;
 
         foreach ($vouchers as $voucher) {
             $paymentAmount = round((float) $voucher->fortnightly_payment_amount, 2);
-            $commission = $this->calculateDistributorCommission($voucher, $paymentAmount);
+            $commission = $this->calculateDistributorCommission($voucher);
+            $lineTotal = $this->calculateNetRemit($voucher, $commission);
+
+            // El numero de quincena viene de installments_billed (cuantas
+            // quincenas ya se le FACTURARON a este vale), no de payments_made
+            // (cuantas ya se LIQUIDARON). Si se usara payments_made, un vale
+            // que nunca se paga se quedaria facturando "quincena 1" para
+            // siempre, porque payments_made nunca avanza sin un pago — el
+            // calendario de facturacion no debe esperar a que paguen.
+            $installmentNumber = $voucher->installments_billed + 1;
 
             CutoffRelationItem::query()->create([
                 'cutoff_relation_id' => $relation->id,
@@ -148,33 +192,57 @@ final class GenerateCutoffService
                 'payments_made' => $voucher->payments_made,
                 'total_payments' => $voucher->total_fortnights,
                 'is_late_payment' => false,
-                'installment_number' => $voucher->payments_made + 1,
+                'installment_number' => $installmentNumber,
                 'accumulated_late_installments' => 0,
                 // payment_amount es la quincena COMPLETA que la distribuidora ya le
                 // cobró al cliente (incluye su comisión de categoría — ver
                 // FinancialCalculationService, ya no se descuenta ahí). Aquí, en el
                 // corte de relación, sí se descuenta: la distribuidora no le va a
                 // pagar su propia comisión a la sucursal, se la queda como
-                // ganancia. Por eso line_total_amount = payment_amount - commission.
-                // Si no paga a tiempo, MarkOverdueRelationsService le suma de vuelta
-                // esa comisión (ya no gana nada) más la multa.
+                // ganancia. line_total_amount (ver calculateNetRemit) NO sale de
+                // restarle commission a este payment_amount ya redondeado -- se
+                // calcula aparte, sobre el total exacto sin redondear, porque
+                // payment_amount ya perdió sus centavos al piso-earse para el
+                // cobro del cliente y restarle ahí la comisión desfasaría el
+                // remanente. Si no paga a tiempo, MarkOverdueRelationsService le
+                // suma de vuelta esa comisión (ya no gana nada) más la multa.
                 'commission_amount' => $commission,
                 'payment_amount' => $paymentAmount,
                 'late_fee_amount' => 0.00,
-                'line_total_amount' => round($paymentAmount - $commission, 2),
+                'line_total_amount' => $lineTotal,
+            ]);
+
+            // Se factura esta quincena: el vale avanza su calendario (siguiente
+            // quincena programada) YA, sin importar si esta se llega a pagar o
+            // no — eso se resuelve despues (a tiempo, atrasada, o arrastrada).
+            // Antes esto se hacia en SettleCutoffRelationService, solo cuando
+            // se pagaba; asi, un vale nunca pagado jamas volvia a "vencer" su
+            // siguiente quincena y quedaba facturandose la misma una y otra
+            // vez cada corte (el bug que reporto el usuario: "no aumentan las
+            // quincenas").
+            $nextDueDate = Carbon::parse($voucher->payment_due_date)->addDays($frequencyDays);
+
+            $voucher->update([
+                'installments_billed' => $installmentNumber,
+                'payment_due_date' => $nextDueDate->toDateString(),
+                'early_payment_start_date' => $nextDueDate->copy()->subDays($dueDays - 1)->toDateString(),
+                'early_payment_end_date' => $nextDueDate->copy()->subDays($dueDays - $frequencyDays)->toDateString(),
             ]);
 
             $totalPayment += $paymentAmount;
             $totalCommission += $commission;
+            $totalLineAmount += $lineTotal;
         }
 
         $carryover = 0.0;
+        $carriedLateFees = 0.0;
 
         if ($previousRelation !== null) {
             $unpaidItems = $previousRelation->items()->get();
 
             foreach ($unpaidItems as $item) {
                 $carryover += (float) $item->line_total_amount;
+                $carriedLateFees += (float) $item->late_fee_amount;
 
                 CutoffRelationItem::query()->create([
                     'cutoff_relation_id' => $relation->id,
@@ -183,12 +251,24 @@ final class GenerateCutoffService
                     'product_name_snapshot' => $item->product_name_snapshot,
                     'payments_made' => $item->payments_made,
                     'total_payments' => $item->total_payments,
-                    'is_late_payment' => false,
+                    // Un item de arrastre SIEMPRE es una quincena que ya se venció sin
+                    // pagarse (por eso existe como arrastre) -- antes esto se ponia en
+                    // false a la fuerza, y la UI (badge "A tiempo"/"Atrasado") terminaba
+                    // mostrando como "a tiempo" una deuda que en realidad ya viene con
+                    // multa. Se hereda el flag real del item original (o se deriva de si
+                    // trae multa, por si algun dato viejo no lo tuviera marcado).
+                    'is_late_payment' => $item->is_late_payment || (float) $item->late_fee_amount > 0,
                     'installment_number' => $item->installment_number,
                     'accumulated_late_installments' => $item->accumulated_late_installments,
                     'commission_amount' => 0.00,
                     'payment_amount' => $item->line_total_amount,
-                    'late_fee_amount' => 0.00,
+                    // La multa NO se resetea a 0 aquí: payment_amount/line_total_amount
+                    // ya incluyen la multa que se le sumó cuando la relación
+                    // anterior se venció (MarkOverdueRelationsService) -- si
+                    // aquí se pusiera en 0, la columna "Recargo" (y el total
+                    // de recargos de la relación) dejarían de reflejar esa
+                    // multa ya cobrada, aunque siga incluida en el monto.
+                    'late_fee_amount' => $item->late_fee_amount,
                     'line_total_amount' => $item->line_total_amount,
                     'previous_paid_amount' => 0.00,
                     'origin_cutoff_id' => $item->origin_cutoff_id ?? $previousRelation->cutoff_id,
@@ -205,37 +285,74 @@ final class GenerateCutoffService
         $relation->update([
             'total_payment' => round($totalPayment, 2),
             'total_commission' => round($totalCommission, 2),
-            'total_late_fees' => 0.00,
+            // Las quincenas normales de este corte nunca traen multa (eso se
+            // decide despues, si la relacion se vence) -- lo unico que puede
+            // traer multa aqui es un arrastre de una relacion anterior que ya
+            // se vencio, y se preserva arriba en vez de resetearse a 0.
+            'total_late_fees' => round($carriedLateFees, 2),
             'total_carryover_received' => round($carryover, 2),
-            // Lo que la distribuidora debe remitir: la suma de sus quincenas
-            // completas menos su comisión total (se la queda) más el arrastre de
-            // periodos anteriores sin pagar (que ya viene neto, ver abajo).
-            'total_amount_due' => round($totalPayment - $totalCommission + $carryover, 2),
+            // Lo que la distribuidora debe remitir: la suma de lo que le toca
+            // remitir por cada vale (ya neto de su comisión, ver
+            // calculateNetRemit — NO totalPayment - totalCommission, que
+            // desfasaría los centavos que ya se perdieron al redondear
+            // payment_amount al piso para el cobro del cliente) más el
+            // arrastre de periodos anteriores sin pagar (que ya viene neto).
+            'total_amount_due' => round($totalLineAmount + $carryover, 2),
         ]);
     }
 
     /**
-     * Utilidad de la distribuidora sobre un pago del corte.
+     * Utilidad de la distribuidora sobre la quincena normal de un vale.
      *
      * La utilidad total del vale (`distributor_profit_amount`) se cotiza sobre el
      * PRINCIPAL, no sobre el total a pagar (que ya incluye comisión de apertura,
      * seguro e interés) — ver `FinancialCalculationService::calculateVoucherSnapshot()`.
-     * Por eso aquí no se vuelve a multiplicar `distributor_profit_percentage_snapshot`
-     * contra el pago del periodo (eso duplicaría el % sobre conceptos que no
-     * generan utilidad para la distribuidora e infla lo que se queda). En vez de
-     * eso, se reparte la utilidad total proporcionalmente a qué fracción de la
-     * deuda total representa este pago: si el pago es exactamente una quincena,
-     * el resultado es idéntico a `distributor_profit_amount / total_fortnights`.
+     * Se reparte en partes iguales entre las quincenas (distributor_profit_amount /
+     * total_fortnights): esta funcion solo se llama para la quincena normal de este
+     * periodo (nunca para un arrastre, que siempre se genera con comision 0 — ver
+     * el loop de carryover, abajo), asi que siempre es exactamente una quincena.
+     *
+     * Antes se repartia proporcionalmente a que fraccion de la deuda total
+     * representaba el pago (`profitTotal * paymentAmount / totalDebt`), pero
+     * payment_amount ya viene redondeado al piso para el cobro del cliente
+     * (FinancialCalculationService), asi que esa proporcion nunca daba
+     * exactamente 1/N y la comision salia con centavos de mas o de menos
+     * (ej. $112.48 en vez de $112.50 sobre 8 quincenas). Repartir en partes
+     * iguales evita ese problema.
      */
-    private function calculateDistributorCommission(Voucher $voucher, float $paymentAmount): float
+    private function calculateDistributorCommission(Voucher $voucher): float
     {
-        $totalDebt = (float) $voucher->total_debt_amount;
         $profitTotal = (float) $voucher->distributor_profit_amount;
+        $fortnights = $voucher->total_fortnights;
 
-        if ($totalDebt <= 0 || $profitTotal <= 0) {
+        if ($profitTotal <= 0 || $fortnights <= 0) {
             return 0.0;
         }
 
-        return round($profitTotal * ($paymentAmount / $totalDebt), 2);
+        return round($profitTotal / $fortnights, 2);
+    }
+
+    /**
+     * Lo que la distribuidora debe remitir a la sucursal por la quincena
+     * normal de un vale: la quincena completa (sin redondear al piso) menos
+     * su comisión, redondeado al piso al final — igual que
+     * FinancialCalculationService redondea el cobro al cliente al final, no
+     * antes. No se parte de `payment_amount` (que ya viene redondeado al
+     * piso para el cliente) porque restarle la comisión ahí perdería el
+     * mismo centavo dos veces (una vez al redondear el cobro del cliente, y
+     * otra vez al restar la comisión) y el remanente saldría descuadrado
+     * (ej. $2,424.52 en vez de $2,425.00).
+     */
+    private function calculateNetRemit(Voucher $voucher, float $commission): float
+    {
+        $fortnights = $voucher->total_fortnights;
+
+        if ($fortnights <= 0) {
+            return 0.0;
+        }
+
+        $grossPerFortnight = ((float) $voucher->total_debt_amount) / $fortnights;
+
+        return floor($grossPerFortnight - $commission);
     }
 }

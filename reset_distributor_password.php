@@ -1,9 +1,9 @@
 <?php
 
-$u = \App\Models\User::where('username', 'mayraalvarado')->first();
+$u = \App\Models\User::where('username', 'misanitariotrejo')->first();
 
 if (! $u) {
-    echo "No se encontro el usuario mayraalvarado\n";
+    echo "No se encontro el usuario misanitariotrejo\n";
 } else {
     $u->password_hash = \Illuminate\Support\Facades\Hash::make('password');
     $u->is_active = true;

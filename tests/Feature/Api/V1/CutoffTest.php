@@ -312,6 +312,11 @@ describe('Cutoffs', function (): void {
     });
 
     it('closes a cutoff manually, marking unpaid relations as VENCIDA even before their due date', function (): void {
+        // payment_due_date de la relacion ya no lleva dias de gracia sumados:
+        // es exactamente el period_end del corte (ver GenerateCutoffService).
+        // Para que quede en el futuro (y probar que el cierre manual la
+        // vence de todos modos, sin esperar a esa fecha), el corte tiene que
+        // generarse con un period_end futuro.
         $branch = Branch::factory()->create();
         $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
         cutoffVoucher($branch, $distributor, now()->addDays(5)->toDateString(), 300.00);
@@ -320,8 +325,8 @@ describe('Cutoffs', function (): void {
         cutoffSignInBusinessRole($manager, 'branch_manager', $branch);
 
         $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
-            'period_start' => now()->subDays(15)->toDateString(),
-            'period_end' => now()->toDateString(),
+            'period_start' => now()->toDateString(),
+            'period_end' => now()->addDays(5)->toDateString(),
         ])->assertCreated();
 
         $cutoff = Cutoff::query()->firstOrFail();

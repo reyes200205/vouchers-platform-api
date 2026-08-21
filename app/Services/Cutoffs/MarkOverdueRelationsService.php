@@ -60,6 +60,7 @@ final class MarkOverdueRelationsService
     {
         $items = $relation->items()->get();
         $totalLateFees = 0.0;
+        $totalAmountDue = 0.0;
 
         foreach ($items as $item) {
             $voucher = $item->voucher_id !== null ? Voucher::query()->find($item->voucher_id) : null;
@@ -70,6 +71,29 @@ final class MarkOverdueRelationsService
             // configuración actual de la sucursal ni del producto en vivo.
             $lateFee = round((float) ($voucher?->late_fee_amount_snapshot ?? 0.0), 2);
 
+            // Un item de arrastre (origin_relation_id no nulo) ya trae en
+            // payment_amount el monto exacto que se le debe a la sucursal de
+            // un periodo anterior -- no viene de redondear una quincena, así
+            // que aquí sí se suma la multa directo sobre eso.
+            //
+            // Un item de la quincena normal (sin origin) SÍ viene de
+            // payment_amount ya redondeado al piso para el cobro del cliente
+            // (FinancialCalculationService) -- sumarle la multa ahí perdería
+            // los mismos centavos otra vez. Por eso la multa se suma sobre el
+            // total exacto del vale sin redondear (total_debt_amount /
+            // total_fortnights), igual que GenerateCutoffService::calculateNetRemit
+            // hace para el pago a tiempo, y el resultado se redondea al piso
+            // al peso entero al final (regla de negocio: siempre floor, nunca
+            // deja centavos) -- no round().
+            $isCarryover = $item->origin_relation_id !== null;
+
+            if (! $isCarryover && $voucher !== null && $voucher->total_fortnights > 0) {
+                $grossPerFortnight = ((float) $voucher->total_debt_amount) / $voucher->total_fortnights;
+                $lineTotal = floor($grossPerFortnight + $lateFee);
+            } else {
+                $lineTotal = floor((float) $item->payment_amount + $lateFee);
+            }
+
             // payment_amount ya es la quincena COMPLETA (con la comisión de la
             // distribuidora incluida — ver FinancialCalculationService), así que no
             // hay que volver a sumarle la comisión aquí: nada más se pone la
@@ -78,10 +102,11 @@ final class MarkOverdueRelationsService
                 'is_late_payment' => true,
                 'commission_amount' => 0.00,
                 'late_fee_amount' => $lateFee,
-                'line_total_amount' => round((float) $item->payment_amount + $lateFee, 2),
+                'line_total_amount' => $lineTotal,
             ]);
 
             $totalLateFees += $lateFee;
+            $totalAmountDue += $lineTotal;
 
             if ($voucher !== null && ! in_array($voucher->status, [
                 VoucherStatus::PAGADO,
@@ -93,18 +118,15 @@ final class MarkOverdueRelationsService
             }
         }
 
-        // Igual que por item: total_payment ya es la suma de las quincenas
-        // completas (con comisión incluida), así que total_amount_due no debe
-        // volver a sumar la comisión — solo se pone en 0 (ya no se la queda) y se
-        // agrega la multa total.
+        // total_amount_due es la suma de line_total_amount de cada item (ya
+        // recalculados arriba), no total_payment + multa + arrastre por
+        // separado -- esos agregados se quedarían con el mismo desfase de
+        // centavos que el item por item ya corrige.
         $relation->update([
             'status' => CutoffRelationStatus::VENCIDA,
             'total_late_fees' => round($totalLateFees, 2),
             'total_commission' => 0.00,
-            'total_amount_due' => round(
-                (float) $relation->total_payment + $totalLateFees + (float) $relation->total_carryover_received,
-                2
-            ),
+            'total_amount_due' => round($totalAmountDue, 2),
         ]);
     }
 }
