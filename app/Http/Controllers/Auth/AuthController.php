@@ -5,14 +5,18 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Auth;
 
 use App\Enums\LoginChannel;
+use App\Enums\OtpVerificationResult;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Auth\ChangePasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Auth\ResendMfaRequest;
+use App\Http\Requests\Auth\VerifyMfaRequest;
 use App\Http\Resources\UserResource;
 use App\Models\BranchSetting;
 use App\Models\DistributorActivation;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
+use App\Services\Auth\MfaChallengeStore;
 use App\Services\Financial\FinancialCalculationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -21,7 +25,7 @@ use Laravel\Sanctum\PersonalAccessToken;
 
 final class AuthController extends ApiController
 {
-    public function login(LoginRequest $request, AuditLogger $audit, FinancialCalculationService $financial): JsonResponse
+    public function login(LoginRequest $request, AuditLogger $audit, FinancialCalculationService $financial, MfaChallengeStore $challenges): JsonResponse
     {
         $user = User::query()
             ->with(['person', 'businessRoles', 'distributor.category'])
@@ -35,24 +39,70 @@ final class AuthController extends ApiController
             return $this->unauthorized('Invalid credentials');
         }
 
-        $user->update([
-            'login_channel' => $request->channel ?? LoginChannel::WEB->value,
-            'last_login_at' => now(),
-        ]);
+        if ($user->requiresOtp()) {
+            $challengeId = $challenges->create($user->id, $request->channel);
+            $user->sendOneTimePassword();
 
-        $token = $user->createToken('auth-token')->plainTextToken;
+            // AuditLogger lee el actor desde $request->user(); el usuario aun no
+            // tiene token, asi que lo forzamos temporalmente para poder auditar.
+            auth()->setUser($user);
+            $audit->record($request, 'MFA_CHALLENGE_SENT', 'auth', 'Codigo OTP enviado para segundo factor de autenticacion.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
 
-        // AuditLogger lee el actor desde $request->user(), que aun no esta resuelto
-        // en esta request publica (el token recien se emitio arriba).
+            return $this->success([
+                'requires_otp' => true,
+                'challenge_id' => $challengeId,
+                'masked_email' => self::maskEmail($user->person?->email),
+            ], 'OTP verification required');
+        }
+
+        return $this->finishLogin($user, $request, $audit, $financial, $request->channel);
+    }
+
+    public function verifyMfa(VerifyMfaRequest $request, AuditLogger $audit, FinancialCalculationService $financial, MfaChallengeStore $challenges): JsonResponse
+    {
+        $challenge = $challenges->get($request->challenge_id);
+
+        if ($challenge === null) {
+            return $this->unauthorized('Challenge expired or invalid. Please log in again.');
+        }
+
+        $user = User::query()
+            ->with(['person', 'businessRoles', 'distributor.category'])
+            ->findOrFail($challenge['user_id']);
+
         auth()->setUser($user);
-        $audit->record($request, 'LOGIN', 'auth', 'Inicio de sesion exitoso.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
+        $result = $user->consumeOneTimePassword($request->code);
 
-        $this->attachPreValeMaxAmount($user, $financial);
+        if (! $result->isOk()) {
+            $audit->record($request, 'MFA_FAILED', 'auth', 'Intento fallido de verificacion OTP: '.$result->value.'.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id, 'reason' => $result->value]);
+
+            return $this->error($this->mfaErrorMessage($result), 422);
+        }
+
+        $challenges->forget($request->challenge_id);
+
+        $audit->record($request, 'MFA_VERIFIED', 'auth', 'Segundo factor verificado exitosamente.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
+
+        return $this->finishLogin($user, $request, $audit, $financial, $challenge['channel']);
+    }
+
+    public function resendMfa(ResendMfaRequest $request, AuditLogger $audit, MfaChallengeStore $challenges): JsonResponse
+    {
+        $challenge = $challenges->get($request->challenge_id);
+
+        if ($challenge === null) {
+            return $this->unauthorized('Challenge expired or invalid. Please log in again.');
+        }
+
+        $user = User::query()->with('person')->findOrFail($challenge['user_id']);
+        $user->sendOneTimePassword();
+
+        auth()->setUser($user);
+        $audit->record($request, 'MFA_CHALLENGE_RESENT', 'auth', 'Reenvio de codigo OTP.', null, ['user_id' => $user->id]);
 
         return $this->success([
-            'user' => new UserResource($user),
-            'token' => $token,
-        ], 'Login successful');
+            'masked_email' => self::maskEmail($user->person?->email),
+        ], 'A new OTP code was sent');
     }
 
     public function logout(Request $request, AuditLogger $audit): JsonResponse
@@ -78,6 +128,75 @@ final class AuthController extends ApiController
         $this->attachPreValeMaxAmount($user, $financial);
 
         return $this->success(new UserResource($user));
+    }
+
+    public function changePassword(ChangePasswordRequest $request, AuditLogger $audit): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        if (! Hash::check($request->current_password, $user->getAuthPassword())) {
+            return $this->error('Current password is incorrect', 422);
+        }
+
+        $user->update(['password_hash' => Hash::make($request->password)]);
+
+        // Si la contrasena actual provenia de una activacion de distribuidora
+        // pendiente, este cambio la marca como completada.
+        DistributorActivation::query()
+            ->where('user_id', $user->id)
+            ->whereNull('used_at')
+            ->update(['used_at' => now()]);
+
+        $audit->record($request, 'PASSWORD_CHANGED', 'auth', 'Cambio de contrasena por el propio usuario.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
+
+        return $this->success(message: 'Password changed successfully');
+    }
+
+    private static function maskEmail(?string $email): ?string
+    {
+        if ($email === null || ! str_contains($email, '@')) {
+            return null;
+        }
+
+        [$local, $domain] = explode('@', $email, 2);
+
+        return mb_substr($local, 0, 3).'***@'.$domain;
+    }
+
+    /**
+     * Cola compartida del login: emite el token, marca canal/ultimo acceso,
+     * audita y responde. La usan tanto el login directo (roles sin OTP)
+     * como verifyMfa() tras un codigo correcto.
+     */
+    private function finishLogin(User $user, Request $request, AuditLogger $audit, FinancialCalculationService $financial, ?string $channel): JsonResponse
+    {
+        $user->update([
+            'login_channel' => $channel ?? LoginChannel::WEB->value,
+            'last_login_at' => now(),
+        ]);
+
+        $token = $user->createToken('auth-token')->plainTextToken;
+
+        auth()->setUser($user);
+        $audit->record($request, 'LOGIN', 'auth', 'Inicio de sesion exitoso.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
+
+        $this->attachPreValeMaxAmount($user, $financial);
+
+        return $this->success([
+            'user' => new UserResource($user),
+            'token' => $token,
+        ], 'Login successful');
+    }
+
+    private function mfaErrorMessage(OtpVerificationResult $result): string
+    {
+        return match ($result) {
+            OtpVerificationResult::EXPIRED => 'The verification code has expired.',
+            OtpVerificationResult::RATE_LIMITED => 'Too many incorrect attempts. Please request a new code.',
+            OtpVerificationResult::NOT_FOUND, OtpVerificationResult::INCORRECT => 'The verification code is incorrect.',
+            OtpVerificationResult::OK => 'OK',
+        };
     }
 
     /**
@@ -111,28 +230,5 @@ final class AuthController extends ApiController
         );
 
         $distributor->setAttribute('pre_vale_max_amount', $result->ruleApplied ? $result->maxAllowedAmount : null);
-    }
-
-    public function changePassword(ChangePasswordRequest $request, AuditLogger $audit): JsonResponse
-    {
-        /** @var User $user */
-        $user = $request->user();
-
-        if (! Hash::check($request->current_password, $user->getAuthPassword())) {
-            return $this->error('Current password is incorrect', 422);
-        }
-
-        $user->update(['password_hash' => Hash::make($request->password)]);
-
-        // Si la contrasena actual provenia de una activacion de distribuidora
-        // pendiente, este cambio la marca como completada.
-        DistributorActivation::query()
-            ->where('user_id', $user->id)
-            ->whereNull('used_at')
-            ->update(['used_at' => now()]);
-
-        $audit->record($request, 'PASSWORD_CHANGED', 'auth', 'Cambio de contrasena por el propio usuario.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
-
-        return $this->success(message: 'Password changed successfully');
     }
 }

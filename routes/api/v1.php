@@ -248,6 +248,8 @@ Route::prefix('auth')->group(function (): void {
     // Public routes (5/min - brute force protection)
     Route::middleware('throttle:auth')->group(function (): void {
         Route::post('login', [AuthController::class, 'login'])->name('api.v1.login');
+        Route::post('mfa/verify', [AuthController::class, 'verifyMfa'])->name('api.v1.mfa.verify');
+        Route::post('mfa/resend', [AuthController::class, 'resendMfa'])->name('api.v1.mfa.resend');
     });
 
     // Protected routes with authenticated rate limiter (120/min)

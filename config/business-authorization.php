@@ -5,6 +5,11 @@ declare(strict_types=1);
 return [
     'global_role_codes' => ['super-admin', 'general_manager'],
 
+    // Roles que deben verificar un codigo OTP por correo (segundo factor)
+    // ademas de su contrasena para poder iniciar sesion. Ver
+    // AuthController::login()/verifyMfa() y User::requiresOtp().
+    'otp_required_role_codes' => ['super-admin'],
+
     'abilities' => [
         'audit-logs.view' => ['super-admin'],
         'platform.view' => ['general_manager'],
