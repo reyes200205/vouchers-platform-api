@@ -28,6 +28,7 @@ use App\Http\Controllers\Distributor\PointController as DistributorPointControll
 use App\Http\Controllers\Distributor\RelationController as DistributorRelationController;
 use App\Http\Controllers\Distributor\VoucherController as DistributorVoucherController;
 use App\Http\Controllers\Employees\EmployeesController;
+use App\Http\Middleware\ForceJsonResponse;
 use App\Http\Controllers\GeneralManager\ApplicationDecisionController;
 use App\Http\Controllers\GeneralManager\BranchController;
 use App\Http\Controllers\GeneralManager\CreditIncreaseController as GeneralManagerCreditIncreaseController;
@@ -210,6 +211,14 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
 
     Route::middleware('business.ability:distributor-statements.view')->get('/distributor/relations', [DistributorRelationController::class, 'index'])->name('distributor.relations.index');
     Route::middleware('business.ability:distributor-statements.view')->get('/distributor/relations/{cutoffRelation}', [DistributorRelationController::class, 'show'])->name('distributor.relations.show');
+    // El PDF es contenido binario, no JSON: ForceJsonResponse intenta
+    // json_encode() cualquier respuesta que no sea JsonResponse y truena con
+    // "Malformed UTF-8 characters" al toparse con los bytes del PDF -- esta
+    // ruta necesita salirse de ese middleware global (ver bootstrap/app.php).
+    Route::withoutMiddleware(ForceJsonResponse::class)
+        ->middleware('business.ability:distributor-statements.view')
+        ->get('/distributor/relations/{cutoffRelation}/pdf', [DistributorRelationController::class, 'pdf'])
+        ->name('distributor.relations.pdf');
 
     Route::middleware('business.ability:reconciliations.import,branch')->post('/branches/{branch}/reconciliations/import', [CashierReconciliationController::class, 'import'])->name('reconciliations.import');
     Route::middleware('business.ability:reconciliations.view')->get('/reconciliations/bank-transactions', [CashierReconciliationController::class, 'bankTransactions'])->name('reconciliations.bank-transactions');
