@@ -124,6 +124,69 @@ describe('Login', function (): void {
 
         $response->assertStatus(401);
     });
+
+    it('fails login if turnstile is enabled but token is missing', function (): void {
+        config(['services.turnstile.enabled' => true]);
+
+        $user = User::factory()->create([
+            'password_hash' => bcrypt('password123'),
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'username' => $user->username,
+            'password' => 'password123',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('cf-turnstile-response');
+    });
+
+    it('fails login if turnstile is enabled but token verification fails', function (): void {
+        config(['services.turnstile.enabled' => true]);
+        config(['services.turnstile.secret_key' => 'fake-secret']);
+
+        \Illuminate\Support\Facades\Http::fake([
+            'challenges.cloudflare.com/turnstile/v0/siteverify' => \Illuminate\Support\Facades\Http::response([
+                'success' => false,
+            ], 200),
+        ]);
+
+        $user = User::factory()->create([
+            'password_hash' => bcrypt('password123'),
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'username' => $user->username,
+            'password' => 'password123',
+            'cf-turnstile-response' => 'invalid-token',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('cf-turnstile-response');
+    });
+
+    it('logs in successfully if turnstile is enabled and token verification passes', function (): void {
+        config(['services.turnstile.enabled' => true]);
+        config(['services.turnstile.secret_key' => 'fake-secret']);
+
+        \Illuminate\Support\Facades\Http::fake([
+            'challenges.cloudflare.com/turnstile/v0/siteverify' => \Illuminate\Support\Facades\Http::response([
+                'success' => true,
+            ], 200),
+        ]);
+
+        $user = User::factory()->create([
+            'password_hash' => bcrypt('password123'),
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'username' => $user->username,
+            'password' => 'password123',
+            'cf-turnstile-response' => 'valid-token',
+        ]);
+
+        $response->assertStatus(200);
+    });
 });
 
 describe('Logout', function (): void {
