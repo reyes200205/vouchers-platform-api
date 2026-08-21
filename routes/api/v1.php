@@ -15,6 +15,7 @@ use App\Http\Controllers\Cashier\ReconciliationController as CashierReconciliati
 use App\Http\Controllers\Cashier\VoucherController as CashierVoucherController;
 use App\Http\Controllers\Checker\VerificadorController;
 use App\Http\Controllers\Checker\VerificationPhotoController;
+use App\Http\Controllers\Coordinator\ApplicationDocumentController;
 use App\Http\Controllers\Coordinator\CoordinadorController;
 use App\Http\Controllers\Coordinator\CreditIncreaseController as CoordinatorCreditIncreaseController;
 use App\Http\Controllers\Coordinator\CustomerController;
@@ -28,7 +29,6 @@ use App\Http\Controllers\Distributor\PointController as DistributorPointControll
 use App\Http\Controllers\Distributor\RelationController as DistributorRelationController;
 use App\Http\Controllers\Distributor\VoucherController as DistributorVoucherController;
 use App\Http\Controllers\Employees\EmployeesController;
-use App\Http\Middleware\ForceJsonResponse;
 use App\Http\Controllers\GeneralManager\ApplicationDecisionController;
 use App\Http\Controllers\GeneralManager\BranchController;
 use App\Http\Controllers\GeneralManager\CreditIncreaseController as GeneralManagerCreditIncreaseController;
@@ -45,6 +45,7 @@ use App\Http\Controllers\Staff\StaffController;
 use App\Http\Controllers\System\AuditLogController;
 use App\Http\Controllers\System\RolesController;
 use App\Http\Controllers\System\SpacesTestController;
+use App\Http\Middleware\ForceJsonResponse;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -152,6 +153,7 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:applications.view')->get('/applications', [CoordinadorController::class, 'index'])->name('applications.index');
     Route::middleware('business.ability:applications.view,application')->get('/applications/{application}', [CoordinadorController::class, 'show'])->name('applications.show');
     Route::post('/applications', [CoordinadorController::class, 'store'])->name('applications.store');
+    Route::post('/applications/documents', [ApplicationDocumentController::class, 'store'])->name('applications.documents.store');
     Route::middleware('business.ability:applications.assign-verifier,application')->patch('/applications/{application}/verifier', [CoordinadorController::class, 'assignVerifier'])->name('applications.assign-verifier');
     Route::middleware('business.ability:applications.verify,application')->post('/applications/{application}/verification', [VerificadorController::class, 'verify'])->name('applications.verify');
     Route::middleware('business.ability:applications.verify,application')->post('/applications/{application}/verification-photos', [VerificationPhotoController::class, 'store'])->name('applications.verification-photos.store');
