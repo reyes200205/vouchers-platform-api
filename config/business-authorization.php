@@ -43,6 +43,9 @@ return [
         'applications.verify' => ['verifier'],
         'applications.decide' => ['general_manager', 'branch_manager'],
         'distributors.manage' => ['general_manager'],
+        // Para elegir una distribuidora al pedir un aumento de linea de credito
+        // (ver credit-increase.request); no expone datos fuera de la sucursal.
+        'distributors.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator'],
         'credit-accounts.open' => ['general_manager', 'branch_manager'],
         'credit-limits.increase' => ['general_manager'],
         'voucher-plans.manage' => ['general_manager'],
