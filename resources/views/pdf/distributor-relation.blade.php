@@ -132,7 +132,7 @@
                             @endif
                         </td>
                         <td>{{ $item->customer?->person ? trim(($item->customer->person->first_name ?? '').' '.($item->customer->person->last_name ?? '')) : 'Cliente #'.$item->customer_id }}</td>
-                        <td>{{ $item->payments_made }}/{{ $item->total_payments }}</td>
+                        <td>{{ $item->installment_number }}/{{ $item->total_payments }}</td>
                         <td class="num">${{ number_format((float) $item->commission_amount, 2) }}</td>
                         <td class="num">${{ number_format((float) $item->payment_amount, 2) }}</td>
                         <td class="num">${{ number_format((float) $item->late_fee_amount, 2) }}</td>
