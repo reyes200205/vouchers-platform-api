@@ -29,11 +29,7 @@ final class VoucherController extends ApiController
         $branchIds = $user->activeBusinessBranchIds();
 
         $vouchers = Voucher::query()
-<<<<<<< HEAD
-            ->with(['customer.person', 'distributor.person'])
-=======
-            ->with(['customer.person', 'branch.setting'])
->>>>>>> 50944d4f000b3720198042eb5e900cf47ec69b3a
+            ->with(['customer.person', 'distributor.person', 'branch.setting'])
             ->when($branchIds !== [], fn ($query) => $query->whereIn('branch_id', $branchIds))
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
             ->latest('id')
