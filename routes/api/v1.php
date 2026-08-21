@@ -19,6 +19,7 @@ use App\Http\Controllers\Coordinator\CoordinadorController;
 use App\Http\Controllers\Coordinator\CreditIncreaseController as CoordinatorCreditIncreaseController;
 use App\Http\Controllers\Coordinator\CustomerController;
 use App\Http\Controllers\Coordinator\CustomerTransferController;
+use App\Http\Controllers\Coordinator\DistributorController as CoordinatorDistributorController;
 use App\Http\Controllers\Coordinator\PaymentController as CoordinatorPaymentController;
 use App\Http\Controllers\Coordinator\VoucherController as CoordinatorVoucherController;
 use App\Http\Controllers\Distributor\CustomerController as DistributorCustomerController;
@@ -186,6 +187,8 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:credit-increase.request')->post('/credit-increase-requests', [CoordinatorCreditIncreaseController::class, 'store'])->name('credit-increase-requests.store');
     Route::middleware('business.ability:credit-increase.pre-authorize,creditIncreaseRequest')->post('/credit-increase-requests/{creditIncreaseRequest}/pre-authorize', [CoordinatorCreditIncreaseController::class, 'preAuthorize'])->name('credit-increase-requests.pre-authorize');
     Route::middleware('business.ability:credit-increase.decide,creditIncreaseRequest')->post('/credit-increase-requests/{creditIncreaseRequest}/decision', [GeneralManagerCreditIncreaseController::class, 'decide'])->name('credit-increase-requests.decide');
+
+    Route::middleware('business.ability:distributors.view')->get('/distributors', [CoordinatorDistributorController::class, 'index'])->name('distributors.index');
 
     Route::middleware('business.ability:payments.view')->get('/customer-payments', [CoordinatorPaymentController::class, 'index'])->name('customer-payments.index');
     Route::middleware('business.ability:payments.view,voucher')->get('/vouchers/{voucher}/payments', [CoordinatorPaymentController::class, 'voucherPayments'])->name('vouchers.payments.index');
