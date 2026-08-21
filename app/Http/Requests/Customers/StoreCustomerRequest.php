@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Customers;
 
+use App\Rules\ValidCurp;
+use App\Rules\ValidRfc;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -27,8 +29,8 @@ final class StoreCustomerRequest extends FormRequest
             'person.second_last_name' => ['nullable', 'string', 'max:100'],
             'person.gender' => ['nullable', 'in:M,F,OTHER'],
             'person.birth_date' => ['nullable', 'date'],
-            'person.curp' => ['required', 'string', 'size:18', 'unique:people,curp'],
-            'person.rfc' => ['nullable', 'string', 'max:13', 'unique:people,rfc'],
+            'person.curp' => ['required', 'string', 'size:18', new ValidCurp(), 'unique:people,curp'],
+            'person.rfc' => ['nullable', 'string', 'max:13', new ValidRfc(), 'unique:people,rfc'],
             'person.home_phone' => ['nullable', 'string', 'max:20'],
             'person.mobile_phone' => ['nullable', 'string', 'max:20'],
             'person.email' => ['nullable', 'email', 'max:150'],

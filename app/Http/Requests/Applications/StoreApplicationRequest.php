@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Applications;
 
+use App\Rules\ValidCurp;
+use App\Rules\ValidRfc;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -28,8 +30,8 @@ final class StoreApplicationRequest extends FormRequest
             'person.second_last_name' => ['nullable', 'string', 'max:100'],
             'person.gender' => ['nullable', 'in:M,F,OTHER'],
             'person.birth_date' => ['nullable', 'date'],
-            'person.curp' => ['nullable', 'string', 'size:18', 'unique:people,curp'],
-            'person.rfc' => ['nullable', 'string', 'max:13', 'unique:people,rfc'],
+            'person.curp' => ['nullable', 'string', 'size:18', new ValidCurp(), 'unique:people,curp'],
+            'person.rfc' => ['nullable', 'string', 'max:13', new ValidRfc(), 'unique:people,rfc'],
             'person.home_phone' => ['nullable', 'string', 'max:30'],
             'person.mobile_phone' => ['nullable', 'string', 'max:30'],
             'person.email' => ['nullable', 'email', 'max:150'],
