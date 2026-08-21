@@ -8,6 +8,7 @@ use App\Enums\CustomerDistributorRelationshipStatus;
 use App\Enums\CustomerStatus;
 use App\Enums\VoucherRequestStatus;
 use App\Enums\VoucherStatus;
+use App\Mail\VoucherIssuedMail;
 use App\Models\BranchSetting;
 use App\Models\CustomerDistributor;
 use App\Models\User;
@@ -15,6 +16,9 @@ use App\Models\Voucher;
 use App\Models\VoucherRequest;
 use App\Services\Financial\FinancialCalculationService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Throwable;
 
 final class ApproveVoucherService
 {
@@ -24,13 +28,13 @@ final class ApproveVoucherService
 
     public function execute(User $user, VoucherRequest $voucherRequest): Voucher
     {
-        return DB::transaction(function () use ($user, $voucherRequest): Voucher {
+        $voucher = DB::transaction(function () use ($user, $voucherRequest): Voucher {
             if ($voucherRequest->status !== VoucherRequestStatus::PENDIENTE) {
                 abort(422, 'La solicitud ya fue resuelta.');
             }
 
             /** @var VoucherRequest $voucherRequest */
-            $voucherRequest->load(['distributor', 'customer']);
+            $voucherRequest->load(['distributor.person', 'customer.person']);
 
             $distributor = $voucherRequest->distributor;
             $snapshot = $voucherRequest->snapshot_json ?? [];
@@ -128,5 +132,33 @@ final class ApproveVoucherService
 
             return $voucher;
         });
+
+        $this->sendIssuedMail($voucher);
+
+        return $voucher;
+    }
+
+    /**
+     * Se envia fuera de la transaccion: un fallo de SMTP no debe revertir la
+     * aprobacion del vale (que ya quedo en firme en la BD), asi que solo se
+     * registra el error si el correo no pudo mandarse.
+     */
+    private function sendIssuedMail(Voucher $voucher): void
+    {
+        $voucher->loadMissing(['customer.person', 'distributor.person', 'branch.setting']);
+
+        $email = $voucher->customer?->person?->email;
+        if ($email === null || $email === '') {
+            return;
+        }
+
+        try {
+            Mail::to($email)->send(new VoucherIssuedMail($voucher));
+        } catch (Throwable $e) {
+            Log::error('No se pudo enviar el correo de vale emitido.', [
+                'voucher_id' => $voucher->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }
