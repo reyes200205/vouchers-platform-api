@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Staff;
 
+use App\Rules\ValidCurp;
+use App\Rules\ValidRfc;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -49,8 +51,8 @@ final class StoreStaffRequest extends FormRequest
             'second_last_name' => ['nullable', 'string', 'max:100'],
             'gender' => ['nullable', 'in:M,F,OTHER'],
             'birth_date' => ['nullable', 'date'],
-            'curp' => ['required', 'string', 'size:18', 'unique:people,curp'],
-            'rfc' => ['nullable', 'string', 'max:13', 'unique:people,rfc'],
+            'curp' => ['required', 'string', 'size:18', new ValidCurp(), 'unique:people,curp'],
+            'rfc' => ['nullable', 'string', 'max:13', new ValidRfc(), 'unique:people,rfc'],
             'home_phone' => ['nullable', 'string', 'max:20'],
             'mobile_phone' => ['nullable', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:150'],
