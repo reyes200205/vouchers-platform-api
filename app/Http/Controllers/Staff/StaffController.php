@@ -10,6 +10,7 @@ use App\Http\Requests\Staff\UpdateStaffRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\Staff\ListStaffService;
+use App\Services\Staff\ShowStaffService;
 use App\Services\Staff\StaffAuditService;
 use App\Services\Staff\StoreStaffService;
 use App\Services\Staff\UpdateStaffService;
@@ -31,6 +32,13 @@ final class StaffController extends ApiController
         return $this->success(
             UserResource::collection($employees)->response()->getData(true)
         );
+    }
+
+    public function show(Request $request, User $user, ShowStaffService $service): JsonResponse
+    {
+        $staff = $service->execute($request->user(), $user);
+
+        return $this->success(new UserResource($staff));
     }
 
     public function store(StoreStaffRequest $request, StoreStaffService $service, StaffAuditService $audit): JsonResponse

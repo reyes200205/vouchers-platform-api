@@ -8,16 +8,56 @@ use App\Enums\ApplicationStatus;
 use App\Enums\VerificationResult;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Applications\StoreApplicationVerificationRequest;
+use App\Http\Requests\Applications\UpdateApplicationRequest;
 use App\Models\Application;
 use App\Models\ApplicationVerification;
 use App\Models\User;
 use App\Notifications\ApplicationVerifiedByVerifierNotification;
+use App\Services\Applications\UpdateApplicationService;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Notification;
 
 final class VerificadorController extends ApiController
 {
+    /**
+     * Corrige datos mal capturados por el coordinador (dirección, teléfono,
+     * CURP, etc.) antes de registrar la verificación en sitio. Ver
+     * UpdateApplicationService para las reglas de cuándo procede.
+     */
+    public function update(UpdateApplicationRequest $request, Application $application, UpdateApplicationService $service, AuditLogger $audit): JsonResponse
+    {
+        $validated = $request->validated();
+
+        // Mismo caso que CoordinadorController::store(): validated() poda las
+        // sub-claves de family_data que no tienen regla propia (members,
+        // occupation, housing), dejando solo applicant_age. Se restaura desde
+        // el input crudo para no perder la correccion completa del verificador.
+        if (array_key_exists('family_data', $validated)) {
+            $validated['family_data'] = $request->input('family_data');
+        }
+
+        $oldPersonSnapshot = $application->applicant?->only(array_keys($validated['person'] ?? []));
+
+        $updated = $service->execute($request->user(), $application, $validated);
+
+        // El diff legible (con etiquetas) queda en verifier_corrections_json
+        // para que gerencia lo vea al decidir; aquí se deja el snapshot crudo
+        // como old_data del log, consistente con el resto de los módulos.
+        $audit->record(
+            $request,
+            'APPLICATION_UPDATED',
+            'applications',
+            'Datos de la solicitud corregidos por el verificador.',
+            $application->branch_id,
+            ['application_id' => $application->id, 'new_person_data' => $validated['person'] ?? null],
+            null,
+            $oldPersonSnapshot
+        );
+
+        return $this->success($updated);
+    }
+
     public function verify(StoreApplicationVerificationRequest $request, Application $application, AuditLogger $audit): JsonResponse
     {
         if ($application->status !== ApplicationStatus::EN_REVISION) {

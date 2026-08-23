@@ -52,6 +52,13 @@ return [
         'applications.create' => ['coordinator'],
         'applications.assign-verifier' => ['coordinator'],
         'applications.verify' => ['verifier'],
+        // Corrección de datos mal capturados por el coordinador. Solo el
+        // verificador ASIGNADO a la solicitud, y solo mientras siga
+        // EN_REVISION (antes de registrar su verificación) — ver
+        // UpdateApplicationService. El coordinador no edita desde aquí
+        // (CLAUDE.md deja esa corrección como responsabilidad del
+        // verificador cuando detecta el error durante la visita).
+        'applications.update' => ['verifier'],
         'applications.decide' => ['general_manager', 'branch_manager'],
         'distributors.manage' => ['general_manager'],
         // Para elegir una distribuidora al pedir un aumento de linea de credito

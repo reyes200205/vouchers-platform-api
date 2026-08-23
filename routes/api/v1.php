@@ -86,6 +86,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:authenticated'])->gr
 
     Route::middleware('business.ability:staff.view')->group(function (): void {
         Route::get('/staff', [StaffController::class, 'index'])->name('staff.index');
+        Route::get('/staff/{user}', [StaffController::class, 'show'])->name('staff.show');
     });
 
     Route::middleware('business.ability:staff.manage')->group(function (): void {
@@ -155,6 +156,7 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:authenticated'])->gr
     Route::post('/applications', [CoordinadorController::class, 'store'])->name('applications.store');
     Route::post('/applications/documents', [ApplicationDocumentController::class, 'store'])->name('applications.documents.store');
     Route::middleware('business.ability:applications.assign-verifier,application')->patch('/applications/{application}/verifier', [CoordinadorController::class, 'assignVerifier'])->name('applications.assign-verifier');
+    Route::middleware('business.ability:applications.update,application')->patch('/applications/{application}', [VerificadorController::class, 'update'])->name('applications.update');
     Route::middleware('business.ability:applications.verify,application')->post('/applications/{application}/verification', [VerificadorController::class, 'verify'])->name('applications.verify');
     Route::middleware('business.ability:applications.verify,application')->post('/applications/{application}/verification-photos', [VerificationPhotoController::class, 'store'])->name('applications.verification-photos.store');
     Route::middleware(['business.ability:applications.decide,application', 'vpn.restrict:general_manager,branch_manager'])->post('/applications/{application}/decision', [ApplicationDecisionController::class, 'decide'])->name('applications.decide');

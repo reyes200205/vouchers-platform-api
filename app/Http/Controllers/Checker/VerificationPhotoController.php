@@ -16,7 +16,7 @@ final class VerificationPhotoController extends ApiController
     public function store(Request $request, Application $application, SpacesStorageService $storage): JsonResponse
     {
         $data = $request->validate([
-            'type' => ['required', 'in:front_photo,id_with_person_photo'],
+            'type' => ['required', 'in:front_photo,id_with_person_photo,proof_of_address_photo'],
             'photo' => ['required', 'image', 'max:10240'],
         ]);
 

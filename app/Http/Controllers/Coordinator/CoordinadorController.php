@@ -53,19 +53,14 @@ final class CoordinadorController extends ApiController
             'verification.verifier.person',
         ]);
 
-        // id_front_path / id_back_path / proof_of_address_path aún no tienen un
-        // endpoint de carga (el formulario del coordinador siempre los manda en
-        // null); se mantienen como ruta local por ahora. Las fotos de la visita
-        // del verificador (verification->*_photo) sí se guardan en Spaces desde
-        // VerificationPhotoController, así que su URL debe salir firmada de ahí,
-        // no como ruta de /storage local.
-        $baseUrl = $request->getSchemeAndHttpHost().'/storage/';
-        $toUrl = fn (?string $path): ?string => $path ? $baseUrl.$path : null;
-
+        // id_front_path / id_back_path / proof_of_address_path se suben via
+        // ApplicationDocumentController a Spaces (bucket privado), igual que
+        // las fotos de verificacion; su URL debe salir firmada desde ahi, no
+        // como ruta de /storage local (ese bucket no es publico).
         $data = $application->toArray();
-        $data['id_front_url'] = $toUrl($application->id_front_path);
-        $data['id_back_url'] = $toUrl($application->id_back_path);
-        $data['proof_of_address_url'] = $toUrl($application->proof_of_address_path);
+        $data['id_front_url'] = $storage->temporaryUrlFor($application->id_front_path);
+        $data['id_back_url'] = $storage->temporaryUrlFor($application->id_back_path);
+        $data['proof_of_address_url'] = $storage->temporaryUrlFor($application->proof_of_address_path);
 
         if ($application->verification !== null) {
             $data['verification']['front_photo_url'] = $storage->temporaryUrlFor($application->verification->front_photo);
@@ -81,6 +76,14 @@ final class CoordinadorController extends ApiController
         /** @var User $user */
         $user = $request->user();
         $data = $request->validated();
+
+        // $request->validated() SOLO conserva, dentro de un campo 'array' como
+        // family_data, las sub-claves que tienen su propia regla declarada
+        // (aqui unicamente family_data.applicant_age) — el resto (members,
+        // occupation, housing) se descarta silenciosamente. new.vue SI manda
+        // esa estructura completa; hay que leerla del input crudo (ya paso la
+        // validacion de tipo array) para no perder lo que capturo el coordinador.
+        $data['family_data'] = $request->input('family_data', $data['family_data'] ?? null);
 
         if (! $user->hasBusinessAbility('applications.create', $data['branch_id'])) {
             return $this->forbidden();
