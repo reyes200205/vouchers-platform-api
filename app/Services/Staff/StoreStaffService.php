@@ -47,6 +47,10 @@ final class StoreStaffService
             abort(422, 'El rol seleccionado no es administrable desde el módulo de personal.');
         }
 
+        if ($role->name === 'general_manager') {
+            abort_unless($actor->hasRole('super-admin'), 403, 'Solo el super administrador puede crear un gerente general.');
+        }
+
         if (! $actor->isGeneralManager() && ! $actor->hasRole('super-admin')) {
             abort_unless(
                 in_array($role->name, ListStaffService::BRANCH_MANAGER_ROLES, true),
@@ -85,7 +89,7 @@ final class StoreStaffService
             ]);
 
             $user->businessRoles()->attach($role, [
-                'branch_id' => $data['branch_id'],
+                'branch_id' => $role->name === 'general_manager' ? null : ($data['branch_id'] ?? null),
                 'assigned_at' => now(),
                 'is_primary' => true,
             ]);

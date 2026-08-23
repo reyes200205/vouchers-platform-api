@@ -12,7 +12,7 @@ final class ListStaffService
     /**
      * Roles de negocio administrables desde el módulo de personal.
      */
-    public const STAFF_ROLES = ['coordinator', 'verifier', 'branch_manager', 'cashier'];
+    public const STAFF_ROLES = ['coordinator', 'verifier', 'branch_manager', 'cashier', 'general_manager'];
 
     /**
      * Roles that a branch manager can create and manage within their own branch.

@@ -8,6 +8,7 @@ use App\Rules\ValidCurp;
 use App\Rules\ValidRfc;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * @property string $first_name
@@ -30,7 +31,7 @@ use Illuminate\Foundation\Http\FormRequest;
  * @property string $username
  * @property string $password
  * @property string $role_code
- * @property int $branch_id
+ * @property int|null $branch_id
  */
 final class StoreStaffRequest extends FormRequest
 {
@@ -65,7 +66,12 @@ final class StoreStaffRequest extends FormRequest
             'username' => ['required', 'string', 'max:80', 'unique:users,username'],
             'password' => ['required', 'string', 'min:8'],
             'role_code' => ['required', 'string', 'max:50', 'exists:roles,code'],
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'branch_id' => [
+                Rule::requiredIf(fn () => $this->input('role_code') !== 'general_manager'),
+                'nullable',
+                'integer',
+                'exists:branches,id',
+            ],
         ];
     }
 }

@@ -257,6 +257,7 @@ final class AlessandroDemoSeeder extends Seeder
             'is_active' => true,
             'requires_vpn' => false,
             'login_channel' => 'WEB',
+            'password_confirmed_at' => now(),
         ]);
 
         $this->attachRole($user, $roleCode, $branch?->id);

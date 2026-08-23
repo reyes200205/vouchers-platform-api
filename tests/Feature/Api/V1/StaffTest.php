@@ -165,7 +165,7 @@ describe('Staff management', function (): void {
             'last_name' => 'Diaz',
             'username' => 'rosa.diaz',
             'password' => 'secret123',
-            'curp' => 'DILR930606JDFRDC08',
+            'curp' => 'DILR930606MDFRDC08',
             'role_code' => 'cashier',
             'branch_id' => $otherBranch->id,
         ])->assertStatus(403);
@@ -313,5 +313,86 @@ describe('Staff management', function (): void {
             'role_code' => 'cashier',
             'branch_id' => Branch::factory()->create()->id,
         ])->assertStatus(403);
+    });
+
+    it('allows only super-admin to create a general manager', function (): void {
+        // 1. Super-admin can create it
+        $superAdmin = User::factory()->create();
+        $superAdmin->businessRoles()->attach(staffRole('super-admin'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($superAdmin);
+
+        $response = $this->postJson('/api/v1/staff', [
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+            'username' => 'john.gm',
+            'password' => 'secret123',
+            'curp' => 'DOEJ900101MDFRND01',
+            'role_code' => 'general_manager',
+            'branch_id' => null,
+        ])->assertCreated();
+
+        $newGmId = $response->json('data.id');
+        $newGm = User::findOrFail($newGmId);
+        expect($newGm->isGeneralManager())->toBeTrue()
+            ->and($newGm->businessRoles()->first()->pivot->branch_id)->toBeNull();
+
+        // 2. A general manager cannot create another general manager
+        $gm = User::factory()->create();
+        $gm->businessRoles()->attach(staffRole('general_manager'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($gm);
+
+        $this->postJson('/api/v1/staff', [
+            'first_name' => 'Jane',
+            'last_name' => 'Doe',
+            'username' => 'jane.gm',
+            'password' => 'secret123',
+            'curp' => 'DOEJ900101MDFRND02',
+            'role_code' => 'general_manager',
+            'branch_id' => null,
+        ])->assertStatus(403);
+    });
+
+    it('allows only super-admin to update or deactivate a general manager', function (): void {
+        $gm = User::factory()->create();
+        $gm->businessRoles()->attach(staffRole('general_manager'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        // 1. A general manager trying to update/deactivate another general manager
+        $anotherGm = User::factory()->create();
+        $anotherGm->businessRoles()->attach(staffRole('general_manager'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($anotherGm);
+
+        $this->patchJson("/api/v1/staff/{$gm->id}", [
+            'is_active' => false,
+        ])->assertStatus(403);
+
+        // 2. A super-admin can update/deactivate a general manager
+        $superAdmin = User::factory()->create();
+        $superAdmin->businessRoles()->attach(staffRole('super-admin'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($superAdmin);
+
+        $this->patchJson("/api/v1/staff/{$gm->id}", [
+            'is_active' => false,
+        ])->assertOk()
+            ->assertJsonPath('data.is_active', false);
     });
 });

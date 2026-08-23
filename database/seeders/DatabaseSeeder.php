@@ -24,7 +24,7 @@ final class DatabaseSeeder extends Seeder
         // RolesAndPermissionSeeder + UserSeeder ya dejan el Super Admin listo para entrar.
         $this->call([
             RolesAndPermissionSeeder::class,
-            UserSeeder::class,
+            BaseSeeder::class,
             // AlessandroDemoSeeder::class,
         ]);
     }

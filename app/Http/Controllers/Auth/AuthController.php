@@ -19,6 +19,7 @@ use App\Services\Auth\MfaChallengeStore;
 use App\Services\Financial\FinancialCalculationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\PersonalAccessToken;
 
@@ -35,7 +36,7 @@ final class AuthController extends ApiController
             ->first();
 
         if (! $user || ! $user->is_active || ! Hash::check($request->password, $user->getAuthPassword())) {
-            return $this->unauthorized('Invalid credentials');
+            return $this->unauthorized('Credenciales invalidas.');
         }
 
         if ($user->requiresOtp()) {
@@ -44,7 +45,7 @@ final class AuthController extends ApiController
 
             // AuditLogger lee el actor desde $request->user(); el usuario aun no
             // tiene token, asi que lo forzamos temporalmente para poder auditar.
-            auth()->setUser($user);
+            Auth::setUser($user);
             $audit->record($request, 'MFA_CHALLENGE_SENT', 'auth', 'Codigo OTP enviado para segundo factor de autenticacion.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
 
             return $this->success([
@@ -69,7 +70,7 @@ final class AuthController extends ApiController
             ->with(['person', 'businessRoles', 'distributor.category'])
             ->findOrFail($challenge['user_id']);
 
-        auth()->setUser($user);
+        Auth::setUser($user);
         $result = $user->consumeOneTimePassword($request->code);
 
         if (! $result->isOk()) {
@@ -96,7 +97,7 @@ final class AuthController extends ApiController
         $user = User::query()->with('person')->findOrFail($challenge['user_id']);
         $user->sendOneTimePassword();
 
-        auth()->setUser($user);
+        Auth::setUser($user);
         $audit->record($request, 'MFA_CHALLENGE_RESENT', 'auth', 'Reenvio de codigo OTP.', null, ['user_id' => $user->id]);
 
         return $this->success([
@@ -191,7 +192,7 @@ final class AuthController extends ApiController
 
         $token = $user->createToken('auth-token')->plainTextToken;
 
-        auth()->setUser($user);
+        Auth::setUser($user);
         $audit->record($request, 'LOGIN', 'auth', 'Inicio de sesion exitoso.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
 
         $this->attachPreValeMaxAmount($user, $financial);

@@ -42,6 +42,17 @@ final class UpdateStaffService
             abort(422, 'El usuario no pertenece al módulo de personal.');
         }
 
+        if ($staff->isGeneralManager() && ! $actor->hasRole('super-admin')) {
+            abort(403, 'Solo el super administrador puede modificar a un gerente general.');
+        }
+
+        if (isset($data['role_code'])) {
+            $targetRole = Role::query()->where('code', $data['role_code'])->firstOrFail();
+            if ($targetRole->name === 'general_manager' && ! $actor->hasRole('super-admin')) {
+                abort(403, 'Solo el super administrador puede asignar el rol de gerente general.');
+            }
+        }
+
         if (! $actor->isGeneralManager() && ! $actor->hasRole('super-admin')) {
             $allowedBranchIds = $actor->activeBusinessBranchIds();
             $staffBranchIds = $staff->activeBusinessBranchIds();
@@ -89,6 +100,15 @@ final class UpdateStaffService
                 ->first();
 
             $branchId = $data['branch_id'] ?? ($primaryPivot?->pivot->branch_id ?? null);
+
+            if (($data['role_code'] ?? null) !== null) {
+                $newRole = Role::query()->where('code', $data['role_code'])->firstOrFail();
+                if ($newRole->name === 'general_manager') {
+                    $branchId = null;
+                }
+            } elseif ($staff->isGeneralManager()) {
+                $branchId = null;
+            }
 
             if (($data['role_code'] ?? null) !== null && $primaryPivot !== null && $primaryPivot->name !== $data['role_code']) {
                 $staff->businessRoles()->updateExistingPivot($primaryPivot->id, ['revoked_at' => now()]);
