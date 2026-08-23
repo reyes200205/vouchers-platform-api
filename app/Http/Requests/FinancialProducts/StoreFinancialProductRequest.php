@@ -23,7 +23,7 @@ final class StoreFinancialProductRequest extends FormRequest
         return [
             'code' => ['sometimes', 'string', 'max:30', 'unique:financial_products,code'],
             'name' => ['required', 'string', 'max:150'],
-            'description' => ['nullable', 'string', 'max:255'],
+            'description' => ['required', 'string', 'max:255'],
             'category_id' => ['nullable', 'integer', Rule::exists('distributor_categories', 'id')],
             'principal_amount' => ['required', 'decimal:0,2', 'min:0'],
             'number_of_fortnights' => ['required', 'integer', 'min:1'],
