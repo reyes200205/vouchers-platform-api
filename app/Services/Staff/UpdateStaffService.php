@@ -76,6 +76,10 @@ final class UpdateStaffService
         return DB::transaction(function () use ($actor, $staff, $data): User {
             $staff->update(['is_active' => $data['is_active']]);
 
+            if (! $data['is_active']) {
+                $staff->tokens()->delete();
+            }
+
             if ($staff->person !== null) {
                 $personFields = [
                     'first_name', 'middle_name', 'last_name', 'second_last_name', 'gender',

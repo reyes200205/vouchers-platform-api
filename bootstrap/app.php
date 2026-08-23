@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Middleware\EnsureBusinessAbility;
 use App\Http\Middleware\EnsureEmailVerified;
+use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\EnsureVpnAccessForRoles;
 use App\Http\Middleware\ForceJsonResponse;
 use App\Http\Middleware\LogApiRequests;
@@ -22,12 +23,15 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [
             ForceJsonResponse::class,
+        ], append: [
+            EnsureUserIsActive::class,
         ]);
 
         $middleware->alias([
             'business.ability' => EnsureBusinessAbility::class,
             'force.json' => ForceJsonResponse::class,
             'log.api' => LogApiRequests::class,
+            'user.active' => EnsureUserIsActive::class,
             'verified' => EnsureEmailVerified::class,
             'vpn.restrict' => EnsureVpnAccessForRoles::class,
         ]);

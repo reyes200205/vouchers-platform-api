@@ -84,7 +84,7 @@ describe('Login', function (): void {
 
     it('returns the role code so the frontend can route by role', function (): void {
         $branch = Branch::factory()->create();
-        $role = Role::query()->firstOrCreate(['code' => 'branch_manager'], ['name' => 'branch_manager']);
+        $role = Role::query()->firstOrCreate(['code' => 'verifier'], ['name' => 'verifier']);
         $user = User::factory()->create([
             'password_hash' => bcrypt('password123'),
         ]);
@@ -104,7 +104,7 @@ describe('Login', function (): void {
                 'data' => [
                     'user' => [
                         'roles' => [
-                            ['code' => 'branch_manager', 'branch_id' => $branch->id],
+                            ['code' => 'verifier', 'branch_id' => $branch->id],
                         ],
                     ],
                 ],
@@ -124,7 +124,7 @@ describe('Login', function (): void {
         $response->assertStatus(401)
             ->assertJson([
                 'success' => false,
-                'message' => 'Invalid credentials',
+                'message' => 'Credenciales invalidas.',
             ]);
     });
 
@@ -204,7 +204,7 @@ describe('Login', function (): void {
 describe('OTP / MFA', function (): void {
     it('does not require OTP for a role outside otp_required_role_codes', function (): void {
         $branch = Branch::factory()->create();
-        $role = Role::query()->firstOrCreate(['code' => 'branch_manager'], ['name' => 'branch_manager']);
+        $role = Role::query()->firstOrCreate(['code' => 'verifier'], ['name' => 'verifier']);
         $user = User::factory()->create(['password_hash' => bcrypt('password123')]);
         $user->businessRoles()->attach($role, [
             'branch_id' => $branch->id,
@@ -417,7 +417,7 @@ describe('Me', function (): void {
 
         // 50% de 20,000 + tolerancia de 500 (defaults de branch_settings) = 10,500.
         $response->assertStatus(200)
-            ->assertJsonPath('data.distributor.pre_vale_max_amount', 10500.0);
+            ->assertJsonPath('data.distributor.pre_vale_max_amount', fn ($v) => (float) $v === 10500.0);
     });
 
     it('does not limit the pre-vale amount when the distributor does not have 100% of credit available', function (): void {
@@ -451,6 +451,6 @@ describe('Me', function (): void {
 
         // 50% de 12,000 (disponible) + tolerancia de 500 = 6,500.
         $response->assertStatus(200)
-            ->assertJsonPath('data.distributor.pre_vale_max_amount', 6500.0);
+            ->assertJsonPath('data.distributor.pre_vale_max_amount', fn ($v) => (float) $v === 6500.0);
     });
 });

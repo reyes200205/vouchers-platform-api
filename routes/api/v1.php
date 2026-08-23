@@ -75,7 +75,7 @@ Route::get('ping', fn () => response()->json([
 |--------------------------------------------------------------------------
 | Routes for
 */
-Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function (): void {
+Route::middleware(['auth:sanctum', 'user.active', 'throttle:authenticated'])->group(function (): void {
     Route::middleware('business.ability:storage.spaces.test')
         ->post('/system/storage/spaces/test-upload', [SpacesTestController::class, 'store'])
         ->name('system.storage.spaces.test-upload');
@@ -275,7 +275,7 @@ Route::prefix('auth')->group(function (): void {
     });
 
     // Protected routes with authenticated rate limiter (120/min)
-    Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function (): void {
+    Route::middleware(['auth:sanctum', 'user.active', 'throttle:authenticated'])->group(function (): void {
         Route::post('logout', [AuthController::class, 'logout'])->name('api.v1.logout');
         Route::get('me', [AuthController::class, 'me'])->name('api.v1.me');
         Route::post('change-password', [AuthController::class, 'changePassword'])->name('api.v1.change-password');

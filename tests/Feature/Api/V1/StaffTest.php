@@ -11,7 +11,7 @@ use Laravel\Sanctum\Sanctum;
 uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
-    $this->seed(\Database\Seeders\RolesAndPermissionSeeder::class);
+    $this->seed(Database\Seeders\RolesAndPermissionSeeder::class);
 });
 
 function staffRole(string $code): Role
@@ -28,6 +28,7 @@ function staffSignIn(string $roleCode, ?Branch $branch = null): User
         'is_primary' => true,
     ]);
     Sanctum::actingAs($user);
+
     return $user;
 }
 
@@ -262,6 +263,38 @@ describe('Staff management', function (): void {
         ])->assertOk()
             ->assertJsonPath('data.is_active', false)
             ->assertJsonPath('data.roles.0.code', 'cashier');
+    });
+
+    it('revokes tokens and blocks requests when staff is deactivated', function (): void {
+        $branch = Branch::factory()->create();
+        staffSignIn('general_manager');
+
+        $staffUser = User::factory()->create(['is_active' => true]);
+        $staffUser->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        $token = $staffUser->createToken('staff-token')->plainTextToken;
+
+        $this->patchJson("/api/v1/staff/{$staffUser->id}", [
+            'is_active' => false,
+        ])->assertOk();
+
+        expect($staffUser->tokens()->count())->toBe(0);
+
+        $this->app['auth']->forgetGuards();
+
+        // 1. Con el token eliminado, Sanctum rechaza con Unauthenticated
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/v1/auth/me')
+            ->assertStatus(401);
+
+        $staffUser->refresh();
+        $this->actingAs($staffUser);
+        $this->getJson('/api/v1/auth/me')
+            ->assertStatus(401)
+            ->assertJson(['success' => false, 'message' => 'Cuenta desactivada. Ponte en contacto con un administrador.']);
     });
 
     it('updates staff person data as general manager', function (): void {
