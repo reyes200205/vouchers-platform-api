@@ -44,9 +44,17 @@ final class ListStaffService
             $perPage = (int) ($filters['per_page'] ?? 15);
             $query = User::query()
                 ->with(['person', 'businessRoles'])
+                ->where('users.id', '!=', $actor->id)
                 ->whereHas('businessRoles', fn ($q) => $q
                     ->whereIn('model_has_roles.branch_id', $branchIds)
+                    ->whereIn('roles.name', self::BRANCH_MANAGER_ROLES)
                     ->whereNull('model_has_roles.revoked_at'));
+
+            if (isset($filters['role'])) {
+                $query->whereHas('businessRoles', fn ($q) => $q
+                    ->where('roles.name', $filters['role'])
+                    ->whereNull('model_has_roles.revoked_at'));
+            }
 
             return $query->paginate($perPage);
         }

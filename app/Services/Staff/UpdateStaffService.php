@@ -53,9 +53,20 @@ final class UpdateStaffService
             }
         }
 
+        if ($actor->id === $staff->id && ! $actor->hasRole('super-admin')) {
+            abort(403, 'No puedes modificar tu propia cuenta desde el módulo de personal.');
+        }
+
         if (! $actor->isGeneralManager() && ! $actor->hasRole('super-admin')) {
             $allowedBranchIds = $actor->activeBusinessBranchIds();
             $staffBranchIds = $staff->activeBusinessBranchIds();
+
+            $staffRole = $staff->businessRoles()->wherePivotNull('revoked_at')->first();
+            abort_unless(
+                $staffRole !== null && in_array($staffRole->name, ListStaffService::BRANCH_MANAGER_ROLES, true),
+                403,
+                'Solo puedes administrar personal subordinado (cajeras, coordinadores, verificadores).'
+            );
 
             abort_unless(array_intersect($staffBranchIds, $allowedBranchIds) !== [], 403, 'Solo puedes administrar personal de tus sucursales.');
             abort_unless(($data['branch_id'] ?? null) === null || in_array($data['branch_id'], $allowedBranchIds, true), 403, 'Solo puedes asignar personal a tus sucursales.');

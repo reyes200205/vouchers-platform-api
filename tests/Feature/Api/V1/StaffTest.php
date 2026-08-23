@@ -297,6 +297,30 @@ describe('Staff management', function (): void {
             ->assertJson(['success' => false, 'message' => 'Cuenta desactivada. Ponte en contacto con un administrador.']);
     });
 
+    it('prevents branch manager from seeing or modifying themselves in staff module', function (): void {
+        $branch = Branch::factory()->create();
+        $bm = staffSignIn('branch_manager', $branch);
+
+        $cashier = User::factory()->create();
+        $cashier->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        // 1. El branch manager no se ve a si mismo en la lista
+        $response = $this->getJson('/api/v1/staff')->assertOk();
+        $ids = collect($response->json('data.data'))->pluck('id')->all();
+        expect($ids)->toContain($cashier->id)
+            ->and($ids)->not->toContain($bm->id);
+
+        // 2. El branch manager no puede editar su propia cuenta desde el modulo
+        $this->patchJson("/api/v1/staff/{$bm->id}", [
+            'is_active' => true,
+            'role_code' => 'cashier',
+        ])->assertStatus(403);
+    });
+
     it('updates staff person data as general manager', function (): void {
         $branch = Branch::factory()->create();
         staffSignIn('general_manager');
