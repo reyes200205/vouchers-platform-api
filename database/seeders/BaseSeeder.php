@@ -50,7 +50,7 @@ final class BaseSeeder extends Seeder
             $user = User::query()->firstOrCreate(
                 ['person_id' => $person->id],
                 [
-                    'username' => explode('@', $userData['email'])[0],
+                    'username' => $userData['email'],
                     'password_hash' => Hash::make('password'),
                     'is_active' => true,
                     'password_confirmed_at' => now(),

@@ -39,7 +39,10 @@ final class StaffController extends ApiController
 
         $audit->record($request, 'STAFF_CREATED', 'staff', 'Miembro del personal creado.', (int) $request->branch_id, [
             'user_id' => $staff->id,
+            'username' => $staff->username,
+            'name' => trim(($staff->person->first_name ?? '') . ' ' . ($staff->person->last_name ?? '')),
             'role_code' => $request->role_code,
+            'branch_id' => $request->branch_id,
         ]);
 
         return $this->created(
@@ -54,7 +57,9 @@ final class StaffController extends ApiController
 
         $audit->record($request, 'STAFF_UPDATED', 'staff', 'Miembro del personal actualizado.', $staff->activeBusinessBranchIds()[0] ?? null, [
             'user_id' => $staff->id,
-            'payload' => $request->safe()->toArray(),
+            'username' => $staff->username,
+            'name' => trim(($staff->person->first_name ?? '') . ' ' . ($staff->person->last_name ?? '')),
+            'payload' => $request->safe()->except(['password']),
         ]);
 
         return $this->success(new UserResource($staff), 'Miembro del personal actualizado exitosamente');

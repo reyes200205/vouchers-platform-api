@@ -19,12 +19,13 @@ final class AuditLogger
         string $module,
         string $description,
         ?int $branchId = null,
-        ?array $extraData = null
+        ?array $extraData = null,
+        ?string $level = null
     ): void {
         /** @var User|null $user */
         $user = $request->user();
 
-        AuditLog::query()->create([
+        $data = [
             'event_type' => $eventType,
             'user_id' => $user?->id,
             'user_name' => $user?->username,
@@ -35,6 +36,12 @@ final class AuditLogger
             'extra_data' => $extraData,
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
-        ]);
+        ];
+
+        if ($level !== null) {
+            $data['level'] = $level;
+        }
+
+        AuditLog::query()->create($data);
     }
 }

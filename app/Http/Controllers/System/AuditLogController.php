@@ -35,6 +35,18 @@ final class AuditLogController extends ApiController
             $query->where('module', $request->input('module'));
         }
 
+        if ($request->filled('branch_id')) {
+            $query->where('branch_id', $request->input('branch_id'));
+        }
+
+        if ($request->filled('user_role')) {
+            $query->where('user_role', $request->input('user_role'));
+        }
+
+        if ($request->filled('user_id')) {
+            $query->where('user_id', $request->input('user_id'));
+        }
+
         $logs = $query->orderBy('created_at', 'desc')
             ->paginate($request->integer('per_page', 15))
             ->appends($request->query());

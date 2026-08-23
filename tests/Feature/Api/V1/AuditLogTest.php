@@ -82,6 +82,30 @@ describe('Audit Logs API', function (): void {
             ->assertOk()
             ->assertJsonCount(1, 'data.data')
             ->assertJsonPath('data.data.0.event_type', 'VOUCHER_CREATE');
+
+        // Setup another user and audit log for role/user filters testing
+        $anotherUser = User::factory()->create();
+        AuditLog::query()->create([
+            'event_type' => 'USER_UPDATE',
+            'level' => 'info',
+            'user_id' => $anotherUser->id,
+            'user_role' => 'coordinator',
+            'user_name' => 'charlie',
+            'module' => 'users',
+            'description' => 'User updated info',
+        ]);
+
+        // Filter by user_role
+        $this->getJson('/api/v1/system/audit-logs?user_role=coordinator')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.event_type', 'USER_UPDATE');
+
+        // Filter by user_id
+        $this->getJson('/api/v1/system/audit-logs?user_id=' . $anotherUser->id)
+            ->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.event_type', 'USER_UPDATE');
     });
 
     it('forbids other roles from viewing audit logs', function (): void {

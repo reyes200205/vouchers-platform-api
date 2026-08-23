@@ -74,7 +74,15 @@ final class AuthController extends ApiController
         $result = $user->consumeOneTimePassword($request->code);
 
         if (! $result->isOk()) {
-            $audit->record($request, 'MFA_FAILED', 'auth', 'Intento fallido de verificacion OTP: '.$result->value.'.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id, 'reason' => $result->value]);
+            $audit->record(
+                $request,
+                'MFA_FAILED',
+                'auth',
+                'Intento fallido de verificacion OTP: '.$result->value.'.',
+                $user->activeBusinessBranchIds()[0] ?? null,
+                ['user_id' => $user->id, 'reason' => $result->value],
+                'WARNING'
+            );
 
             return $this->error($this->mfaErrorMessage($result), 422);
         }

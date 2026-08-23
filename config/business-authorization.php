@@ -8,7 +8,7 @@ return [
     // Roles que deben verificar un codigo OTP por correo (segundo factor)
     // ademas de su contrasena para poder iniciar sesion. Ver
     // AuthController::login()/verifyMfa() y User::requiresOtp().
-    'otp_required_role_codes' => ['super-admin'],
+    'otp_required_role_codes' => ['super-admin', 'general_manager', 'branch_manager'],
 
     'abilities' => [
         'audit-logs.view' => ['super-admin'],
@@ -28,7 +28,7 @@ return [
         'branches.manage' => ['general_manager'],
         'branch-settings.view' => ['general_manager', 'branch_manager'],
         'branch-settings.manage' => ['general_manager', 'branch_manager'],
-        'products.view' => ['general_manager', 'branch_manager', 'distributor'],
+        'products.view' => ['super-admin', 'general_manager', 'branch_manager', 'distributor'],
         // Solo el gerente general crea/edita productos-vale (tanto los de
         // catálogo global como los de una sucursal específica); el gerente de
         // sucursal únicamente los consulta (products.view). Antes
