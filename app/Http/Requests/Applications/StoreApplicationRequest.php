@@ -27,12 +27,12 @@ final class StoreApplicationRequest extends FormRequest
             'person.first_name' => ['required', 'string', 'max:100'],
             'person.middle_name' => ['nullable', 'string', 'max:100'],
             'person.last_name' => ['required', 'string', 'max:100'],
-            'person.second_last_name' => ['nullable', 'string', 'max:100'],
+            'person.second_last_name' => ['required', 'string', 'max:100'],
             'person.gender' => ['required', 'in:M,F,OTHER'],
             'person.birth_date' => ['required', 'date', 'before_or_equal:18 years ago'],
             'person.curp' => ['required', 'string', 'size:18', new ValidCurp(), 'unique:people,curp'],
             'person.rfc' => ['required', 'string', 'size:13', new ValidRfc(), 'unique:people,rfc'],
-            'person.home_phone' => ['nullable', 'string', 'max:30'],
+            'person.home_phone' => ['required', 'string', 'max:30'],
             'person.mobile_phone' => ['required', 'string', 'max:30'],
             'person.email' => ['required', 'email', 'max:150'],
             'person.street' => ['required', 'string', 'max:150'],
@@ -44,6 +44,7 @@ final class StoreApplicationRequest extends FormRequest
             'person.latitude' => ['nullable', 'decimal:0,7'],
             'person.longitude' => ['nullable', 'decimal:0,7'],
             'person.notes' => ['nullable', 'string'],
+            'person.street_references' => ['nullable', 'string'],
             // family_data agrupa: familiares/conyuge, ocupacion (donde trabaja o estudia, edad)
             // y vivienda (tenencia, dimensiones, referencia laboral). Ver new.vue en el frontend
             // para la forma exacta que arma el coordinador.

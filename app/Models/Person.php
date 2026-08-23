@@ -33,6 +33,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
     'latitude',
     'longitude',
     'notes',
+    'street_references',
 ])]
 final class Person extends Model
 {
