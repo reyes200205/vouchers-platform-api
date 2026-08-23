@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Distributor;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Customers\StoreCustomerRequest;
 use App\Http\Resources\CustomerResource;
@@ -50,7 +51,7 @@ final class CustomerController extends ApiController
 
         $audit->record(
             $request,
-            'CUSTOMER_CREATED',
+            AuditEventType::Created,
             'customers',
             'Cliente dado de alta por distribuidora, pendiente de verificacion.',
             $customer->branch_id,

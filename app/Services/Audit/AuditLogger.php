@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Audit;
 
+use App\Enums\AuditEventType;
 use App\Models\AuditLog;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -16,7 +17,7 @@ final class AuditLogger
      */
     public function record(
         Request $request,
-        string $eventType,
+        AuditEventType $eventType,
         string $module,
         string $description,
         ?int $branchId = null,
@@ -28,7 +29,7 @@ final class AuditLogger
         $user = $request->user();
 
         $data = [
-            'event_type' => $eventType,
+            'event_type' => $eventType->value,
             'user_id' => $user?->id,
             'user_name' => $user?->username,
             'user_role' => $user?->businessRoles()->wherePivotNull('revoked_at')->value('roles.code'),

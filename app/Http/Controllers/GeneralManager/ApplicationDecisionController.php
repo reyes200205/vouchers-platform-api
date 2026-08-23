@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\GeneralManager;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Applications\DecideApplicationRequest;
 use App\Models\Application;
@@ -19,7 +20,7 @@ final class ApplicationDecisionController extends ApiController
         /** @var User $user */
         $user = $request->user();
         $result = $service->execute($application, $user, $request->validated());
-        $audit->record($request, 'APPLICATION_DECIDED', 'applications', 'Decision final de solicitud registrada.', $application->branch_id, ['application_id' => $application->id, 'decision' => $request->string('decision')->value()]);
+        $audit->record($request, AuditEventType::Decided, 'applications', 'Decision final de solicitud registrada.', $application->branch_id, ['application_id' => $application->id, 'decision' => $request->string('decision')->value()]);
 
         return $this->success([
             'application' => $result['application'],

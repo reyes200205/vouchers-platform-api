@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\BranchManager;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Cutoffs\GenerateCutoffRequest;
 use App\Http\Resources\CutoffResource;
@@ -82,7 +83,7 @@ final class CutoffController extends ApiController
 
         $audit->record(
             $request,
-            'CUTOFF_GENERATED',
+            AuditEventType::Generated,
             'cutoffs',
             'Corte generado.',
             $branch->id,

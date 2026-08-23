@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Cashier;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Customers\StoreCustomerChangeRequest;
 use App\Http\Requests\Customers\VerifyCustomerRequest;
@@ -32,7 +33,7 @@ final class CustomerController extends ApiController
 
         $audit->record(
             $request,
-            'CUSTOMER_VERIFIED',
+            AuditEventType::Verified,
             'customers',
             'Cliente verificado por cajera.',
             $customer->branch_id,
@@ -55,7 +56,7 @@ final class CustomerController extends ApiController
 
         $audit->record(
             $request,
-            'CUSTOMER_CHANGE_REQUESTED',
+            AuditEventType::Requested,
             'customers',
             'Solicitud de cambio de datos del cliente registrada.',
             $customer->branch_id,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Distributor;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Transfers\StoreCustomerTransferRequest;
 use App\Http\Resources\CustomerTransferRequestResource;
@@ -50,7 +51,7 @@ final class CustomerTransferController extends ApiController
 
         $audit->record(
             $request,
-            'CUSTOMER_TRANSFER_REQUESTED',
+            AuditEventType::Requested,
             'customers',
             'Transferencia de cliente solicitada por distribuidora destino.',
             $customer->branch_id,
@@ -77,7 +78,7 @@ final class CustomerTransferController extends ApiController
 
         $audit->record(
             $request,
-            'CUSTOMER_TRANSFER_CANCELED',
+            AuditEventType::Canceled,
             'customers',
             'Solicitud de transferencia de cliente cancelada.',
             $transferRequest->customer->branch_id,

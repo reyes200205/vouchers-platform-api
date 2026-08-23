@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\BranchManager;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Categories\StoreDistributorCategoryRequest;
 use App\Http\Requests\Categories\UpdateDistributorCategoryRequest;
@@ -41,7 +42,7 @@ final class CategoryController extends ApiController
 
         $audit->record(
             $request,
-            'CATEGORY_CREATED',
+            AuditEventType::Created,
             'catalog',
             "Created distributor category " . $category->name,
             $user->activeBusinessBranchIds()[0] ?? null,
@@ -77,7 +78,7 @@ final class CategoryController extends ApiController
 
         $audit->record(
             $request,
-            'CATEGORY_UPDATED',
+            AuditEventType::Updated,
             'catalog',
             "Updated distributor category " . $distributorCategory->name,
             $user->activeBusinessBranchIds()[0] ?? null,

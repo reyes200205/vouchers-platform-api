@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Coordinator;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Transfers\DecideCustomerTransferRequest;
 use App\Http\Resources\CustomerTransferRequestResource;
@@ -49,7 +50,7 @@ final class CustomerTransferController extends ApiController
 
         $audit->record(
             $request,
-            'CUSTOMER_TRANSFER_RESOLVED',
+            AuditEventType::Resolved,
             'customers',
             'Solicitud de transferencia resuelta: ' . $transferRequest->status->value . '.',
             $sourceDistributor->branch_id,

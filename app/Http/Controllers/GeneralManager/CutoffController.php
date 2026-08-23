@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\GeneralManager;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Resources\CutoffResource;
 use App\Models\Cutoff;
@@ -21,7 +22,7 @@ final class CutoffController extends ApiController
 
         $audit->record(
             $request,
-            'CUTOFF_REPROCESSED',
+            AuditEventType::Reprocessed,
             'cutoffs',
             'Corte reprocesado (mismo periodo, se revisó si había nuevas relaciones).',
             $cutoff->branch_id,
@@ -39,7 +40,7 @@ final class CutoffController extends ApiController
 
         $audit->record(
             $request,
-            'CUTOFF_CLOSED',
+            AuditEventType::Closed,
             'cutoffs',
             'Corte cerrado manualmente; las relaciones sin pagar quedaron vencidas.',
             $cutoff->branch_id,

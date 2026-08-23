@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\GeneralManager;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Branches\StoreBranchRequest;
 use App\Http\Requests\Branches\UpdateBranchRequest;
@@ -108,7 +109,7 @@ final class BranchController extends ApiController
             $manager->assignRole('branch_manager');
         }
 
-        $audit->record($request, 'BRANCH_CREATED', 'branches', 'Sucursal creada.', $branch->id);
+        $audit->record($request, AuditEventType::Created, 'branches', 'Sucursal creada.', $branch->id);
 
         return $this->created(new BranchResource($branch->fresh()));
     }
@@ -134,7 +135,7 @@ final class BranchController extends ApiController
             }
         }
 
-        $audit->record($request, 'BRANCH_UPDATED', 'branches', 'Sucursal actualizada.', $branch->id, [
+        $audit->record($request, AuditEventType::Updated, 'branches', 'Sucursal actualizada.', $branch->id, [
             'before' => $before,
             'after' => $branch->fresh()->only(array_keys($request->safe()->except('manager_user_id'))),
         ]);

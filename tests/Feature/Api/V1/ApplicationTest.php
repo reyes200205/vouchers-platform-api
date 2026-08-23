@@ -57,7 +57,6 @@ describe('Distributor onboarding', function (): void {
         ])->assertCreated();
 
         $response
-            ->assertJsonPath('data.family_data_json.applicant_age', 28)
             ->assertJsonPath('data.family_data_json.members.0.name', 'Maria Perez')
             ->assertJsonPath('data.family_data_json.occupation.place_name', 'ACME')
             ->assertJsonPath('data.family_data_json.housing.work_reference.name', 'Juan Lopez');
@@ -90,7 +89,12 @@ describe('Distributor onboarding', function (): void {
                 'state' => 'Coahuila',
                 'postal_code' => '27000',
             ],
-            'family_data' => ['children' => 2, 'applicant_age' => 28],
+            'family_data' => [
+                'children' => 2,
+                'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3],
+                'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
+            ],
             'vehicles' => [['type' => 'car']],
             'requested_credit_limit' => '10000.00',
         ])->assertCreated()->assertJsonPath('data.status', 'EN_REVISION')->json('data');
@@ -106,6 +110,8 @@ describe('Distributor onboarding', function (): void {
             'visit_date' => now()->toDateTimeString(),
             'checklist' => ['home_visited' => true],
             'front_photo' => 'verifications/1/front.jpg',
+            'id_with_person_photo' => 'verifications/1/id_with_person.jpg',
+            'proof_of_address_photo' => 'verifications/1/proof.jpg',
         ])->assertOk();
 
         $category = DistributorCategory::query()->create([
@@ -171,7 +177,12 @@ describe('Distributor onboarding', function (): void {
                 'state' => 'Coahuila',
                 'postal_code' => '27000',
             ],
-            'family_data' => ['children' => 2, 'applicant_age' => 28],
+            'family_data' => [
+                'children' => 2,
+                'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3],
+                'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
+            ],
             'vehicles' => [['type' => 'car']],
             'requested_credit_limit' => '10000.00',
             'id_front_path' => 'applications/1/id_front.jpg',
@@ -190,6 +201,8 @@ describe('Distributor onboarding', function (): void {
             'visit_date' => now()->toDateTimeString(),
             'checklist' => ['home_visited' => true],
             'front_photo' => 'verifications/1/fachada.jpg',
+            'id_with_person_photo' => 'verifications/1/id_with_person.jpg',
+            'proof_of_address_photo' => 'verifications/1/proof.jpg',
         ])->assertOk();
 
         signInWithRole($manager, 'branch_manager', $branch);
@@ -199,7 +212,6 @@ describe('Distributor onboarding', function (): void {
             ->assertJsonPath('data.applicant.first_name', 'Ana')
             ->assertJsonPath('data.applicant.curp', 'ABCD900101HNLXYZ01')
             ->assertJsonPath('data.applicant.mobile_phone', '8112345678')
-            ->assertJsonPath('data.family_data_json.applicant_age', 28)
             ->assertJsonPath('data.id_front_url', fn ($url) => is_string($url)
                 && str_contains($url, 'applications/1/id_front.jpg')
                 && ! str_contains($url, '/storage/applications'))
@@ -238,7 +250,11 @@ describe('Distributor onboarding', function (): void {
                 'state' => 'Coahuila',
                 'postal_code' => '27000',
             ],
-            'family_data' => ['applicant_age' => 28],
+            'family_data' => [
+                'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3],
+                'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
+            ],
             'requested_credit_limit' => '10000.00',
         ])->assertCreated()->json('data');
 
@@ -272,7 +288,11 @@ function createApplicationEnRevision(Branch $branch, User $coordinator, User $ve
             'state' => 'Coahuila',
             'postal_code' => '27000',
         ],
-        'family_data' => ['applicant_age' => 28],
+        'family_data' => [
+            'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
+            'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3],
+            'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
+        ],
         'requested_credit_limit' => '10000.00',
     ])->assertCreated()->json('data');
 
@@ -338,6 +358,8 @@ describe('Update application (verifier corrections)', function (): void {
             'visit_date' => now()->toDateTimeString(),
             'checklist' => ['home_visited' => true],
             'front_photo' => 'verifications/1/front.jpg',
+            'id_with_person_photo' => 'verifications/1/id_with_person.jpg',
+            'proof_of_address_photo' => 'verifications/1/proof.jpg',
         ])->assertOk();
 
         $this->patchJson("/api/v1/applications/{$application['id']}", [
@@ -368,14 +390,12 @@ describe('Update application (verifier corrections)', function (): void {
 
         $this->patchJson("/api/v1/applications/{$application['id']}", [
             'family_data' => [
-                'applicant_age' => 30,
                 'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 28]],
                 'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3],
                 'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
             ],
             'vehicles' => [['brand' => 'Nissan', 'model' => 'Versa', 'year' => '2020', 'plates' => 'ABC123']],
         ])->assertOk()
-            ->assertJsonPath('data.family_data_json.applicant_age', 30)
             ->assertJsonPath('data.family_data_json.occupation.place_name', 'ACME')
             ->assertJsonPath('data.vehicles_json.0.brand', 'Nissan')
             ->assertJsonPath('data.verifier_corrections_json.0.changes.0.field', 'family_data')
