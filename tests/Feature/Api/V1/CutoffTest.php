@@ -350,4 +350,167 @@ describe('Cutoffs', function (): void {
         // Ya cerrado, no se puede volver a cerrar.
         $this->postJson("/api/v1/cutoffs/{$cutoff->id}/close")->assertStatus(422);
     });
+
+    it('refuses to reprocess a cutoff that was already closed manually, instead of silently reopening it', function (): void {
+        // Bug reportado: reprocesar un corte CERRADO lo dejaba en EJECUTADO
+        // otra vez -- lo "reabría" como efecto secundario de solo buscar
+        // distribuidoras nuevas, sin que nadie lo pidiera explícitamente.
+        // CloseCutoffService ya trata CERRADO como estado final (no se
+        // puede volver a cerrar); ReprocessCutoffService ahora hace lo
+        // mismo.
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
+        // El vencimiento se deja unos días ANTES del cierre del periodo (no
+        // exactamente igual a period_end): SQLite guarda la columna `date`
+        // con hora incluida y, comparado como texto contra el límite del
+        // whereBetween, un vencimiento que cae justo en el límite superior
+        // queda fuera por unos caracteres de más (ver otras pruebas de este
+        // archivo con el mismo comentario) -- en MySQL, la columna real sí
+        // es DATE y trunca la hora, así que ese caso no se da en producción.
+        cutoffVoucher($branch, $distributor, now()->subDays(3)->toDateString());
+
+        $manager = User::factory()->create();
+        cutoffSignInBusinessRole($manager, 'branch_manager', $branch);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+            'period_start' => now()->subDays(15)->toDateString(),
+            'period_end' => now()->toDateString(),
+        ])->assertCreated();
+
+        $cutoff = Cutoff::query()->firstOrFail();
+
+        $gm = User::factory()->create();
+        cutoffSignInBusinessRole($gm, 'general_manager', $branch);
+
+        $this->postJson("/api/v1/cutoffs/{$cutoff->id}/close")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'CERRADO');
+
+        // Una distribuidora nueva aparece después del cierre -- ni así debe
+        // reprocesarse: un corte cerrado ya es un estado final.
+        $distributorLate = Distributor::factory()->create(['branch_id' => $branch->id]);
+        cutoffVoucher($branch, $distributorLate, now()->subDays(3)->toDateString());
+
+        $this->postJson("/api/v1/cutoffs/{$cutoff->id}/reprocess")->assertStatus(422);
+
+        $this->assertDatabaseHas('cutoffs', ['id' => $cutoff->id, 'status' => 'CERRADO']);
+        $this->assertDatabaseCount('cutoff_relations', 1);
+    });
+
+    it('lets a general manager list cutoffs of any branch, not just the one their own role is attached to', function (): void {
+        // El general_manager es un rol global: activeBusinessBranchIds() solo
+        // le devuelve la sucursal donde quedó su vínculo (su "matriz"), pero
+        // eso no debe limitar qué sucursales puede CONSULTAR -- antes el
+        // listado se filtraba siempre por esa sucursal sin importar el rol,
+        // así que seleccionar otra sucursal en el frontend nunca mostraba
+        // nada.
+        $matriz = Branch::factory()->create();
+        $otherBranch = Branch::factory()->create();
+
+        $distributorMatriz = Distributor::factory()->create(['branch_id' => $matriz->id]);
+        cutoffVoucher($matriz, $distributorMatriz, now()->toDateString());
+
+        $distributorOther = Distributor::factory()->create(['branch_id' => $otherBranch->id]);
+        cutoffVoucher($otherBranch, $distributorOther, now()->toDateString());
+
+        $branchManagerMatriz = User::factory()->create();
+        cutoffSignInBusinessRole($branchManagerMatriz, 'branch_manager', $matriz);
+        $this->postJson("/api/v1/branches/{$matriz->id}/cutoffs/generate", [
+            'period_start' => now()->subDays(15)->toDateString(),
+            'period_end' => now()->toDateString(),
+        ])->assertCreated();
+
+        $branchManagerOther = User::factory()->create();
+        cutoffSignInBusinessRole($branchManagerOther, 'branch_manager', $otherBranch);
+        $this->postJson("/api/v1/branches/{$otherBranch->id}/cutoffs/generate", [
+            'period_start' => now()->subDays(15)->toDateString(),
+            'period_end' => now()->toDateString(),
+        ])->assertCreated();
+
+        $matrizCutoff = Cutoff::query()->where('branch_id', $matriz->id)->firstOrFail();
+        $otherCutoff = Cutoff::query()->where('branch_id', $otherBranch->id)->firstOrFail();
+
+        $gm = User::factory()->create();
+        cutoffSignInBusinessRole($gm, 'general_manager', $matriz);
+
+        // Sin branch_id: el gerente general ve los cortes de AMBAS sucursales.
+        $response = $this->getJson('/api/v1/cutoffs?per_page=50')->assertOk();
+        $ids = collect($response->json('data.data'))->pluck('id')->all();
+        expect($ids)->toContain($matrizCutoff->id)->toContain($otherCutoff->id);
+
+        // Pidiendo explícitamente la sucursal que NO es la suya, la ve.
+        $response = $this->getJson("/api/v1/cutoffs?per_page=50&branch_id={$otherBranch->id}")->assertOk();
+        $ids = collect($response->json('data.data'))->pluck('id')->all();
+        expect($ids)->toContain($otherCutoff->id)->not->toContain($matrizCutoff->id);
+
+        // Un branch_manager, en cambio, sigue restringido a su propia
+        // sucursal aunque pida el branch_id de otra.
+        Sanctum::actingAs($branchManagerMatriz);
+        $response = $this->getJson("/api/v1/cutoffs?per_page=50&branch_id={$otherBranch->id}")->assertOk();
+        $ids = collect($response->json('data.data'))->pluck('id')->all();
+        expect($ids)->toContain($matrizCutoff->id)->not->toContain($otherCutoff->id);
+    });
+
+    it('does not double-charge the late fee when a carried-over relation goes overdue again', function (): void {
+        // Bug reportado: un arrastre que YA incluía la multa de su relación
+        // original (porque esa relación se venció) se le volvía a sumar la
+        // misma multa si la relación que lo recibió TAMBIÉN se vencía sin
+        // pagarse -- la multa es una sola por vale, nunca una por cada corte
+        // que sigue sin pagarse.
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
+        cutoffVoucher($branch, $distributor, now()->subDays(20)->toDateString(), 300.00);
+
+        $manager = User::factory()->create();
+        cutoffSignInBusinessRole($manager, 'branch_manager', $branch);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+            'period_start' => now()->subDays(30)->toDateString(),
+            'period_end' => now()->subDays(20)->toDateString(),
+        ])->assertCreated();
+
+        $relation1 = CutoffRelation::query()->firstOrFail();
+        (new App\Services\Cutoffs\MarkOverdueRelationsService())->execute();
+
+        $this->assertDatabaseHas('cutoff_relation_items', [
+            'cutoff_relation_id' => $relation1->id,
+            'late_fee_amount' => 300.00,
+            'line_total_amount' => 3125.00,
+        ]);
+
+        // Se genera el siguiente corte: la deuda de relation1 (ya VENCIDA) se
+        // arrastra tal cual a relation2, multa incluida.
+        $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+            'period_start' => now()->subDays(19)->toDateString(),
+            'period_end' => now()->subDays(10)->toDateString(),
+        ])->assertCreated();
+
+        $relation2 = CutoffRelation::query()->where('id', '!=', $relation1->id)->firstOrFail();
+        expect($relation2->previous_relation_id)->toBe($relation1->id);
+
+        $this->assertDatabaseHas('cutoff_relation_items', [
+            'cutoff_relation_id' => $relation2->id,
+            'origin_relation_id' => $relation1->id,
+            'late_fee_amount' => 300.00,
+            'line_total_amount' => 3125.00,
+        ]);
+
+        // relation2 también se vence sin pagarse -- la multa NO debe
+        // duplicarse sobre el arrastre que ya la traía incluida.
+        (new App\Services\Cutoffs\MarkOverdueRelationsService())->execute();
+
+        $this->assertDatabaseHas('cutoff_relation_items', [
+            'cutoff_relation_id' => $relation2->id,
+            'origin_relation_id' => $relation1->id,
+            'late_fee_amount' => 300.00,
+            'line_total_amount' => 3125.00,
+        ]);
+
+        $this->assertDatabaseHas('cutoff_relations', [
+            'id' => $relation2->id,
+            'status' => 'VENCIDA',
+            'total_late_fees' => 300.00,
+            'total_amount_due' => 3125.00,
+        ]);
+    });
 });

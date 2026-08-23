@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Cashier;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Reconciliations\ImportBankDepositsRequest;
 use App\Http\Resources\BankTransactionResource;
@@ -26,7 +27,7 @@ final class ReconciliationController extends ApiController
 
         $audit->record(
             $request,
-            'BANK_IMPORT_COMPLETED',
+            AuditEventType::Completed,
             'reconciliations',
             'Archivo bancario importado.',
             $branch->id,
@@ -66,12 +67,40 @@ final class ReconciliationController extends ApiController
     {
         /** @var User $user */
         $user = $request->user();
+        $isGlobal = $user->hasGlobalBusinessRole();
+        // reconciliations.verify (branch_manager/general_manager, ver
+        // config/business-authorization.php) es quien aprueba/rechaza -- por
+        // eso necesita ver TODAS las solicitudes pendientes de su sucursal,
+        // no solo las que el mismo generó. Antes esta vista filtraba por
+        // reconciled_by_user_id para cualquiera que no fuera general_manager,
+        // así que un gerente de sucursal nunca veía las solicitudes que
+        // mandaba la cajera -- la bandeja de conciliaciones pendientes le
+        // salía siempre vacía aunque sí hubiera algo que aprobar.
+        $canApprove = $user->hasBusinessAbility('reconciliations.verify');
+        $branchIds = $isGlobal ? [] : $user->activeBusinessBranchIds();
 
         $reconciliations = \App\Models\Reconciliation::query()
-            ->with('distributorPayment')
+            ->with([
+                'bankTransaction',
+                'distributorPayment.distributor.person',
+                'distributorPayment.distributor.category',
+                'distributorPayment.cutoffRelation.cutoff.branch',
+            ])
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
             ->when($request->filled('pending_verification') && $request->boolean('pending_verification'), fn ($query) => $query->whereNull('verified_at'))
-            ->when($user->isGeneralManager() === false, fn ($query) => $query->where('reconciled_by_user_id', $user->id))
+            ->when(! $isGlobal, function ($query) use ($canApprove, $branchIds, $user) {
+                if ($canApprove) {
+                    $query->whereHas(
+                        'distributorPayment.cutoffRelation.cutoff',
+                        fn ($q) => $q->whereIn('branch_id', $branchIds)
+                    );
+                } else {
+                    // Quien no puede aprobar (ej. cajera) solo ve lo que ella
+                    // misma generó, para dar seguimiento a sus propias
+                    // solicitudes -- no toda la bandeja de la sucursal.
+                    $query->where('reconciled_by_user_id', $user->id);
+                }
+            })
             ->latest('reconciled_at')
             ->paginate($request->integer('per_page', 15))
             ->appends($request->query());

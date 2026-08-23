@@ -274,6 +274,13 @@ final class ImportBankDepositsService
         $reference = trim((string) ($row['referencia'] ?? '')) ?: null;
 
         BankTransaction::query()->create([
+            // Antes no se guardaba branch_id aquí a pesar de que $branch ya
+            // estaba disponible: la transacción quedaba sin sucursal y, al
+            // resolverse su ability de sucursal en EnsureBusinessAbility, se
+            // usaba (por el bug ya corregido ahí) un valor que no representaba
+            // ninguna sucursal real, bloqueando con "Forbidden" la solicitud
+            // de conciliación manual de usuarios con permiso legítimo.
+            'branch_id' => $branch->id,
             'reference' => $reference,
             'transaction_date' => $this->parseDate($row['fecha']),
             'transaction_time' => $this->parseTime($row['hora'] ?? null),

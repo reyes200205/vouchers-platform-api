@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Distributor;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Vouchers\StoreVoucherRequest;
 use App\Http\Resources\VoucherRequestResource;
@@ -75,7 +76,7 @@ final class VoucherController extends ApiController
 
         $audit->record(
             $request,
-            'VOUCHER_REQUESTED',
+            AuditEventType::Requested,
             'vouchers',
             'Solicitud de vale creada por la distribuidora, pendiente de aprobacion.',
             $voucherRequest->branch_id,

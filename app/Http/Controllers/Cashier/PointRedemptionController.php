@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Cashier;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Resources\PointRedemptionResource;
 use App\Models\PointRedemption;
@@ -30,7 +31,7 @@ final class PointRedemptionController extends ApiController
 
         $audit->record(
             $request,
-            'POINT_REDEMPTION_PAID_BY_CASHIER',
+            AuditEventType::Disbursed,
             'points',
             'Canje de puntos pagado por cajera.',
             $redemption->branch_id,

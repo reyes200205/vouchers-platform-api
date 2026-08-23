@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Cashier;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Vouchers\DisburseVoucherRequest;
 use App\Http\Resources\VoucherResource;
@@ -20,7 +21,7 @@ final class VoucherController extends ApiController
 
         $audit->record(
             $request,
-            'VOUCHER_DISBURSED',
+            AuditEventType::Disbursed,
             'vouchers',
             'Vale dispersado por cajera.',
             $voucher->branch_id,

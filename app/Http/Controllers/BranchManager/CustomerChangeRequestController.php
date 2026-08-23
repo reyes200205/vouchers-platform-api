@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\BranchManager;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Customers\DecideCustomerChangeRequest;
 use App\Http\Resources\CustomerChangeRequestResource;
@@ -47,7 +48,7 @@ final class CustomerChangeRequestController extends ApiController
 
         $audit->record(
             $request,
-            'CUSTOMER_CHANGE_RESOLVED',
+            AuditEventType::Resolved,
             'customers',
             'Solicitud de cambio de datos resuelta: ' . $changeRequest->status->value . '.',
             $changeRequest->customer->branch_id,

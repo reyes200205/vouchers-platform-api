@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\GeneralManager;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Credit\DecideCreditIncreaseRequest;
 use App\Http\Resources\CreditIncreaseRequestResource;
@@ -41,7 +42,7 @@ final class CreditIncreaseController extends ApiController
 
         $audit->record(
             $request,
-            'CREDIT_INCREASE_DECIDED',
+            AuditEventType::Decided,
             'credit',
             'Aumento de línea resuelto por el gerente.',
             $creditIncreaseRequest->branch_id,

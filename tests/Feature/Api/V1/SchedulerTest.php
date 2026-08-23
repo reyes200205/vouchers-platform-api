@@ -103,7 +103,7 @@ describe('Scheduler and notifications', function (): void {
             ->and($item->is_late_payment)->toBeTrue();
     });
 
-    it('blocks a distributor after 3 consecutive overdue cutoffs and notifies', function (): void {
+    it('marks a distributor as MOROSA after 3 consecutive overdue cutoffs and notifies', function (): void {
         $branch = Branch::factory()->create();
         $coordinator = User::factory()->create();
         $distributor = Distributor::factory()->create([
@@ -133,18 +133,65 @@ describe('Scheduler and notifications', function (): void {
 
         Artisan::call('cutoffs:mark-overdue');
 
+        // Al tercer corte consecutivo sin pagar queda MOROSA (ya no puede
+        // emitir vales) -- antes de este cambio se marcaba BLOQUEADA
+        // directo al tercero, sin ningún aviso previo al segundo (ver el
+        // siguiente test).
         $this->assertDatabaseHas('distributors', [
             'id' => $distributor->id,
-            'status' => 'BLOQUEADA',
+            'status' => 'MOROSA',
             'can_issue_vouchers' => 0,
         ]);
 
         $this->assertDatabaseHas('notifications', [
-            'type' => \App\Notifications\DistributorBlockedNotification::class,
+            'type' => \App\Notifications\DistributorDelinquentNotification::class,
         ]);
     });
 
-    it('does not block a distributor with fewer than 3 overdue cutoffs', function (): void {
+    it('sends a warning notice (without restricting anything yet) after exactly 2 consecutive overdue cutoffs', function (): void {
+        $branch = Branch::factory()->create();
+        $coordinator = User::factory()->create();
+        $distributor = Distributor::factory()->create([
+            'branch_id' => $branch->id,
+            'coordinator_user_id' => $coordinator->id,
+            'status' => DistributorStatus::ACTIVA,
+            'can_issue_vouchers' => true,
+        ]);
+
+        for ($i = 0; $i < 2; $i++) {
+            $cutoff = Cutoff::factory()->create([
+                'branch_id' => $branch->id,
+                'scheduled_at' => now()->subDays(20 - $i * 16),
+            ]);
+
+            CutoffRelation::query()->create([
+                'cutoff_id' => $cutoff->id,
+                'distributor_id' => $distributor->id,
+                'relation_number' => 'REL-' . fake()->unique()->numberBetween(1000, 9999),
+                'payment_reference' => 'REF-' . fake()->unique()->numberBetween(1000, 9999),
+                'payment_due_date' => now()->subDays(5)->toDateString(),
+                'total_amount_due' => 2599.00,
+                'status' => CutoffRelationStatus::VENCIDA,
+                'generated_at' => now()->subDays(20 - $i * 16),
+            ]);
+        }
+
+        Artisan::call('cutoffs:mark-overdue');
+
+        // Al segundo corte consecutivo sin pagar es SOLO un aviso: todavía
+        // puede emitir vales y su status no cambia.
+        $this->assertDatabaseHas('distributors', [
+            'id' => $distributor->id,
+            'status' => 'ACTIVA',
+            'can_issue_vouchers' => 1,
+        ]);
+
+        $this->assertDatabaseHas('notifications', [
+            'type' => \App\Notifications\DistributorOverdueNoticeNotification::class,
+        ]);
+    });
+
+    it('does not notify a distributor with fewer than 2 overdue cutoffs', function (): void {
         $branch = Branch::factory()->create();
         $distributor = Distributor::factory()->create([
             'branch_id' => $branch->id,

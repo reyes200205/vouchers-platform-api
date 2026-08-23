@@ -51,6 +51,53 @@ describe('Branches', function (): void {
         ]);
     });
 
+    it('lets a general manager also be assigned as a branch\'s manager without losing their global reach', function (): void {
+        // El gerente general de la sucursal matriz, por ejemplo, también
+        // funge como gerente de esa sucursal en particular -- hoy no hay
+        // forma de reflejar eso: el gerente general siempre se trata como
+        // global únicamente. La forma de asignarlo (el campo "Gerente" al
+        // editar una sucursal, que ya incluye a los gerentes generales entre
+        // los candidatos -- ver BranchController::availableManagers) le da
+        // al usuario un SEGUNDO rol de negocio (branch_manager, con
+        // is_primary=false) atado a esa sucursal, sin tocar su rol de
+        // gerente general (que se sigue guardando con branch_id NULL). Este
+        // test deja constancia de que esa combinación ya funciona de punta
+        // a punta y que no se rompe si se vuelve a guardar el mismo valor.
+        Role::query()->firstOrCreate(
+            ['name' => 'branch_manager', 'guard_name' => 'web'],
+            ['code' => 'branch_manager']
+        );
+
+        $generalManager = User::factory()->create();
+        actingAsBusinessRole($generalManager, 'general_manager');
+
+        $matriz = Branch::factory()->create(['name' => 'Sucursal Matriz']);
+
+        $this->patchJson("/api/v1/branches/{$matriz->id}", [
+            'manager_user_id' => $generalManager->id,
+        ])->assertOk()->assertJsonPath('data.manager.id', $generalManager->id);
+
+        // Sigue siendo global: puede ver/gestionar cualquier otra sucursal,
+        // no solo la matriz.
+        $otherBranch = Branch::factory()->create();
+        $this->getJson("/api/v1/branches/{$otherBranch->id}")->assertOk();
+        $this->patchJson("/api/v1/branches/{$otherBranch->id}", ['name' => 'Otra Sucursal'])->assertOk();
+
+        // Guardar el mismo gerente otra vez (el usuario reabre el formulario
+        // y da clic en "Guardar" sin cambiar nada) no debe duplicar el rol
+        // ni tronar por una restricción única.
+        $this->patchJson("/api/v1/branches/{$matriz->id}", [
+            'manager_user_id' => $generalManager->id,
+        ])->assertOk()->assertJsonPath('data.manager.id', $generalManager->id);
+
+        $this->assertDatabaseCount('model_has_roles', 2);
+
+        $generalManager->refresh();
+        expect($generalManager->isGeneralManager())->toBeTrue()
+            ->and($generalManager->hasGlobalBusinessRole())->toBeTrue()
+            ->and($generalManager->activeBusinessBranchIds())->toBe([$matriz->id]);
+    });
+
     it('allows a coordinator to view but not modify a branch', function (): void {
         $coordinator = User::factory()->create();
         $branch = Branch::factory()->create();

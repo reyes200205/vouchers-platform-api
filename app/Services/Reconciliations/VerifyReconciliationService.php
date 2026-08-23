@@ -16,6 +16,7 @@ final class VerifyReconciliationService
 {
     public function __construct(
         private readonly SettleCutoffRelationService $settleCutoffRelationService,
+        private readonly RetroactiveReconciliationService $retroactiveReconciliationService,
     ) {
     }
 
@@ -27,6 +28,16 @@ final class VerifyReconciliationService
 
         if ($reconciliation->reconciled_by_user_id === $user->id) {
             abort(422, 'La segunda autorización debe realizarla un usuario distinto al que registró la conciliación.');
+        }
+
+        // Se registró contra una relación VENCIDA/CERRADA (o PAGADA con multa):
+        // puede que el pago real sí haya llegado a tiempo y la multa se haya
+        // aplicado por error de la cajera. RetroactiveReconciliationService
+        // decide, según la fecha real del depósito, si corresponde quitarla
+        // (y a lo largo de toda la cadena de arrastre) antes de liquidar --
+        // ver ManualMatchDepositService, que es quien pone esta bandera.
+        if ($reconciliation->is_retroactive_correction) {
+            return $this->retroactiveReconciliationService->execute($user, $reconciliation);
         }
 
         return DB::transaction(function () use ($user, $reconciliation): Reconciliation {

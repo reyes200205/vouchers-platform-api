@@ -8,9 +8,11 @@ use App\Enums\ApplicationStatus;
 use App\Enums\CreditIncreaseRequestStatus;
 use App\Enums\PointRedemptionStatus;
 use App\Http\Controllers\ApiController;
+use App\Http\Resources\ReconciliationResource;
 use App\Models\Application;
 use App\Models\CreditIncreaseRequest;
 use App\Models\PointRedemption;
+use App\Models\Reconciliation;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -53,6 +55,17 @@ final class InboxController extends ApiController
 
         if ($tab === 'all' || $tab === 'redemptions') {
             $data['redemptions'] = $this->redemptions($branchIds, $perPage);
+        }
+
+        // Aunque las conciliaciones manuales ya tienen su propia pantalla
+        // ("Conciliaciones"), esa pantalla no pasa por el mismo
+        // ocultamiento-sin-VPN que la Bandeja de Aprobaciones -- así que un
+        // gerente sin VPN podía llegar ahí igual. Se agrega esta pestaña para
+        // que la segunda autorización de conciliaciones quede cubierta por el
+        // mismo mecanismo (ver EnsureVpnAccessForRoles / vpn.restrict en las
+        // rutas de verify/reject) sin depender de una pantalla aparte.
+        if ($tab === 'all' || $tab === 'reconciliations') {
+            $data['reconciliations'] = $this->reconciliations($branchIds, $perPage);
         }
 
         return $this->success($data);
@@ -189,6 +202,45 @@ final class InboxController extends ApiController
                     ? trim(($redemption->requestedBy->person->first_name ?? '').' '.($redemption->requestedBy->person->last_name ?? ''))
                     : null,
                 'created_at' => $redemption->created_at?->toIso8601String(),
+            ])->all(),
+            'total' => $paginator->total(),
+        ];
+    }
+
+    /**
+     * @param  list<int>|null  $branchIds
+     * @return array{items: array<int, array<string, mixed>>, total: int}
+     */
+    private function reconciliations(?array $branchIds, int $perPage): array
+    {
+        $query = Reconciliation::query()
+            ->with([
+                'bankTransaction',
+                'distributorPayment.distributor.person',
+                'distributorPayment.distributor.category',
+                'distributorPayment.cutoffRelation.cutoff.branch',
+            ])
+            ->whereNull('verified_at')
+            ->orderByDesc('reconciled_at');
+
+        if ($branchIds !== null) {
+            $query->whereHas(
+                'distributorPayment.cutoffRelation.cutoff',
+                fn ($q) => $q->whereIn('branch_id', $branchIds)
+            );
+        }
+
+        $paginator = $query->paginate($perPage);
+
+        return [
+            // ReconciliationResource ya trae toda la info que necesita
+            // DecideReconciliationModal.vue (distribuidora, relación,
+            // transacción bancaria) -- se reutiliza tal cual en vez de
+            // reconstruir un shape plano como los otros tres tipos, para no
+            // duplicar esa lógica de nuevo aquí.
+            'items' => $paginator->getCollection()->map(fn (Reconciliation $reconciliation): array => [
+                'type' => 'reconciliation',
+                ...(new ReconciliationResource($reconciliation))->resolve(),
             ])->all(),
             'total' => $paginator->total(),
         ];

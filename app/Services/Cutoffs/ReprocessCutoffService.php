@@ -31,6 +31,17 @@ final class ReprocessCutoffService
             abort(422, 'El corte aún no ha sido ejecutado.');
         }
 
+        // Un corte CERRADO ya es un estado final (CloseCutoffService también
+        // se niega a volver a cerrarlo) -- antes, reprocesar uno lo dejaba en
+        // EJECUTADO otra vez sin que nadie lo pidiera explícitamente,
+        // "reabriéndolo" como efecto secundario de solo buscar distribuidoras
+        // nuevas. Si de verdad hace falta revisar un corte ya cerrado, eso
+        // debe ser una acción explícita (reabrirlo primero), no un efecto
+        // colateral de reprocesar.
+        if ($cutoff->status === CutoffStatus::CERRADO) {
+            abort(422, 'Este corte ya está cerrado; no se puede reprocesar.');
+        }
+
         if ($cutoff->period_start === null) {
             abort(422, 'Este corte no tiene periodo guardado (se generó antes de esta actualización); genera un corte nuevo en su lugar.');
         }

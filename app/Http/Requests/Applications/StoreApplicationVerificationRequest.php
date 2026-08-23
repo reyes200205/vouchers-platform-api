@@ -6,6 +6,7 @@ namespace App\Http\Requests\Applications;
 
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 final class StoreApplicationVerificationRequest extends FormRequest
 {
@@ -21,7 +22,7 @@ final class StoreApplicationVerificationRequest extends FormRequest
     {
         return [
             'result' => ['required', 'in:VERIFICADA,RECHAZADA'],
-            'notes' => ['nullable', 'string'],
+            'notes' => [Rule::requiredIf(fn () => $this->input('result') === 'RECHAZADA'), 'nullable', 'string'],
             'verification_latitude' => ['nullable', 'decimal:0,7'],
             'verification_longitude' => ['nullable', 'decimal:0,8'],
             'visit_date' => ['required', 'date'],
@@ -30,8 +31,8 @@ final class StoreApplicationVerificationRequest extends FormRequest
             // La foto de fachada la toma y sube el verificador durante la visita
             // (ver VerificationPhotoController::store), por lo que es obligatoria aqui.
             'front_photo' => ['required', 'string', 'max:255'],
-            'id_with_person_photo' => ['nullable', 'string', 'max:255'],
-            'proof_of_address_photo' => ['nullable', 'string', 'max:255'],
+            'id_with_person_photo' => ['required', 'string', 'max:255'],
+            'proof_of_address_photo' => ['required', 'string', 'max:255'],
             'additional_evidence' => ['nullable', 'array'],
             'distance_meters' => ['nullable', 'decimal:0,2', 'min:0'],
         ];

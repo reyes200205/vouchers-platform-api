@@ -4,18 +4,31 @@ declare(strict_types=1);
 
 namespace Database\Seeders;
 
+use App\Models\Branch;
 use App\Models\Person;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 
-final class UserSeeder extends Seeder
+final class BaseSeeder extends Seeder
 {
     /**
      * Run the database seeds.
      */
     public function run(): void
     {
+        // 1. Create Sucursal UTT (Matriz) in Torreón
+        Branch::query()->firstOrCreate(
+            ['code' => 'BR-UTT'],
+            [
+                'name' => 'Sucursal UTT',
+                'address' => 'Torreón, Coahuila',
+                'phone' => '8711234567',
+                'is_active' => true,
+            ]
+        );
+
+        // 2. Create Super Admin User
         $users = [
             [
                 'name' => 'Super Admin',
@@ -37,9 +50,10 @@ final class UserSeeder extends Seeder
             $user = User::query()->firstOrCreate(
                 ['person_id' => $person->id],
                 [
-                    'username' => explode('@', $userData['email'])[0],
+                    'username' => $userData['email'],
                     'password_hash' => Hash::make('password'),
                     'is_active' => true,
+                    'password_confirmed_at' => now(),
                 ]
             );
 

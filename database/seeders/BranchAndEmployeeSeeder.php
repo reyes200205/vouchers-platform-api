@@ -54,6 +54,7 @@ final class BranchAndEmployeeSeeder extends Seeder
                 'person_id' => $gmPerson->id,
                 'password_hash' => Hash::make('password'),
                 'is_active' => true,
+                'password_confirmed_at' => now(),
             ]
         );
 
@@ -98,6 +99,7 @@ final class BranchAndEmployeeSeeder extends Seeder
                 'person_id' => $bmPerson->id,
                 'password_hash' => Hash::make('password'),
                 'is_active' => true,
+                'password_confirmed_at' => now(),
             ]
         );
 

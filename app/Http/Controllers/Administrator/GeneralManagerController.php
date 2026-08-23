@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Administrator;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Users\StoreGeneralManagerRequest;
 use App\Http\Resources\UserResource;
@@ -46,7 +47,7 @@ final class GeneralManagerController extends ApiController
             return $user;
         });
 
-        $audit->record($request, 'GENERAL_MANAGER_CREATED', 'users', 'Gerente general creado.', null, ['user_id' => $user->id]);
+        $audit->record($request, AuditEventType::Created, 'users', 'Gerente general creado.', null, ['user_id' => $user->id]);
 
         return $this->created(
             new UserResource($user->load(['person', 'businessRoles'])),

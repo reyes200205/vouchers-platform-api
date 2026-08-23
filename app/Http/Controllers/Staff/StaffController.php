@@ -9,8 +9,9 @@ use App\Http\Requests\Staff\StoreStaffRequest;
 use App\Http\Requests\Staff\UpdateStaffRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
-use App\Services\Audit\AuditLogger;
 use App\Services\Staff\ListStaffService;
+use App\Services\Staff\ShowStaffService;
+use App\Services\Staff\StaffAuditService;
 use App\Services\Staff\StoreStaffService;
 use App\Services\Staff\UpdateStaffService;
 use Illuminate\Http\JsonResponse;
@@ -23,9 +24,9 @@ final class StaffController extends ApiController
         $user = $request->user();
 
         $employees = $service->execute($user, [
-            'role' => $request->has('role') ? $request->string('role')->toString() : null,
+            'role'      => $request->has('role') ? $request->string('role')->toString() : null,
             'branch_id' => $request->has('branch_id') ? $request->integer('branch_id') : null,
-            'per_page' => $request->integer('per_page', 15),
+            'per_page'  => $request->integer('per_page', 15),
         ])->appends($request->query());
 
         return $this->success(
@@ -33,14 +34,18 @@ final class StaffController extends ApiController
         );
     }
 
-    public function store(StoreStaffRequest $request, StoreStaffService $service, AuditLogger $audit): JsonResponse
+    public function show(Request $request, User $user, ShowStaffService $service): JsonResponse
+    {
+        $staff = $service->execute($request->user(), $user);
+
+        return $this->success(new UserResource($staff));
+    }
+
+    public function store(StoreStaffRequest $request, StoreStaffService $service, StaffAuditService $audit): JsonResponse
     {
         $staff = $service->execute($request->user(), $request->safe()->toArray());
 
-        $audit->record($request, 'STAFF_CREATED', 'staff', 'Miembro del personal creado.', (int) $request->branch_id, [
-            'user_id' => $staff->id,
-            'role_code' => $request->role_code,
-        ]);
+        $audit->recordCreated($request, $staff, $request->role_code, (int) $request->branch_id);
 
         return $this->created(
             new UserResource($staff),
@@ -48,14 +53,13 @@ final class StaffController extends ApiController
         );
     }
 
-    public function update(UpdateStaffRequest $request, User $user, UpdateStaffService $service, AuditLogger $audit): JsonResponse
+    public function update(UpdateStaffRequest $request, User $user, UpdateStaffService $service, StaffAuditService $audit): JsonResponse
     {
+        $old = $audit->snapshot($user);
+
         $staff = $service->execute($request->user(), $user, $request->safe()->toArray());
 
-        $audit->record($request, 'STAFF_UPDATED', 'staff', 'Miembro del personal actualizado.', $staff->activeBusinessBranchIds()[0] ?? null, [
-            'user_id' => $staff->id,
-            'payload' => $request->safe()->toArray(),
-        ]);
+        $audit->recordUpdated($request, $staff, $old);
 
         return $this->success(new UserResource($staff), 'Miembro del personal actualizado exitosamente');
     }

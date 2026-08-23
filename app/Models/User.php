@@ -32,6 +32,7 @@ use Spatie\Permission\Traits\HasRoles;
     'requires_vpn',
     'login_channel',
     'last_login_at',
+    'password_confirmed_at',
 ])]
 #[Hidden([
     'password_hash',
@@ -178,13 +179,19 @@ final class User extends Authenticatable
      */
     public function requiresOtp(): bool
     {
-        $registrar = app(\Spatie\Permission\PermissionRegistrar::class);
-        $originalTeamId = $registrar->getPermissionsTeamId();
-        $registrar->setPermissionsTeamId(null);
-        $requires = $this->hasAnyRole(config('business-authorization.otp_required_role_codes', []));
-        $registrar->setPermissionsTeamId($originalTeamId);
+        $otpRoles = config('business-authorization.otp_required_role_codes', []);
 
-        return $requires;
+        if (empty($otpRoles)) {
+            return false;
+        }
+
+        return $this->businessRoles()
+            ->wherePivotNull('revoked_at')
+            ->where(function ($q) use ($otpRoles) {
+                $q->whereIn('roles.name', $otpRoles)
+                  ->orWhereIn('roles.code', $otpRoles);
+            })
+            ->exists();
     }
 
     public function sendOneTimePassword(): void
@@ -223,6 +230,7 @@ final class User extends Authenticatable
             'requires_vpn' => 'boolean',
             'login_channel' => LoginChannel::class,
             'last_login_at' => 'datetime',
+            'password_confirmed_at' => 'datetime',
         ];
     }
 }

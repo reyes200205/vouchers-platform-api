@@ -4,22 +4,26 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auth;
 
+use App\Enums\AuditEventType;
 use App\Enums\LoginChannel;
 use App\Enums\OtpVerificationResult;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Auth\ChangePasswordRequest;
+use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\ResendMfaRequest;
+use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Requests\Auth\VerifyMfaRequest;
 use App\Http\Resources\UserResource;
 use App\Models\BranchSetting;
-use App\Models\DistributorActivation;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Auth\MfaChallengeStore;
+use App\Services\Auth\PasswordResetService;
 use App\Services\Financial\FinancialCalculationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\PersonalAccessToken;
 
@@ -36,7 +40,7 @@ final class AuthController extends ApiController
             ->first();
 
         if (! $user || ! $user->is_active || ! Hash::check($request->password, $user->getAuthPassword())) {
-            return $this->unauthorized('Invalid credentials');
+            return $this->unauthorized('Credenciales invalidas.');
         }
 
         if ($user->requiresOtp()) {
@@ -45,8 +49,8 @@ final class AuthController extends ApiController
 
             // AuditLogger lee el actor desde $request->user(); el usuario aun no
             // tiene token, asi que lo forzamos temporalmente para poder auditar.
-            auth()->setUser($user);
-            $audit->record($request, 'MFA_CHALLENGE_SENT', 'auth', 'Codigo OTP enviado para segundo factor de autenticacion.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
+            Auth::setUser($user);
+            $audit->record($request, AuditEventType::Sent, 'auth', 'Codigo OTP enviado para segundo factor de autenticacion.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
 
             return $this->success([
                 'requires_otp' => true,
@@ -70,18 +74,26 @@ final class AuthController extends ApiController
             ->with(['person', 'businessRoles', 'distributor.category'])
             ->findOrFail($challenge['user_id']);
 
-        auth()->setUser($user);
+        Auth::setUser($user);
         $result = $user->consumeOneTimePassword($request->code);
 
         if (! $result->isOk()) {
-            $audit->record($request, 'MFA_FAILED', 'auth', 'Intento fallido de verificacion OTP: '.$result->value.'.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id, 'reason' => $result->value]);
+            $audit->record(
+                $request,
+                AuditEventType::Failed,
+                'auth',
+                'Intento fallido de verificacion OTP: '.$result->value.'.',
+                $user->activeBusinessBranchIds()[0] ?? null,
+                $this->getUserAuditData($user, ['reason' => $result->value]),
+                'WARNING'
+            );
 
             return $this->error($this->mfaErrorMessage($result), 422);
         }
 
         $challenges->forget($request->challenge_id);
 
-        $audit->record($request, 'MFA_VERIFIED', 'auth', 'Segundo factor verificado exitosamente.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
+        $audit->record($request, AuditEventType::Verified, 'auth', 'Segundo factor verificado exitosamente.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
 
         return $this->finishLogin($user, $request, $audit, $financial, $challenge['channel']);
     }
@@ -97,8 +109,8 @@ final class AuthController extends ApiController
         $user = User::query()->with('person')->findOrFail($challenge['user_id']);
         $user->sendOneTimePassword();
 
-        auth()->setUser($user);
-        $audit->record($request, 'MFA_CHALLENGE_RESENT', 'auth', 'Reenvio de codigo OTP.', null, ['user_id' => $user->id]);
+        Auth::setUser($user);
+        $audit->record($request, AuditEventType::Resent, 'auth', 'Reenvio de codigo OTP.', null, $this->getUserAuditData($user));
 
         return $this->success([
             'masked_email' => self::maskEmail($user->person?->email),
@@ -114,7 +126,7 @@ final class AuthController extends ApiController
 
         $token?->delete();
 
-        $audit->record($request, 'LOGOUT', 'auth', 'Cierre de sesion.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
+        $audit->record($request, AuditEventType::Logout, 'auth', 'Cierre de sesion.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
 
         return $this->success(message: 'Logged out successfully');
     }
@@ -139,18 +151,66 @@ final class AuthController extends ApiController
             return $this->error('Current password is incorrect', 422);
         }
 
-        $user->update(['password_hash' => Hash::make($request->password)]);
+        $user->update([
+            'password_hash' => Hash::make($request->password),
+            'password_confirmed_at' => now(),
+        ]);
 
-        // Si la contrasena actual provenia de una activacion de distribuidora
-        // pendiente, este cambio la marca como completada.
-        DistributorActivation::query()
-            ->where('user_id', $user->id)
-            ->whereNull('used_at')
-            ->update(['used_at' => now()]);
-
-        $audit->record($request, 'PASSWORD_CHANGED', 'auth', 'Cambio de contrasena por el propio usuario.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
+        $audit->record($request, AuditEventType::Changed, 'auth', 'Cambio de contrasena por el propio usuario.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
 
         return $this->success(message: 'Password changed successfully');
+    }
+
+    /**
+     * Para cuando el usuario decide QUEDARSE con la contrasena temporal
+     * (CURP) que se le asigno al darlo de alta, en vez de cambiarla: el
+     * modal de "primer login" del frontend llama esto en ese caso. No
+     * cambia el hash, solo apaga la bandera que obliga a mostrar el modal.
+     */
+    public function confirmPassword(Request $request, AuditLogger $audit): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $user->update(['password_confirmed_at' => now()]);
+
+        $audit->record($request, AuditEventType::Confirmed, 'auth', 'El usuario conservo su contrasena temporal.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
+
+        return $this->success(message: 'Password confirmed successfully');
+    }
+
+    /**
+     * Envia el enlace de recuperacion si el usuario existe y tiene correo
+     * registrado. Responde siempre el mismo mensaje generico (exista o no el
+     * usuario) para no revelar que usuarios estan dados de alta en el sistema.
+     */
+    public function forgotPassword(ForgotPasswordRequest $request, AuditLogger $audit, PasswordResetService $service): JsonResponse
+    {
+        $user = $service->sendResetLink($request->username);
+
+        if ($user) {
+            // AuditLogger lee el actor desde $request->user(); aqui aun no hay
+            // sesion, asi que lo forzamos temporalmente para dejar registrado
+            // a quien se le envio el enlace (mismo patron que MFA_CHALLENGE_SENT).
+            Auth::setUser($user);
+            $audit->record($request, AuditEventType::Sent, 'auth', 'Enlace de recuperacion de contrasena enviado.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
+        }
+
+        return $this->success(message: 'Si el usuario existe, enviamos un enlace de recuperación a su correo registrado.');
+    }
+
+    public function resetPassword(ResetPasswordRequest $request, AuditLogger $audit, PasswordResetService $service): JsonResponse
+    {
+        $user = $service->reset($request->email, $request->token, $request->password);
+
+        if (! $user) {
+            return $this->error('El enlace de recuperación no es válido o ya expiró.', 400);
+        }
+
+        Auth::setUser($user);
+        $audit->record($request, AuditEventType::Completed, 'auth', 'Contrasena restablecida mediante enlace de recuperacion.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
+
+        return $this->success(message: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.');
     }
 
     private static function maskEmail(?string $email): ?string
@@ -178,8 +238,8 @@ final class AuthController extends ApiController
 
         $token = $user->createToken('auth-token')->plainTextToken;
 
-        auth()->setUser($user);
-        $audit->record($request, 'LOGIN', 'auth', 'Inicio de sesion exitoso.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
+        Auth::setUser($user);
+        $audit->record($request, AuditEventType::Login, 'auth', 'Inicio de sesion exitoso.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
 
         $this->attachPreValeMaxAmount($user, $financial);
 
@@ -230,5 +290,18 @@ final class AuthController extends ApiController
         );
 
         $distributor->setAttribute('pre_vale_max_amount', $result->ruleApplied ? $result->maxAllowedAmount : null);
+    }
+
+    private function getUserAuditData(User $user, array $extra = []): array
+    {
+        $role = $user->businessRoles()->wherePivotNull('revoked_at')->first();
+
+        return array_merge([
+            'user_id' => $user->id,
+            'username' => $user->username,
+            'email' => $user->person?->email,
+            'role' => $role?->code ?? $role?->name ?? null,
+            'branch_id' => $role?->pivot?->branch_id ?? null,
+        ], $extra);
     }
 }

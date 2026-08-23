@@ -10,7 +10,7 @@ use Illuminate\Foundation\Http\FormRequest;
 /**
  * @property string $name
  * @property string $address
- * @property string|null $phone
+ * @property string $phone
  */
 final class StoreBranchRequest extends FormRequest
 {
@@ -27,10 +27,10 @@ final class StoreBranchRequest extends FormRequest
         return [
             'code' => ['nullable', 'string', 'max:30', 'unique:branches,code'],
             'name' => ['required', 'string', 'max:150'],
-            'address' => ['nullable', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:30'],
+            'address' => ['required', 'string', 'max:255'],
+            'phone' => ['required', 'string', 'max:30'],
             'is_active' => ['sometimes', 'boolean'],
-            'manager_user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'manager_user_id' => ['required', 'integer', 'exists:users,id'],
         ];
     }
 }

@@ -11,7 +11,7 @@ use Laravel\Sanctum\Sanctum;
 uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
-    $this->seed(\Database\Seeders\RolesAndPermissionSeeder::class);
+    $this->seed(Database\Seeders\RolesAndPermissionSeeder::class);
 });
 
 function staffRole(string $code): Role
@@ -28,6 +28,7 @@ function staffSignIn(string $roleCode, ?Branch $branch = null): User
         'is_primary' => true,
     ]);
     Sanctum::actingAs($user);
+
     return $user;
 }
 
@@ -73,6 +74,68 @@ describe('Staff management', function (): void {
         $ids = collect($response->json('data.data'))->pluck('id');
         expect($ids)->toContain($myCashier->id)
             ->and($ids)->not->toContain($otherCashier->id);
+    });
+
+    it('shows a single staff member for the general manager', function (): void {
+        $branch = Branch::factory()->create();
+        staffSignIn('general_manager');
+
+        $cashier = User::factory()->create();
+        $cashier->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->getJson("/api/v1/staff/{$cashier->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $cashier->id)
+            ->assertJsonPath('data.roles.0.code', 'cashier');
+    });
+
+    it('lets a branch manager show a staff member within their own branch', function (): void {
+        $myBranch = Branch::factory()->create();
+        staffSignIn('branch_manager', $myBranch);
+
+        $myCashier = User::factory()->create();
+        $myCashier->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $myBranch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->getJson("/api/v1/staff/{$myCashier->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $myCashier->id);
+    });
+
+    it('forbids a branch manager from showing staff outside their branch', function (): void {
+        $myBranch = Branch::factory()->create();
+        $otherBranch = Branch::factory()->create();
+        staffSignIn('branch_manager', $myBranch);
+
+        $otherCashier = User::factory()->create();
+        $otherCashier->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $otherBranch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->getJson("/api/v1/staff/{$otherCashier->id}")
+            ->assertStatus(403);
+    });
+
+    it('returns 404 when the target user is not a staff role', function (): void {
+        staffSignIn('general_manager');
+
+        $distributor = User::factory()->create();
+        $distributor->businessRoles()->attach(staffRole('distributor'), [
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->getJson("/api/v1/staff/{$distributor->id}")
+            ->assertStatus(404);
     });
 
     it('creates a cashier assigned to a branch as general manager', function (): void {
@@ -165,7 +228,7 @@ describe('Staff management', function (): void {
             'last_name' => 'Diaz',
             'username' => 'rosa.diaz',
             'password' => 'secret123',
-            'curp' => 'DILR930606JDFRDC08',
+            'curp' => 'DILR930606MDFRDC08',
             'role_code' => 'cashier',
             'branch_id' => $otherBranch->id,
         ])->assertStatus(403);
@@ -264,6 +327,62 @@ describe('Staff management', function (): void {
             ->assertJsonPath('data.roles.0.code', 'cashier');
     });
 
+    it('revokes tokens and blocks requests when staff is deactivated', function (): void {
+        $branch = Branch::factory()->create();
+        staffSignIn('general_manager');
+
+        $staffUser = User::factory()->create(['is_active' => true]);
+        $staffUser->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        $token = $staffUser->createToken('staff-token')->plainTextToken;
+
+        $this->patchJson("/api/v1/staff/{$staffUser->id}", [
+            'is_active' => false,
+        ])->assertOk();
+
+        expect($staffUser->tokens()->count())->toBe(0);
+
+        $this->app['auth']->forgetGuards();
+
+        // 1. Con el token eliminado, Sanctum rechaza con Unauthenticated
+        $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/v1/auth/me')
+            ->assertStatus(401);
+
+        $staffUser->refresh();
+        $this->actingAs($staffUser);
+        $this->getJson('/api/v1/auth/me')
+            ->assertStatus(401)
+            ->assertJson(['success' => false, 'message' => 'Cuenta desactivada. Ponte en contacto con un administrador.']);
+    });
+
+    it('prevents branch manager from seeing or modifying themselves in staff module', function (): void {
+        $branch = Branch::factory()->create();
+        $bm = staffSignIn('branch_manager', $branch);
+
+        $cashier = User::factory()->create();
+        $cashier->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        // 1. El branch manager no se ve a si mismo en la lista
+        $response = $this->getJson('/api/v1/staff')->assertOk();
+        $ids = collect($response->json('data.data'))->pluck('id')->all();
+        expect($ids)->toContain($cashier->id)
+            ->and($ids)->not->toContain($bm->id);
+
+        // 2. El branch manager no puede editar su propia cuenta desde el modulo
+        $this->patchJson("/api/v1/staff/{$bm->id}", [
+            'is_active' => true,
+            'role_code' => 'cashier',
+        ])->assertStatus(403);
+    });
+
     it('updates staff person data as general manager', function (): void {
         $branch = Branch::factory()->create();
         staffSignIn('general_manager');
@@ -313,5 +432,86 @@ describe('Staff management', function (): void {
             'role_code' => 'cashier',
             'branch_id' => Branch::factory()->create()->id,
         ])->assertStatus(403);
+    });
+
+    it('allows only super-admin to create a general manager', function (): void {
+        // 1. Super-admin can create it
+        $superAdmin = User::factory()->create();
+        $superAdmin->businessRoles()->attach(staffRole('super-admin'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($superAdmin);
+
+        $response = $this->postJson('/api/v1/staff', [
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+            'username' => 'john.gm',
+            'password' => 'secret123',
+            'curp' => 'DOEJ900101MDFRND01',
+            'role_code' => 'general_manager',
+            'branch_id' => null,
+        ])->assertCreated();
+
+        $newGmId = $response->json('data.id');
+        $newGm = User::findOrFail($newGmId);
+        expect($newGm->isGeneralManager())->toBeTrue()
+            ->and($newGm->businessRoles()->first()->pivot->branch_id)->toBeNull();
+
+        // 2. A general manager cannot create another general manager
+        $gm = User::factory()->create();
+        $gm->businessRoles()->attach(staffRole('general_manager'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($gm);
+
+        $this->postJson('/api/v1/staff', [
+            'first_name' => 'Jane',
+            'last_name' => 'Doe',
+            'username' => 'jane.gm',
+            'password' => 'secret123',
+            'curp' => 'DOEJ900101MDFRND02',
+            'role_code' => 'general_manager',
+            'branch_id' => null,
+        ])->assertStatus(403);
+    });
+
+    it('allows only super-admin to update or deactivate a general manager', function (): void {
+        $gm = User::factory()->create();
+        $gm->businessRoles()->attach(staffRole('general_manager'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        // 1. A general manager trying to update/deactivate another general manager
+        $anotherGm = User::factory()->create();
+        $anotherGm->businessRoles()->attach(staffRole('general_manager'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($anotherGm);
+
+        $this->patchJson("/api/v1/staff/{$gm->id}", [
+            'is_active' => false,
+        ])->assertStatus(403);
+
+        // 2. A super-admin can update/deactivate a general manager
+        $superAdmin = User::factory()->create();
+        $superAdmin->businessRoles()->attach(staffRole('super-admin'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($superAdmin);
+
+        $this->patchJson("/api/v1/staff/{$gm->id}", [
+            'is_active' => false,
+        ])->assertOk()
+            ->assertJsonPath('data.is_active', false);
     });
 });

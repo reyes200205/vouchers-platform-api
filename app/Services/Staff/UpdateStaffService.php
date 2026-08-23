@@ -42,9 +42,31 @@ final class UpdateStaffService
             abort(422, 'El usuario no pertenece al módulo de personal.');
         }
 
+        if ($staff->isGeneralManager() && ! $actor->hasRole('super-admin')) {
+            abort(403, 'Solo el super administrador puede modificar a un gerente general.');
+        }
+
+        if (isset($data['role_code'])) {
+            $targetRole = Role::query()->where('code', $data['role_code'])->firstOrFail();
+            if ($targetRole->name === 'general_manager' && ! $actor->hasRole('super-admin')) {
+                abort(403, 'Solo el super administrador puede asignar el rol de gerente general.');
+            }
+        }
+
+        if ($actor->id === $staff->id && ! $actor->hasRole('super-admin')) {
+            abort(403, 'No puedes modificar tu propia cuenta desde el módulo de personal.');
+        }
+
         if (! $actor->isGeneralManager() && ! $actor->hasRole('super-admin')) {
             $allowedBranchIds = $actor->activeBusinessBranchIds();
             $staffBranchIds = $staff->activeBusinessBranchIds();
+
+            $staffRole = $staff->businessRoles()->wherePivotNull('revoked_at')->first();
+            abort_unless(
+                $staffRole !== null && in_array($staffRole->name, ListStaffService::BRANCH_MANAGER_ROLES, true),
+                403,
+                'Solo puedes administrar personal subordinado (cajeras, coordinadores, verificadores).'
+            );
 
             abort_unless(array_intersect($staffBranchIds, $allowedBranchIds) !== [], 403, 'Solo puedes administrar personal de tus sucursales.');
             abort_unless(($data['branch_id'] ?? null) === null || in_array($data['branch_id'], $allowedBranchIds, true), 403, 'Solo puedes asignar personal a tus sucursales.');
@@ -64,6 +86,10 @@ final class UpdateStaffService
 
         return DB::transaction(function () use ($actor, $staff, $data): User {
             $staff->update(['is_active' => $data['is_active']]);
+
+            if (! $data['is_active']) {
+                $staff->tokens()->delete();
+            }
 
             if ($staff->person !== null) {
                 $personFields = [
@@ -89,6 +115,15 @@ final class UpdateStaffService
                 ->first();
 
             $branchId = $data['branch_id'] ?? ($primaryPivot?->pivot->branch_id ?? null);
+
+            if (($data['role_code'] ?? null) !== null) {
+                $newRole = Role::query()->where('code', $data['role_code'])->firstOrFail();
+                if ($newRole->name === 'general_manager') {
+                    $branchId = null;
+                }
+            } elseif ($staff->isGeneralManager()) {
+                $branchId = null;
+            }
 
             if (($data['role_code'] ?? null) !== null && $primaryPivot !== null && $primaryPivot->name !== $data['role_code']) {
                 $staff->businessRoles()->updateExistingPivot($primaryPivot->id, ['revoked_at' => now()]);

@@ -36,6 +36,18 @@ final class CutoffRelationItemResource extends JsonResource
             'previous_paid_amount' => $this->previous_paid_amount,
             'origin_cutoff_id' => $this->origin_cutoff_id,
             'origin_relation_id' => $this->origin_relation_id,
+            // Solo informativo: cuánta comisión hubiera ganado la
+            // distribuidora sobre este vale si hubiera pagado a tiempo
+            // (según su categoría/producto -- ver
+            // GenerateCutoffService::calculateDistributorCommission). No
+            // cambia commission_amount (0 real, la distribuidora sí la
+            // pierde por el atraso -- ver MarkOverdueRelationsService); esto
+            // solo se muestra en el detalle para que quede claro cuánto se
+            // perdió, no para volver a sumarlo a ningún total.
+            'commission_forfeited_amount' => $this->when(
+                $this->is_late_payment && $this->relationLoaded('voucher') && $this->voucher !== null && $this->voucher->total_fortnights > 0,
+                fn () => round((float) $this->voucher->distributor_profit_amount / $this->voucher->total_fortnights, 2)
+            ),
             'customer' => $this->whenLoaded('customer', fn () => $this->customer ? [
                 'id' => $this->customer->id,
                 'customer_code' => $this->customer->customer_code,

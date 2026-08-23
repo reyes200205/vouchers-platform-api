@@ -9,7 +9,6 @@ use App\Enums\DistributorStatus;
 use App\Enums\ManagerDecisionEventType;
 use App\Models\Application;
 use App\Models\Distributor;
-use App\Models\DistributorActivation;
 use App\Models\ManagerDecisionLog;
 use Spatie\Permission\Models\Role;
 use App\Models\User;
@@ -63,14 +62,23 @@ final class DecideApplicationService
                 'activated_at' => now(),
             ]);
 
-            $activationToken = Str::random(48);
+            // La contrasena inicial es el CURP del solicitante: lo trae consigo
+            // (no hay que inventarle ni comunicarle un token aparte) y el
+            // gerente lo ve en la misma pantalla de aprobacion. Si la solicitud
+            // no capturo CURP (el campo es opcional en la captura inicial), se
+            // cae a un token aleatorio como antes -- no puede quedar sin
+            // contrasena. password_confirmed_at en null es lo que obliga al
+            // modal de "deja esta contrasena o cambiala" en el primer login
+            // (ver AuthController::confirmPassword/changePassword).
+            $temporaryPassword = $application->applicant->curp ?: Str::random(48);
             $username = $this->uniqueUsername($application);
             $user = User::query()->firstOrCreate(
                 ['person_id' => $application->applicant_person_id],
                 [
                     'username' => $username,
-                    'password_hash' => Hash::make($activationToken),
+                    'password_hash' => Hash::make($temporaryPassword),
                     'is_active' => true,
+                    'password_confirmed_at' => null,
                 ]
             );
 
@@ -80,11 +88,6 @@ final class DecideApplicationService
                 'assigned_at' => now(),
                 'is_primary' => true,
             ]);
-
-            DistributorActivation::query()->updateOrCreate(
-                ['user_id' => $user->id],
-                ['token_hash' => hash('sha256', $activationToken), 'expires_at' => now()->addDays(3), 'used_at' => null]
-            );
 
             $application->update(['status' => ApplicationStatus::APROBADA, 'decided_at' => now()]);
 
@@ -100,7 +103,7 @@ final class DecideApplicationService
                 'application' => $application->fresh(),
                 'distributor' => $distributor,
                 'distributor_username' => $user->username,
-                'temporary_password' => $activationToken,
+                'temporary_password' => $temporaryPassword,
             ];
         });
     }

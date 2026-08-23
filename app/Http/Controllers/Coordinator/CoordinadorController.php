@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Coordinator;
 
 use App\Enums\ApplicationStatus;
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Applications\StoreApplicationRequest;
 use App\Models\Application;
@@ -12,6 +13,7 @@ use App\Models\Person;
 use App\Models\User;
 use App\Notifications\ApplicationAssignedToVerifierNotification;
 use App\Services\Audit\AuditLogger;
+use App\Services\Storage\SpacesStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +44,7 @@ final class CoordinadorController extends ApiController
      * se visitó, la verificación en sitio (incluida la foto de fachada). Se
      * usa desde la Bandeja de Aprobaciones al decidir una solicitud.
      */
-    public function show(Request $request, Application $application): JsonResponse
+    public function show(Request $request, Application $application, SpacesStorageService $storage): JsonResponse
     {
         $application->load([
             'applicant',
@@ -52,18 +54,19 @@ final class CoordinadorController extends ApiController
             'verification.verifier.person',
         ]);
 
-        $baseUrl = $request->getSchemeAndHttpHost().'/storage/';
-        $toUrl = fn (?string $path): ?string => $path ? $baseUrl.$path : null;
-
+        // id_front_path / id_back_path / proof_of_address_path se suben via
+        // ApplicationDocumentController a Spaces (bucket privado), igual que
+        // las fotos de verificacion; su URL debe salir firmada desde ahi, no
+        // como ruta de /storage local (ese bucket no es publico).
         $data = $application->toArray();
-        $data['id_front_url'] = $toUrl($application->id_front_path);
-        $data['id_back_url'] = $toUrl($application->id_back_path);
-        $data['proof_of_address_url'] = $toUrl($application->proof_of_address_path);
+        $data['id_front_url'] = $storage->temporaryUrlFor($application->id_front_path);
+        $data['id_back_url'] = $storage->temporaryUrlFor($application->id_back_path);
+        $data['proof_of_address_url'] = $storage->temporaryUrlFor($application->proof_of_address_path);
 
         if ($application->verification !== null) {
-            $data['verification']['front_photo_url'] = $toUrl($application->verification->front_photo);
-            $data['verification']['id_with_person_photo_url'] = $toUrl($application->verification->id_with_person_photo);
-            $data['verification']['proof_of_address_photo_url'] = $toUrl($application->verification->proof_of_address_photo);
+            $data['verification']['front_photo_url'] = $storage->temporaryUrlFor($application->verification->front_photo);
+            $data['verification']['id_with_person_photo_url'] = $storage->temporaryUrlFor($application->verification->id_with_person_photo);
+            $data['verification']['proof_of_address_photo_url'] = $storage->temporaryUrlFor($application->verification->proof_of_address_photo);
         }
 
         return $this->success($data);
@@ -74,6 +77,14 @@ final class CoordinadorController extends ApiController
         /** @var User $user */
         $user = $request->user();
         $data = $request->validated();
+
+        // $request->validated() SOLO conserva, dentro de un campo 'array' como
+        // family_data, las sub-claves que tienen su propia regla declarada
+        // (aqui unicamente family_data.applicant_age) — el resto (members,
+        // occupation, housing) se descarta silenciosamente. new.vue SI manda
+        // esa estructura completa; hay que leerla del input crudo (ya paso la
+        // validacion de tipo array) para no perder lo que capturo el coordinador.
+        $data['family_data'] = $request->input('family_data', $data['family_data'] ?? null);
 
         if (! $user->hasBusinessAbility('applications.create', $data['branch_id'])) {
             return $this->forbidden();
@@ -102,7 +113,7 @@ final class CoordinadorController extends ApiController
             ]);
         });
 
-        $audit->record($request, 'APPLICATION_SUBMITTED', 'applications', 'Solicitud de distribuidora enviada a verificacion.', $application->branch_id, ['application_id' => $application->id]);
+        $audit->record($request, AuditEventType::Submitted, 'applications', 'Solicitud de distribuidora enviada a verificacion.', $application->branch_id, ['application_id' => $application->id]);
 
         return $this->created($application->load(['applicant', 'branch']));
     }
@@ -125,7 +136,7 @@ final class CoordinadorController extends ApiController
         }
 
         $application->update(['assigned_verifier_id' => $data['verifier_user_id'], 'reviewed_at' => now()]);
-        $audit->record($request, 'APPLICATION_VERIFIER_ASSIGNED', 'applications', 'Verificador asignado a solicitud.', $application->branch_id, ['application_id' => $application->id]);
+        $audit->record($request, AuditEventType::Assigned, 'applications', 'Verificador asignado a solicitud.', $application->branch_id, ['application_id' => $application->id]);
 
         $application = $application->fresh() ?? $application;
         Notification::send($verifier, new ApplicationAssignedToVerifierNotification($application));

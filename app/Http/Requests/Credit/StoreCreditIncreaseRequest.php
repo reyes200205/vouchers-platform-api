@@ -22,7 +22,7 @@ final class StoreCreditIncreaseRequest extends FormRequest
         return [
             'distributor_id' => ['required', 'integer', 'exists:distributors,id'],
             'requested_amount' => ['required', 'decimal:0,2', 'min:0.01'],
-            'reason' => ['nullable', 'string', 'max:255'],
+            'reason' => ['required', 'string', 'max:255'],
         ];
     }
 }

@@ -12,7 +12,7 @@ final class ListStaffService
     /**
      * Roles de negocio administrables desde el módulo de personal.
      */
-    public const STAFF_ROLES = ['coordinator', 'verifier', 'branch_manager', 'cashier'];
+    public const STAFF_ROLES = ['coordinator', 'verifier', 'branch_manager', 'cashier', 'general_manager'];
 
     /**
      * Roles that a branch manager can create and manage within their own branch.
@@ -44,9 +44,17 @@ final class ListStaffService
             $perPage = (int) ($filters['per_page'] ?? 15);
             $query = User::query()
                 ->with(['person', 'businessRoles'])
+                ->where('users.id', '!=', $actor->id)
                 ->whereHas('businessRoles', fn ($q) => $q
                     ->whereIn('model_has_roles.branch_id', $branchIds)
+                    ->whereIn('roles.name', self::BRANCH_MANAGER_ROLES)
                     ->whereNull('model_has_roles.revoked_at'));
+
+            if (isset($filters['role'])) {
+                $query->whereHas('businessRoles', fn ($q) => $q
+                    ->where('roles.name', $filters['role'])
+                    ->whereNull('model_has_roles.revoked_at'));
+            }
 
             return $query->paginate($perPage);
         }

@@ -18,10 +18,14 @@ final class DatabaseSeeder extends Seeder
     {
         // BranchAndEmployeeSeeder queda fuera del seeding automatico por dependencias no existentes.
         // Ahora UserSeeder crea unicamente al Super Admin y se incluye en el seeding.
+        // AlessandroDemoSeeder queda fuera: usa Person::factory()/Customer::factory()/etc,
+        // que dependen de fake() (fakerphp/faker esta en require-dev, no en el servidor
+        // con `composer install --no-dev`). El sistema jala igual sin datos de demo:
+        // RolesAndPermissionSeeder + UserSeeder ya dejan el Super Admin listo para entrar.
         $this->call([
             RolesAndPermissionSeeder::class,
-            UserSeeder::class,
-            AlessandroDemoSeeder::class,
+            BaseSeeder::class,
+            // AlessandroDemoSeeder::class,
         ]);
     }
 }

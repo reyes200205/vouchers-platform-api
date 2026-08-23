@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Cashier;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Payments\ReverseCustomerPaymentRequest;
 use App\Http\Requests\Payments\StoreCustomerPaymentRequest;
@@ -24,7 +25,7 @@ final class PaymentController extends ApiController
 
         $audit->record(
             $request,
-            'CUSTOMER_PAYMENT_RECORDED',
+            AuditEventType::Recorded,
             'payments',
             'Pago de cliente registrado.',
             $voucher->branch_id,
@@ -45,7 +46,7 @@ final class PaymentController extends ApiController
 
         $audit->record(
             $request,
-            'CUSTOMER_PAYMENT_REVERSED',
+            AuditEventType::Reversed,
             'payments',
             'Pago de cliente reversado.',
             $payment->voucher->branch_id,

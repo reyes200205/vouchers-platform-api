@@ -8,6 +8,7 @@ use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\SecurityScheme;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -28,6 +29,12 @@ final class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureRateLimiting();
+
+        // Ver config/network.php: las cabeceras de confianza ya se fijan en
+        // bootstrap/app.php (no depende de config()); aqui solo se fija LA
+        // LISTA de proxies confiables, que si necesita config().
+        $trustedProxies = config('network.trusted_proxies', []);
+        TrustProxies::at(is_array($trustedProxies) && $trustedProxies !== [] ? $trustedProxies : '*');
 
         Scramble::configure()
             ->withDocumentTransformers(function (OpenApi $openApi) {

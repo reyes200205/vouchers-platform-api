@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use App\Http\Middleware\EnsureBusinessAbility;
 use App\Http\Middleware\EnsureEmailVerified;
+use App\Http\Middleware\EnsureUserIsActive;
+use App\Http\Middleware\EnsureVpnAccessForRoles;
 use App\Http\Middleware\ForceJsonResponse;
 use App\Http\Middleware\LogApiRequests;
 use Illuminate\Foundation\Application;
@@ -21,14 +23,31 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [
             ForceJsonResponse::class,
+        ], append: [
+            EnsureUserIsActive::class,
         ]);
 
         $middleware->alias([
             'business.ability' => EnsureBusinessAbility::class,
             'force.json' => ForceJsonResponse::class,
             'log.api' => LogApiRequests::class,
+            'user.active' => EnsureUserIsActive::class,
             'verified' => EnsureEmailVerified::class,
+            'vpn.restrict' => EnsureVpnAccessForRoles::class,
         ]);
+
+        // Solo las cabeceras se fijan aqui (no dependen de config()). La
+        // lista de proxies confiables (TRUSTED_PROXIES) se aplica en
+        // AppServiceProvider::boot() en vez de aqui: esta closure corre antes
+        // de que 'config' este registrado en el contenedor, y ademas un
+        // env() suelto fuera de un archivo de config regresa null cuando hay
+        // config cacheado en produccion.
+        $middleware->trustProxies(
+            headers: Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PORT
+                | Request::HEADER_X_FORWARDED_PROTO,
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(function (Request $request, Throwable $e) {
@@ -39,12 +58,13 @@ return Application::configure(basePath: dirname(__DIR__))
             return $request->expectsJson();
         });
 
-        $exceptions->render(function (\Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, Request $request) {
+        $exceptions->render(function (Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, Request $request) {
             if ($request->is('api/*')) {
                 $previous = $e->getPrevious();
 
-                if ($previous instanceof \Illuminate\Database\Eloquent\ModelNotFoundException) {
+                if ($previous instanceof Illuminate\Database\Eloquent\ModelNotFoundException) {
                     $modelName = class_basename($previous->getModel());
+
                     return response()->json([
                         'success' => false,
                         'message' => "{$modelName} not found",

@@ -64,49 +64,66 @@ final class MarkOverdueRelationsService
 
         foreach ($items as $item) {
             $voucher = $item->voucher_id !== null ? Voucher::query()->find($item->voucher_id) : null;
-
-            // La multa se lee del snapshot inmutable que quedó grabado en el vale al
-            // emitirlo (vouchers.late_fee_amount_snapshot), tomado en su momento del
-            // producto financiero (financial_products.late_fee_amount), no de la
-            // configuración actual de la sucursal ni del producto en vivo.
-            $lateFee = round((float) ($voucher?->late_fee_amount_snapshot ?? 0.0), 2);
-
-            // Un item de arrastre (origin_relation_id no nulo) ya trae en
-            // payment_amount el monto exacto que se le debe a la sucursal de
-            // un periodo anterior -- no viene de redondear una quincena, así
-            // que aquí sí se suma la multa directo sobre eso.
-            //
-            // Un item de la quincena normal (sin origin) SÍ viene de
-            // payment_amount ya redondeado al piso para el cobro del cliente
-            // (FinancialCalculationService) -- sumarle la multa ahí perdería
-            // los mismos centavos otra vez. Por eso la multa se suma sobre el
-            // total exacto del vale sin redondear (total_debt_amount /
-            // total_fortnights), igual que GenerateCutoffService::calculateNetRemit
-            // hace para el pago a tiempo, y el resultado se redondea al piso
-            // al peso entero al final (regla de negocio: siempre floor, nunca
-            // deja centavos) -- no round().
             $isCarryover = $item->origin_relation_id !== null;
 
-            if (! $isCarryover && $voucher !== null && $voucher->total_fortnights > 0) {
-                $grossPerFortnight = ((float) $voucher->total_debt_amount) / $voucher->total_fortnights;
-                $lineTotal = floor($grossPerFortnight + $lateFee);
-            } else {
-                $lineTotal = floor((float) $item->payment_amount + $lateFee);
+            // Un item de arrastre que YA trae multa (porque la relación de la
+            // que se arrastró ya se había vencido antes) no vuelve a
+            // cobrarla aquí: la multa es una sola por vale, no una por cada
+            // corte que sigue sin pagarse. payment_amount/line_total_amount
+            // de un arrastre YA vienen con esa multa incluida desde que se
+            // generó (ver GenerateCutoffService, que copia el monto final de
+            // la relación anterior tal cual) -- sumarla otra vez aquí la
+            // duplicaría cada vez que la deuda se vuelve a vencer sin
+            // pagarse. Antes esto sí la duplicaba: un arrastre de $2,737
+            // (que ya incluía $200 de multa) se recalculaba a $2,937 la
+            // siguiente vez que su relación se vencía, sin haber cobrado
+            // nada de más.
+            $alreadyCarriesFee = $isCarryover && (float) $item->late_fee_amount > 0;
+
+            if (! $alreadyCarriesFee) {
+                // La multa se lee del snapshot inmutable que quedó grabado en el vale al
+                // emitirlo (vouchers.late_fee_amount_snapshot), tomado en su momento del
+                // producto financiero (financial_products.late_fee_amount), no de la
+                // configuración actual de la sucursal ni del producto en vivo.
+                $lateFee = round((float) ($voucher?->late_fee_amount_snapshot ?? 0.0), 2);
+
+                // Un item de arrastre (origin_relation_id no nulo) que TODAVÍA no
+                // traía multa (se arrastró mientras su relación seguía GENERADA,
+                // sin haberse vencido todavía) ya trae en payment_amount el monto
+                // exacto que se le debe a la sucursal de un periodo anterior -- no
+                // viene de redondear una quincena, así que aquí sí se suma la
+                // multa directo sobre eso, por primera y única vez.
+                //
+                // Un item de la quincena normal (sin origin) SÍ viene de
+                // payment_amount ya redondeado al piso para el cobro del cliente
+                // (FinancialCalculationService) -- sumarle la multa ahí perdería
+                // los mismos centavos otra vez. Por eso la multa se suma sobre el
+                // total exacto del vale sin redondear (total_debt_amount /
+                // total_fortnights), igual que GenerateCutoffService::calculateNetRemit
+                // hace para el pago a tiempo, y el resultado se redondea al piso
+                // al peso entero al final (regla de negocio: siempre floor, nunca
+                // deja centavos) -- no round().
+                if (! $isCarryover && $voucher !== null && $voucher->total_fortnights > 0) {
+                    $grossPerFortnight = ((float) $voucher->total_debt_amount) / $voucher->total_fortnights;
+                    $lineTotal = floor($grossPerFortnight + $lateFee);
+                } else {
+                    $lineTotal = floor((float) $item->payment_amount + $lateFee);
+                }
+
+                // payment_amount ya es la quincena COMPLETA (con la comisión de la
+                // distribuidora incluida — ver FinancialCalculationService), así que no
+                // hay que volver a sumarle la comisión aquí: nada más se pone la
+                // comisión en 0 (ya no se la queda) y se le agrega la multa.
+                $item->update([
+                    'is_late_payment' => true,
+                    'commission_amount' => 0.00,
+                    'late_fee_amount' => $lateFee,
+                    'line_total_amount' => $lineTotal,
+                ]);
             }
 
-            // payment_amount ya es la quincena COMPLETA (con la comisión de la
-            // distribuidora incluida — ver FinancialCalculationService), así que no
-            // hay que volver a sumarle la comisión aquí: nada más se pone la
-            // comisión en 0 (ya no se la queda) y se le agrega la multa.
-            $item->update([
-                'is_late_payment' => true,
-                'commission_amount' => 0.00,
-                'late_fee_amount' => $lateFee,
-                'line_total_amount' => $lineTotal,
-            ]);
-
-            $totalLateFees += $lateFee;
-            $totalAmountDue += $lineTotal;
+            $totalLateFees += (float) $item->late_fee_amount;
+            $totalAmountDue += (float) $item->line_total_amount;
 
             if ($voucher !== null && ! in_array($voucher->status, [
                 VoucherStatus::PAGADO,

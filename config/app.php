@@ -58,6 +58,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Frontend URL
+    |--------------------------------------------------------------------------
+    |
+    | Base del frontend Nuxt (vouchers-plattform-frontend), usada para armar
+    | enlaces que apuntan a la SPA desde el backend (ej. el enlace de
+    | recuperacion de contrasena en el correo de reset-password).
+    |
+    */
+
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\GeneralManager;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Points\DecidePointRedemptionRequest;
 use App\Http\Requests\Points\UpdateDistributorCategoryRequest;
@@ -47,7 +48,7 @@ final class PointController extends ApiController
 
         $audit->record(
             $request,
-            'POINT_REDEMPTION_DECIDED',
+            AuditEventType::Decided,
             'points',
             'Canje de puntos resuelto.',
             $redemption->branch_id,
@@ -67,7 +68,7 @@ final class PointController extends ApiController
 
         $audit->record(
             $request,
-            'DISTRIBUTOR_CATEGORY_CHANGED',
+            AuditEventType::Changed,
             'points',
             'Categoría de la distribuidora actualizada.',
             $distributor->branch_id,
