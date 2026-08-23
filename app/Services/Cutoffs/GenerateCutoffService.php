@@ -38,6 +38,10 @@ use Illuminate\Support\Facades\DB;
  */
 final class GenerateCutoffService
 {
+    public function __construct(
+        private readonly SettleCutoffRelationService $settleCutoffRelationService,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $data
      */
@@ -241,7 +245,30 @@ final class GenerateCutoffService
             $unpaidItems = $previousRelation->items()->get();
 
             foreach ($unpaidItems as $item) {
-                $carryover += (float) $item->line_total_amount;
+                // Si la relación anterior quedó PARCIAL (se conciliaron uno o
+                // varios depósitos que no cubrieron todo), previous_paid_amount
+                // ya trae cuánto de ESTE item se alcanzó a cubrir (ver
+                // SettleCutoffRelationService::applyPartialPayment). Lo que
+                // realmente sigue adeudado -- y lo único que debe arrastrarse
+                // al corte nuevo -- es el remanente, no el monto original
+                // completo otra vez: antes, un depósito parcial cubría de
+                // hecho una parte de la deuda pero la siguiente quincena
+                // seguía mostrando el adeudo completo sin descontar nada de
+                // lo ya pagado.
+                $alreadyPaid = round((float) $item->previous_paid_amount, 2);
+                $itemRemaining = round((float) $item->line_total_amount - $alreadyPaid, 2);
+
+                if ($itemRemaining <= 0.005) {
+                    // Este item en particular ya quedó cubierto por completo
+                    // (puede pasar en una relación con varios items donde el
+                    // pago alcanzó para unos vales pero no para otros): ese
+                    // vale sí liquidó su quincena, no hay nada que arrastrar.
+                    $this->settleCutoffRelationService->advanceVoucherForItem($item);
+
+                    continue;
+                }
+
+                $carryover += $itemRemaining;
                 $carriedLateFees += (float) $item->late_fee_amount;
 
                 CutoffRelationItem::query()->create([
@@ -261,7 +288,10 @@ final class GenerateCutoffService
                     'installment_number' => $item->installment_number,
                     'accumulated_late_installments' => $item->accumulated_late_installments,
                     'commission_amount' => 0.00,
-                    'payment_amount' => $item->line_total_amount,
+                    // El remanente (ya neto de lo que se alcanzó a cubrir con
+                    // pagos parciales anteriores), no el monto original del
+                    // item -- ver comentario arriba.
+                    'payment_amount' => $itemRemaining,
                     // La multa NO se resetea a 0 aquí: payment_amount/line_total_amount
                     // ya incluyen la multa que se le sumó cuando la relación
                     // anterior se venció (MarkOverdueRelationsService) -- si
@@ -269,7 +299,11 @@ final class GenerateCutoffService
                     // de recargos de la relación) dejarían de reflejar esa
                     // multa ya cobrada, aunque siga incluida en el monto.
                     'late_fee_amount' => $item->late_fee_amount,
-                    'line_total_amount' => $item->line_total_amount,
+                    'line_total_amount' => $itemRemaining,
+                    // Arranca en 0 en la relación nueva: previous_paid_amount
+                    // es "cuánto se cubrió DE ESTE item en ESTA relación", no
+                    // un acumulado histórico entre relaciones -- ya se reflejó
+                    // descontando el remanente arriba.
                     'previous_paid_amount' => 0.00,
                     'origin_cutoff_id' => $item->origin_cutoff_id ?? $previousRelation->cutoff_id,
                     'origin_relation_id' => $item->origin_relation_id ?? $previousRelation->id,

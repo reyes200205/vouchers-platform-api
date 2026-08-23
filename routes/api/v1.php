@@ -230,8 +230,15 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:authenticated'])->gr
     Route::middleware('business.ability:reconciliations.view')->get('/reconciliations/bank-transactions', [CashierReconciliationController::class, 'bankTransactions'])->name('reconciliations.bank-transactions');
     Route::middleware('business.ability:reconciliations.view')->get('/reconciliations', [CashierReconciliationController::class, 'reconciliations'])->name('reconciliations.index');
     Route::middleware('business.ability:reconciliations.manual,bankTransaction')->post('/reconciliations/bank-transactions/{bankTransaction}/manual-match', [GeneralManagerReconciliationController::class, 'manualMatch'])->name('reconciliations.manual-match');
-    Route::middleware('business.ability:reconciliations.verify,reconciliation')->post('/reconciliations/{reconciliation}/verify', [GeneralManagerReconciliationController::class, 'verify'])->name('reconciliations.verify');
-    Route::middleware('business.ability:reconciliations.verify,reconciliation')->post('/reconciliations/{reconciliation}/reject', [GeneralManagerReconciliationController::class, 'reject'])->name('reconciliations.reject');
+    // Igual que applications.decide/credit-increase.decide/points.redeem.decide:
+    // esta es la segunda autorización de una conciliación manual (aprobar o
+    // rechazar), así que debe quedar restringida a la VPN interna igual que
+    // cualquier otra decisión de gerente -- antes se quedó sin este
+    // middleware y un gerente podía aprobar/rechazar conciliaciones desde
+    // fuera de la VPN aunque el resto de sus aprobaciones sí estuvieran
+    // bloqueadas.
+    Route::middleware(['business.ability:reconciliations.verify,reconciliation', 'vpn.restrict:general_manager,branch_manager'])->post('/reconciliations/{reconciliation}/verify', [GeneralManagerReconciliationController::class, 'verify'])->name('reconciliations.verify');
+    Route::middleware(['business.ability:reconciliations.verify,reconciliation', 'vpn.restrict:general_manager,branch_manager'])->post('/reconciliations/{reconciliation}/reject', [GeneralManagerReconciliationController::class, 'reject'])->name('reconciliations.reject');
 
     Route::middleware('business.ability:points.redeem.request,distributor')->post('/distributors/{distributor}/points/redeem', [DistributorPointController::class, 'redeem'])->name('points.redeem.request');
     Route::middleware('business.ability:points.view,distributor')->get('/distributors/{distributor}/points/redemptions', [DistributorPointController::class, 'myRedemptions'])->name('points.redemptions.mine');

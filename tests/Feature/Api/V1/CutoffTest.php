@@ -351,6 +351,52 @@ describe('Cutoffs', function (): void {
         $this->postJson("/api/v1/cutoffs/{$cutoff->id}/close")->assertStatus(422);
     });
 
+    it('refuses to reprocess a cutoff that was already closed manually, instead of silently reopening it', function (): void {
+        // Bug reportado: reprocesar un corte CERRADO lo dejaba en EJECUTADO
+        // otra vez -- lo "reabría" como efecto secundario de solo buscar
+        // distribuidoras nuevas, sin que nadie lo pidiera explícitamente.
+        // CloseCutoffService ya trata CERRADO como estado final (no se
+        // puede volver a cerrar); ReprocessCutoffService ahora hace lo
+        // mismo.
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create(['branch_id' => $branch->id]);
+        // El vencimiento se deja unos días ANTES del cierre del periodo (no
+        // exactamente igual a period_end): SQLite guarda la columna `date`
+        // con hora incluida y, comparado como texto contra el límite del
+        // whereBetween, un vencimiento que cae justo en el límite superior
+        // queda fuera por unos caracteres de más (ver otras pruebas de este
+        // archivo con el mismo comentario) -- en MySQL, la columna real sí
+        // es DATE y trunca la hora, así que ese caso no se da en producción.
+        cutoffVoucher($branch, $distributor, now()->subDays(3)->toDateString());
+
+        $manager = User::factory()->create();
+        cutoffSignInBusinessRole($manager, 'branch_manager', $branch);
+
+        $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+            'period_start' => now()->subDays(15)->toDateString(),
+            'period_end' => now()->toDateString(),
+        ])->assertCreated();
+
+        $cutoff = Cutoff::query()->firstOrFail();
+
+        $gm = User::factory()->create();
+        cutoffSignInBusinessRole($gm, 'general_manager', $branch);
+
+        $this->postJson("/api/v1/cutoffs/{$cutoff->id}/close")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'CERRADO');
+
+        // Una distribuidora nueva aparece después del cierre -- ni así debe
+        // reprocesarse: un corte cerrado ya es un estado final.
+        $distributorLate = Distributor::factory()->create(['branch_id' => $branch->id]);
+        cutoffVoucher($branch, $distributorLate, now()->subDays(3)->toDateString());
+
+        $this->postJson("/api/v1/cutoffs/{$cutoff->id}/reprocess")->assertStatus(422);
+
+        $this->assertDatabaseHas('cutoffs', ['id' => $cutoff->id, 'status' => 'CERRADO']);
+        $this->assertDatabaseCount('cutoff_relations', 1);
+    });
+
     it('lets a general manager list cutoffs of any branch, not just the one their own role is attached to', function (): void {
         // El general_manager es un rol global: activeBusinessBranchIds() solo
         // le devuelve la sucursal donde quedó su vínculo (su "matriz"), pero

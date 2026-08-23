@@ -29,20 +29,38 @@ final class EnsureBusinessAbility
     /**
      * Resolves the branch id to check against the user's roles.
      *
-     * $branch->branch_id ?? $branch->id no distinguía entre "este modelo no
-     * tiene columna branch_id" (ej. el propio Branch enlazado por ruta, donde
-     * branch_id no existe como atributo y ?? cae correctamente a $branch->id)
-     * y "este modelo SÍ tiene branch_id pero está en null" (ej. un
-     * BankTransaction importado antes de que ImportBankDepositsService
-     * empezara a guardarlo, o creado en pruebas sin especificarlo) — en ese
-     * segundo caso ?? también caía a $branch->id, usando el id NUMÉRICO
-     * PROPIO del modelo (ej. la transacción #14) como si fuera un branch id,
-     * lo cual casi nunca coincide con la sucursal real del usuario y producía
-     * un "Forbidden" para una solicitud legítima. Ahora se distingue
-     * explícitamente por si el atributo existe (aunque sea null), no por su
-     * valor: si existe y es null, no se restringe por sucursal (se deja que
-     * hasBusinessAbility() valide solo por rol) en vez de comparar contra un
-     * id que nunca fue pensado como branch id.
+     * $branch->branch_id ?? $branch->id no distinguía entre los casos
+     * distintos que se veían igual (todos "sin valor" bajo ??):
+     *
+     *   1. El modelo enlazado por ruta ES la sucursal misma (ej. Branch en
+     *      `business.ability:branches.manage,branch`) -- ahí sí corresponde
+     *      usar su propio id como branch id.
+     *   2. El modelo SÍ tiene columna branch_id pero está en null (ej. un
+     *      BankTransaction importado antes de que ImportBankDepositsService
+     *      empezara a guardarlo) -- no hay sucursal que validar todavía.
+     *   3. El modelo no tiene columna branch_id propia pero SÍ puede
+     *      resolver la sucursal a la que pertenece a través de sus
+     *      relaciones (ej. Reconciliation -> distributorPayment ->
+     *      cutoffRelation -> cutoff) -- expone `resolveBusinessBranchId()`
+     *      para eso.
+     *   4. El modelo no tiene ningún concepto de sucursal propio ni forma de
+     *      resolverlo -- nunca debería restringirse por sucursal vía este
+     *      parámetro.
+     *
+     * Antes, tanto el caso 2 como el 4 caían al mismo `?? $branch->id`,
+     * usando el id NUMÉRICO PROPIO del modelo (ej. la reconciliación #14)
+     * como si fuera un branch id -- eso casi nunca coincide con la sucursal
+     * real del usuario y producía un "Forbidden" para una solicitud
+     * legítima (pasó primero con BankTransaction en /manual-match, y luego
+     * con Reconciliation en /verify). Una primera corrección hizo que el
+     * caso 3 (Reconciliation) cayera en "no restringir" igual que el 4,
+     * lo cual arregló el Forbidden indebido pero abrió un hueco real: un
+     * gerente de sucursal podía verificar/rechazar conciliaciones de
+     * CUALQUIER sucursal, no solo la suya (detectado por el test
+     * "lets a branch manager verify pending reconciliations of their branch
+     * only" en CashierFlowTest.php). Por eso ahora el caso 3 resuelve la
+     * sucursal real vía `resolveBusinessBranchId()` en vez de renunciar a
+     * validarla.
      */
     private function resolveBranchId(mixed $branch): ?int
     {
@@ -54,12 +72,22 @@ final class EnsureBusinessAbility
             return null;
         }
 
+        if ($branch instanceof \App\Models\Branch) {
+            return (int) $branch->id;
+        }
+
+        if (method_exists($branch, 'resolveBusinessBranchId')) {
+            $value = $branch->resolveBusinessBranchId();
+
+            return $value === null ? null : (int) $value;
+        }
+
         if (method_exists($branch, 'getAttributes') && array_key_exists('branch_id', $branch->getAttributes())) {
             $value = $branch->branch_id;
 
             return $value === null ? null : (int) $value;
         }
 
-        return isset($branch->id) ? (int) $branch->id : null;
+        return null;
     }
 }

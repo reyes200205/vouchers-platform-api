@@ -37,7 +37,12 @@ final class ReconciliationController extends ApiController
             ]
         );
 
-        return $this->created(new ReconciliationResource($reconciliation->load('distributorPayment')));
+        return $this->created(new ReconciliationResource($reconciliation->load([
+            'bankTransaction',
+            'distributorPayment.distributor.person',
+            'distributorPayment.distributor.category',
+            'distributorPayment.cutoffRelation.cutoff.branch',
+        ])));
     }
 
     public function verify(VerifyReconciliationRequest $request, Reconciliation $reconciliation, VerifyReconciliationService $service, AuditLogger $audit): JsonResponse
@@ -59,7 +64,12 @@ final class ReconciliationController extends ApiController
             ]
         );
 
-        return $this->success(new ReconciliationResource($reconciliation->load('distributorPayment')));
+        return $this->success(new ReconciliationResource($reconciliation->load([
+            'bankTransaction',
+            'distributorPayment.distributor.person',
+            'distributorPayment.distributor.category',
+            'distributorPayment.cutoffRelation.cutoff.branch',
+        ])));
     }
 
     public function reject(RejectReconciliationRequest $request, Reconciliation $reconciliation, RejectReconciliationService $service, AuditLogger $audit): JsonResponse

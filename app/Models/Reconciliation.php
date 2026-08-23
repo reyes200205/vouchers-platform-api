@@ -69,4 +69,16 @@ final class Reconciliation extends Model
     {
         return $this->belongsTo(User::class, 'reconciled_by_user_id');
     }
+
+    /**
+     * Sucursal efectiva de esta conciliación para validar permisos por
+     * sucursal (ver App\Http\Middleware\EnsureBusinessAbility). Reconciliation
+     * no tiene columna branch_id propia -- se resuelve a través de
+     * distributor_payment -> cutoff_relation -> cutoff, que sí la tienen y
+     * son obligatorias (no nullable) en todo el camino.
+     */
+    public function resolveBusinessBranchId(): ?int
+    {
+        return $this->distributorPayment?->cutoffRelation?->cutoff?->branch_id;
+    }
 }
