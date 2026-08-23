@@ -55,6 +55,7 @@ final class StoreApplicationRequest extends FormRequest
             'family_data.occupation.position' => ['required', 'string', 'max:100'],
             'family_data.occupation.phone' => ['required', 'string', 'max:30'],
             'family_data.occupation.years' => ['required', 'integer', 'min:0'],
+            'family_data.occupation.monthly_income' => ['required', 'numeric', 'min:0'],
             'family_data.housing' => ['required', 'array'],
             'family_data.housing.ownership_type' => ['required', 'string', 'max:50'],
             'family_data.housing.dimensions' => ['required', 'string', 'max:100'],

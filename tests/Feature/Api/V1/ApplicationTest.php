@@ -50,7 +50,7 @@ describe('Distributor onboarding', function (): void {
             'family_data' => [
                 'applicant_age' => 28,
                 'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
-                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
                 'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
             ],
             'requested_credit_limit' => '10000.00',
@@ -92,7 +92,7 @@ describe('Distributor onboarding', function (): void {
             'family_data' => [
                 'children' => 2,
                 'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
-                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
                 'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
             ],
             'vehicles' => [['type' => 'car']],
@@ -180,7 +180,7 @@ describe('Distributor onboarding', function (): void {
             'family_data' => [
                 'children' => 2,
                 'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
-                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
                 'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
             ],
             'vehicles' => [['type' => 'car']],
@@ -252,7 +252,7 @@ describe('Distributor onboarding', function (): void {
             ],
             'family_data' => [
                 'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
-                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
                 'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
             ],
             'requested_credit_limit' => '10000.00',
@@ -290,7 +290,7 @@ function createApplicationEnRevision(Branch $branch, User $coordinator, User $ve
         ],
         'family_data' => [
             'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
-            'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3],
+            'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
             'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
         ],
         'requested_credit_limit' => '10000.00',
@@ -391,7 +391,7 @@ describe('Update application (verifier corrections)', function (): void {
         $this->patchJson("/api/v1/applications/{$application['id']}", [
             'family_data' => [
                 'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 28]],
-                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
                 'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
             ],
             'vehicles' => [['brand' => 'Nissan', 'model' => 'Versa', 'year' => '2020', 'plates' => 'ABC123']],
