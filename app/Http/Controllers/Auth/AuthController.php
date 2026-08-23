@@ -8,14 +8,17 @@ use App\Enums\LoginChannel;
 use App\Enums\OtpVerificationResult;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Auth\ChangePasswordRequest;
+use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\ResendMfaRequest;
+use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Requests\Auth\VerifyMfaRequest;
 use App\Http\Resources\UserResource;
 use App\Models\BranchSetting;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use App\Services\Auth\MfaChallengeStore;
+use App\Services\Auth\PasswordResetService;
 use App\Services\Financial\FinancialCalculationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -173,6 +176,40 @@ final class AuthController extends ApiController
         $audit->record($request, 'PASSWORD_CONFIRMED', 'auth', 'El usuario conservo su contrasena temporal.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
 
         return $this->success(message: 'Password confirmed successfully');
+    }
+
+    /**
+     * Envia el enlace de recuperacion si el usuario existe y tiene correo
+     * registrado. Responde siempre el mismo mensaje generico (exista o no el
+     * usuario) para no revelar que usuarios estan dados de alta en el sistema.
+     */
+    public function forgotPassword(ForgotPasswordRequest $request, AuditLogger $audit, PasswordResetService $service): JsonResponse
+    {
+        $user = $service->sendResetLink($request->username);
+
+        if ($user) {
+            // AuditLogger lee el actor desde $request->user(); aqui aun no hay
+            // sesion, asi que lo forzamos temporalmente para dejar registrado
+            // a quien se le envio el enlace (mismo patron que MFA_CHALLENGE_SENT).
+            Auth::setUser($user);
+            $audit->record($request, 'PASSWORD_RESET_LINK_SENT', 'auth', 'Enlace de recuperacion de contrasena enviado.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
+        }
+
+        return $this->success(message: 'Si el usuario existe, enviamos un enlace de recuperación a su correo registrado.');
+    }
+
+    public function resetPassword(ResetPasswordRequest $request, AuditLogger $audit, PasswordResetService $service): JsonResponse
+    {
+        $user = $service->reset($request->email, $request->token, $request->password);
+
+        if (! $user) {
+            return $this->error('El enlace de recuperación no es válido o ya expiró.', 400);
+        }
+
+        Auth::setUser($user);
+        $audit->record($request, 'PASSWORD_RESET_COMPLETED', 'auth', 'Contrasena restablecida mediante enlace de recuperacion.', $user->activeBusinessBranchIds()[0] ?? null, ['user_id' => $user->id]);
+
+        return $this->success(message: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.');
     }
 
     private static function maskEmail(?string $email): ?string

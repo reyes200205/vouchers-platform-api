@@ -270,6 +270,8 @@ Route::prefix('auth')->group(function (): void {
         Route::post('login', [AuthController::class, 'login'])->name('api.v1.login');
         Route::post('mfa/verify', [AuthController::class, 'verifyMfa'])->name('api.v1.mfa.verify');
         Route::post('mfa/resend', [AuthController::class, 'resendMfa'])->name('api.v1.mfa.resend');
+        Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->name('api.v1.forgot-password');
+        Route::post('reset-password', [AuthController::class, 'resetPassword'])->name('api.v1.reset-password');
     });
 
     // Protected routes with authenticated rate limiter (120/min)
