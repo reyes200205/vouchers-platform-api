@@ -76,6 +76,68 @@ describe('Staff management', function (): void {
             ->and($ids)->not->toContain($otherCashier->id);
     });
 
+    it('shows a single staff member for the general manager', function (): void {
+        $branch = Branch::factory()->create();
+        staffSignIn('general_manager');
+
+        $cashier = User::factory()->create();
+        $cashier->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->getJson("/api/v1/staff/{$cashier->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $cashier->id)
+            ->assertJsonPath('data.roles.0.code', 'cashier');
+    });
+
+    it('lets a branch manager show a staff member within their own branch', function (): void {
+        $myBranch = Branch::factory()->create();
+        staffSignIn('branch_manager', $myBranch);
+
+        $myCashier = User::factory()->create();
+        $myCashier->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $myBranch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->getJson("/api/v1/staff/{$myCashier->id}")
+            ->assertOk()
+            ->assertJsonPath('data.id', $myCashier->id);
+    });
+
+    it('forbids a branch manager from showing staff outside their branch', function (): void {
+        $myBranch = Branch::factory()->create();
+        $otherBranch = Branch::factory()->create();
+        staffSignIn('branch_manager', $myBranch);
+
+        $otherCashier = User::factory()->create();
+        $otherCashier->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $otherBranch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->getJson("/api/v1/staff/{$otherCashier->id}")
+            ->assertStatus(403);
+    });
+
+    it('returns 404 when the target user is not a staff role', function (): void {
+        staffSignIn('general_manager');
+
+        $distributor = User::factory()->create();
+        $distributor->businessRoles()->attach(staffRole('distributor'), [
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->getJson("/api/v1/staff/{$distributor->id}")
+            ->assertStatus(404);
+    });
+
     it('creates a cashier assigned to a branch as general manager', function (): void {
         $branch = Branch::factory()->create();
         staffSignIn('general_manager');
