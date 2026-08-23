@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'module',
     'description',
     'extra_data',
+    'old_data',
     'ip_address',
     'user_agent',
 ])]
@@ -27,6 +28,7 @@ final class AuditLog extends Model
 
     protected $casts = [
         'extra_data' => 'array',
+        'old_data' => 'array',
     ];
 
     /**

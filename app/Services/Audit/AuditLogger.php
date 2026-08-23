@@ -12,6 +12,7 @@ final class AuditLogger
 {
     /**
      * @param array<string, mixed>|null $extraData
+     * @param array<string, mixed>|null $oldData  Estado anterior al cambio (solo para updates)
      */
     public function record(
         Request $request,
@@ -20,7 +21,8 @@ final class AuditLogger
         string $description,
         ?int $branchId = null,
         ?array $extraData = null,
-        ?string $level = null
+        ?string $level = null,
+        ?array $oldData = null
     ): void {
         /** @var User|null $user */
         $user = $request->user();
@@ -34,6 +36,7 @@ final class AuditLogger
             'module' => $module,
             'description' => $description,
             'extra_data' => $extraData,
+            'old_data' => $oldData,
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
         ];

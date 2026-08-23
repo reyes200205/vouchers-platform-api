@@ -33,6 +33,7 @@ final class AuditLogResource extends JsonResource
             'module' => $this->module,
             'description' => $this->description,
             'extra_data' => $this->extra_data,
+            'old_data' => $this->old_data,
             'ip_address' => $this->ip_address,
             'user_agent' => $this->user_agent,
             'created_at' => $this->created_at?->toIso8601String(),
