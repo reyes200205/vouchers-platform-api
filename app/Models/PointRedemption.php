@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'distributor_id',
     'branch_id',
     'requested_by_user_id',
+    'folio',
     'points',
     'point_value_snapshot',
     'amount_mxn',

@@ -20,6 +20,7 @@ final class PointRedemptionResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'folio' => $this->folio,
             'distributor_id' => $this->distributor_id,
             'branch_id' => $this->branch_id,
             'requested_by_user_id' => $this->requested_by_user_id,

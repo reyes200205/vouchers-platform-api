@@ -34,8 +34,8 @@ final class RequestPointRedemptionService
         $valuePerPoint = (float) ($distributor->branch->branchSetting?->point_value_mxn ?? 2.00);
         $amount = round($points * $valuePerPoint, 2);
 
-        return DB::transaction(function () use ($user, $distributor, $data, $points, $valuePerPoint, $amount): PointRedemption {
-            return PointRedemption::query()->create([
+        return DB::transaction(function () use ($user, $distributor, $points, $valuePerPoint, $amount): PointRedemption {
+            $redemption = PointRedemption::query()->create([
                 'distributor_id' => $distributor->id,
                 'branch_id' => $distributor->branch_id,
                 'requested_by_user_id' => $user->id,
@@ -44,6 +44,10 @@ final class RequestPointRedemptionService
                 'amount_mxn' => $amount,
                 'status' => PointRedemptionStatus::PENDIENTE,
             ]);
+
+            $redemption->update(['folio' => 'CANJE-'.str_pad((string) $redemption->id, 8, '0', STR_PAD_LEFT)]);
+
+            return $redemption;
         });
     }
 }

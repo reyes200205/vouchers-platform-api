@@ -28,6 +28,10 @@ final class PointController extends ApiController
             ->with('distributor')
             ->when($branchIds !== [], fn ($query) => $query->whereIn('branch_id', $branchIds))
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
+            ->when($request->filled('distributor_number'), fn ($query) => $query->whereHas(
+                'distributor',
+                fn ($distributorQuery) => $distributorQuery->where('distributor_number', 'like', '%'.$request->string('distributor_number')->value().'%')
+            ))
             ->latest('id')
             ->paginate($request->integer('per_page', 15))
             ->appends($request->query());

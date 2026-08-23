@@ -11,6 +11,7 @@ use App\Http\Controllers\BranchManager\CutoffController as BranchManagerCutoffCo
 use App\Http\Controllers\BranchManager\ProductController;
 use App\Http\Controllers\Cashier\CustomerController as CashierCustomerController;
 use App\Http\Controllers\Cashier\PaymentController as CashierPaymentController;
+use App\Http\Controllers\Cashier\PointRedemptionController as CashierPointRedemptionController;
 use App\Http\Controllers\Cashier\ReconciliationController as CashierReconciliationController;
 use App\Http\Controllers\Cashier\VoucherController as CashierVoucherController;
 use App\Http\Controllers\Checker\VerificadorController;
@@ -231,6 +232,8 @@ Route::middleware(['auth:sanctum', 'throttle:authenticated'])->group(function ()
     Route::middleware('business.ability:points.view')->get('/point-redemptions', [GeneralManagerPointController::class, 'index'])->name('point-redemptions.index');
     Route::middleware('business.ability:points.redeem.decide,pointRedemption')->post('/point-redemptions/{pointRedemption}/decision', [GeneralManagerPointController::class, 'decide'])->name('point-redemptions.decide');
     Route::middleware('business.ability:points.category,distributor')->patch('/distributors/{distributor}/category', [GeneralManagerPointController::class, 'updateCategory'])->name('distributors.category.update');
+    Route::middleware('business.ability:points.redeem.payout')->get('/point-redemptions/lookup/{folio}', [CashierPointRedemptionController::class, 'show'])->name('point-redemptions.lookup');
+    Route::middleware('business.ability:points.redeem.payout')->post('/point-redemptions/lookup/{folio}/payout', [CashierPointRedemptionController::class, 'payout'])->name('point-redemptions.payout');
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::patch('/notifications/{notification}/read', [NotificationController::class, 'markAsRead'])->name('notifications.read');
