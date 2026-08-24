@@ -717,6 +717,33 @@ describe('Voucher disbursement (cajera)', function (): void {
             'authorized_number' => 'AUT-0003',
         ])->assertForbidden();
     });
+
+    it('forbids a branch manager and a general manager from disbursing vouchers — only the cashier hands over the money', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $voucher = Voucher::factory()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'financial_product_id' => $product->id,
+            'status' => VoucherStatus::APROBADO,
+        ]);
+
+        $branchManager = User::factory()->create();
+        signInBusinessRole($branchManager, 'branch_manager', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260816-005',
+            'authorized_number' => 'AUT-0005',
+        ])->assertForbidden();
+
+        $generalManager = User::factory()->create();
+        signInBusinessRole($generalManager, 'general_manager', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260816-006',
+            'authorized_number' => 'AUT-0006',
+        ])->assertForbidden();
+    });
 });
 
 describe('Voucher views', function (): void {
