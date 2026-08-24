@@ -73,6 +73,13 @@ return [
             'visibility' => 'private',
             'throw' => true,
             'report' => false,
+            // Sin esto, el SDK de AWS puede quedarse colgado indefinidamente si
+            // el host de Spaces no responde (ver SpacesStorageService::storeAndSign),
+            // dejando el request del cliente pendiente para siempre en vez de fallar.
+            'http' => [
+                'connect_timeout' => 5,
+                'timeout' => 30,
+            ],
         ],
 
     ],
