@@ -139,6 +139,53 @@ describe('Distributor onboarding', function (): void {
         ]);
     });
 
+    it('lets the verifier register a verification with only the front (fachada) photo, since the INE and proof of address were already uploaded by the coordinator', function (): void {
+        $branch = Branch::factory()->create();
+        $coordinator = User::factory()->create();
+        $verifier = User::factory()->create();
+        signInWithRole($coordinator, 'coordinator', $branch);
+
+        $application = $this->postJson('/api/v1/applications', [
+            'branch_id' => $branch->id,
+            'person' => [
+                'first_name' => 'Ana', 'last_name' => 'Distribuidora', 'second_last_name' => 'Materno',
+                'gender' => 'F', 'birth_date' => '1990-01-01', 'curp' => 'ABCD900101HNLXYZ04', 'rfc' => 'ABCD900101XY4',
+                'home_phone' => '8711234568', 'mobile_phone' => '8112345671', 'email' => 'ana4@distribuidora.com',
+                'street' => 'Av. Juarez 123', 'external_number' => '123', 'neighborhood' => 'Centro',
+                'city' => 'Torreon', 'state' => 'Coahuila', 'postal_code' => '27000',
+            ],
+            'family_data' => [
+                'applicant_age' => 28,
+                'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
+                'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
+            ],
+            'requested_credit_limit' => '10000.00',
+            'id_front_path' => 'applications/4/id_front.jpg',
+            'proof_of_address_path' => 'applications/4/comprobante.jpg',
+        ])->assertCreated()->json('data');
+
+        attachRole($verifier, 'verifier', $branch);
+        $this->patchJson("/api/v1/applications/{$application['id']}/verifier", [
+            'verifier_user_id' => $verifier->id,
+        ])->assertOk();
+
+        Sanctum::actingAs($verifier);
+        $this->postJson("/api/v1/applications/{$application['id']}/verification", [
+            'result' => 'VERIFICADA',
+            'visit_date' => now()->toDateTimeString(),
+            'front_photo' => 'verifications/4/fachada.jpg',
+        ])->assertOk()
+            ->assertJsonPath('data.front_photo', 'verifications/4/fachada.jpg')
+            ->assertJsonPath('data.id_with_person_photo', null)
+            ->assertJsonPath('data.proof_of_address_photo', null);
+
+        $this->assertDatabaseHas('applications', [
+            'id' => $application['id'],
+            'status' => 'POSIBLE_DISTRIBUIDORA',
+        ]);
+    });
+
     it('shows the full application detail with applicant info and photo URLs for the branch manager deciding it', function (): void {
         // La foto de verificación se guarda en Spaces (ver VerificationPhotoController);
         // el detalle debe leerla de ahí con una URL firmada, no como ruta local.
