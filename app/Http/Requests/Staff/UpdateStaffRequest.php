@@ -57,7 +57,7 @@ final class UpdateStaffRequest extends FormRequest
             'gender' => ['sometimes', 'nullable', 'in:M,F,OTHER'],
             'birth_date' => ['sometimes', 'nullable', 'date', 'before_or_equal:18 years ago'],
             'curp' => ['sometimes', 'nullable', 'string', 'size:18', new ValidCurp(), Rule::unique('people', 'curp')->ignore($person?->id)],
-            'rfc' => ['sometimes', 'nullable', 'string', 'max:13', new ValidRfc(), Rule::unique('people', 'rfc')->ignore($person?->id)],
+            'rfc' => ['sometimes', 'nullable', 'string', 'size:13', new ValidRfc(), Rule::unique('people', 'rfc')->ignore($person?->id)],
             'home_phone' => ['sometimes', 'nullable', 'string', 'max:20'],
             'mobile_phone' => ['sometimes', 'nullable', 'string', 'max:20'],
             'email' => ['sometimes', 'nullable', 'email', 'max:150'],
