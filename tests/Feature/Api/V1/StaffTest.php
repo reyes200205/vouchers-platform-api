@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use Illuminate\Support\Str;
 
 uses(RefreshDatabase::class);
 
@@ -30,6 +31,33 @@ function staffSignIn(string $roleCode, ?Branch $branch = null): User
     Sanctum::actingAs($user);
 
     return $user;
+}
+
+function getValidStaffPayload(array $overrides = []): array
+{
+    $suffix = strtoupper(Str::random(5));
+    $usernameSuffix = Str::random(5);
+    return array_merge([
+        'first_name' => 'Luis',
+        'last_name' => 'Gomez',
+        'second_last_name' => 'Materno',
+        'gender' => 'M',
+        'birth_date' => '1990-01-01',
+        'curp' => 'GOLL900101MNL' . substr($suffix, 0, 5),
+        'rfc' => 'GOLL900101' . substr($suffix, 0, 3),
+        'mobile_phone' => '8711234567',
+        'email' => "luis.gomez.{$usernameSuffix}@gmail.com",
+        'street' => 'Calle 123',
+        'external_number' => '100',
+        'neighborhood' => 'Centro',
+        'city' => 'Torreon',
+        'state' => 'Coahuila',
+        'postal_code' => '27000',
+        'username' => "luis.gomez.{$usernameSuffix}",
+        'password' => 'secret123',
+        'role_code' => 'cashier',
+        'branch_id' => 1,
+    ], $overrides);
 }
 
 describe('Staff management', function (): void {
@@ -182,14 +210,13 @@ describe('Staff management', function (): void {
         $branch = Branch::factory()->create();
         staffSignIn('general_manager');
 
-        $this->postJson('/api/v1/staff', [
+        $this->postJson('/api/v1/staff', getValidStaffPayload([
             'first_name' => 'Luis',
             'last_name' => 'Perez',
             'username' => 'luis.perez',
-            'password' => 'secret123',
-            'role_code' => 'cashier',
+            'curp' => '',
             'branch_id' => $branch->id,
-        ])->assertStatus(422)
+        ]))->assertStatus(422)
             ->assertJsonValidationErrors('curp');
     });
 
@@ -197,66 +224,61 @@ describe('Staff management', function (): void {
         $branch = Branch::factory()->create();
         staffSignIn('general_manager');
 
-        $this->postJson('/api/v1/staff', [
+        $this->postJson('/api/v1/staff', getValidStaffPayload([
             'first_name' => 'Jose',
             'last_name' => 'Perez',
             'username' => 'jose.perez',
-            'password' => 'secret123',
             'curp' => 'PEPS921201MNERRR05',
             'role_code' => 'super-admin',
             'branch_id' => $branch->id,
-        ])->assertStatus(422);
+        ]))->assertStatus(422);
     });
 
     it('lets a branch manager create a cashier, coordinator, and verifier in their branch', function (): void {
         $myBranch = Branch::factory()->create();
         staffSignIn('branch_manager', $myBranch);
 
-        $this->postJson('/api/v1/staff', [
+        $this->postJson('/api/v1/staff', getValidStaffPayload([
             'first_name' => 'Luis',
             'last_name' => 'Gomez',
             'username' => 'luis.gomez',
-            'password' => 'secret123',
             'curp' => 'GOLL920515MNLMRS04',
             'role_code' => 'cashier',
             'branch_id' => $myBranch->id,
-        ])->assertCreated();
+        ]))->assertCreated();
 
         $otherBranch = Branch::factory()->create();
-        $this->postJson('/api/v1/staff', [
+        $this->postJson('/api/v1/staff', getValidStaffPayload([
             'first_name' => 'Rosa',
             'last_name' => 'Diaz',
             'username' => 'rosa.diaz',
-            'password' => 'secret123',
             'curp' => 'DILR930606MDFRDC08',
             'role_code' => 'cashier',
             'branch_id' => $otherBranch->id,
-        ])->assertStatus(403);
+        ]))->assertStatus(403);
 
-        $this->postJson('/api/v1/staff', [
+        $this->postJson('/api/v1/staff', getValidStaffPayload([
             'first_name' => 'Ivan',
             'last_name' => 'Castro',
             'username' => 'ivan.castro',
-            'password' => 'secret123',
             'curp' => 'CASI940707HDFTRV02',
             'role_code' => 'coordinator',
             'branch_id' => $myBranch->id,
-        ])->assertCreated();
+        ]))->assertCreated();
     });
 
     it('lets a branch manager create a verifier for their branch', function (): void {
         $myBranch = Branch::factory()->create();
         staffSignIn('branch_manager', $myBranch);
 
-        $this->postJson('/api/v1/staff', [
+        $this->postJson('/api/v1/staff', getValidStaffPayload([
             'first_name' => 'Maria',
             'last_name' => 'Lopez',
             'username' => 'maria.lopez',
-            'password' => 'secret123',
             'curp' => 'LOPM920514MDFRRR06',
             'role_code' => 'verifier',
             'branch_id' => $myBranch->id,
-        ])->assertCreated();
+        ]))->assertCreated();
     });
 
     it('lets a branch manager upgrade an existing cashier to coordinator or verifier', function (): void {
@@ -423,15 +445,14 @@ describe('Staff management', function (): void {
         Sanctum::actingAs($user);
 
         $this->getJson('/api/v1/staff')->assertStatus(403);
-        $this->postJson('/api/v1/staff', [
+        $this->postJson('/api/v1/staff', getValidStaffPayload([
             'first_name' => 'X',
             'last_name' => 'Y',
             'username' => 'x.y',
-            'password' => 'secret123',
             'curp' => 'XYXY000101MXLYYN00',
             'role_code' => 'cashier',
             'branch_id' => Branch::factory()->create()->id,
-        ])->assertStatus(403);
+        ]))->assertStatus(403);
     });
 
     it('allows only super-admin to create a general manager', function (): void {
@@ -444,15 +465,14 @@ describe('Staff management', function (): void {
         ]);
         Sanctum::actingAs($superAdmin);
 
-        $response = $this->postJson('/api/v1/staff', [
+        $response = $this->postJson('/api/v1/staff', getValidStaffPayload([
             'first_name' => 'John',
             'last_name' => 'Doe',
             'username' => 'john.gm',
-            'password' => 'secret123',
             'curp' => 'DOEJ900101MDFRND01',
             'role_code' => 'general_manager',
             'branch_id' => null,
-        ])->assertCreated();
+        ]))->assertCreated();
 
         $newGmId = $response->json('data.id');
         $newGm = User::findOrFail($newGmId);
@@ -468,15 +488,14 @@ describe('Staff management', function (): void {
         ]);
         Sanctum::actingAs($gm);
 
-        $this->postJson('/api/v1/staff', [
+        $this->postJson('/api/v1/staff', getValidStaffPayload([
             'first_name' => 'Jane',
             'last_name' => 'Doe',
             'username' => 'jane.gm',
-            'password' => 'secret123',
             'curp' => 'DOEJ900101MDFRND02',
             'role_code' => 'general_manager',
             'branch_id' => null,
-        ])->assertStatus(403);
+        ]))->assertStatus(403);
     });
 
     it('allows only super-admin to update or deactivate a general manager', function (): void {
