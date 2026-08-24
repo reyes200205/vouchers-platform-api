@@ -152,7 +152,16 @@ describe('Cutoffs', function (): void {
 
         expect($secondRelation->previous_relation_id)->toBe($firstRelation->id);
         expect((float) $secondRelation->total_carryover_received)->toBe(2675.00);
-        expect((float) $secondRelation->total_amount_due)->toBe(2675.00);
+
+        // El segundo corte trae DOS cosas para este vale, no solo el
+        // arrastre: al facturarse en el primer corte, su payment_due_date
+        // avanzó 14 días (frequencyDays por defecto) -- eso cae dentro de la
+        // ventana del segundo periodo (mañana a +15 días), así que también
+        // le toca su quincena normal ahí, aparte del arrastre de la que
+        // nunca se pagó (el mismo comportamiento documentado para vales
+        // MOROSO en GenerateCutoffService::generateRelation). Total:
+        // 2,675.00 de arrastre + 2,675.00 de la quincena nueva = 5,350.00.
+        expect((float) $secondRelation->total_amount_due)->toBe(5350.00);
 
         $this->assertDatabaseHas('cutoff_relations', [
             'id' => $firstRelation->id,
@@ -163,6 +172,12 @@ describe('Cutoffs', function (): void {
             'cutoff_relation_id' => $secondRelation->id,
             'origin_relation_id' => $firstRelation->id,
             'payment_amount' => 2675.00,
+        ]);
+
+        $this->assertDatabaseHas('cutoff_relation_items', [
+            'cutoff_relation_id' => $secondRelation->id,
+            'origin_relation_id' => null,
+            'line_total_amount' => 2675.00,
         ]);
     });
 

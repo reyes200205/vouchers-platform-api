@@ -130,10 +130,23 @@ final class GenerateCutoffService
         // atrasado (su corte anterior se vencio) sigue generando su quincena
         // normal en el siguiente corte, aparte del arrastre de la atrasada
         // (carryover, abajo) — asi como se ve en el ejemplo de la pizarra.
+        // whereDate() en vez de whereBetween() con las fechas en texto: aunque
+        // payment_due_date es una columna DATE de verdad (sin hora) tanto en
+        // MySQL como en la definicion de la migracion, el cast 'date' de
+        // Eloquent serializa el valor completo como "Y-m-d H:i:s" al guardar
+        // -- MySQL igual lo guarda limpio porque su columna DATE no admite
+        // hora, pero en SQLite (sin tipos reales, usado por las pruebas
+        // automatizadas) se guarda el texto tal cual con la hora pegada, y
+        // comparado por texto contra el limite superior de whereBetween
+        // ("2026-08-29" sin hora) queda FUERA por unos caracteres de mas.
+        // whereDate() envuelve la columna en DATE(...) antes de comparar, asi
+        // que no importa si el valor guardado trae hora o no -- se compara
+        // solo la fecha, en cualquiera de los dos motores.
         $vouchers = Voucher::query()
             ->where('distributor_id', $distributor->id)
             ->whereIn('status', [VoucherStatus::ACTIVO, VoucherStatus::PAGO_PARCIAL, VoucherStatus::MOROSO])
-            ->whereBetween('payment_due_date', [$periodStart->toDateString(), $periodEnd->toDateString()])
+            ->whereDate('payment_due_date', '>=', $periodStart->toDateString())
+            ->whereDate('payment_due_date', '<=', $periodEnd->toDateString())
             ->orderBy('id')
             ->get();
 

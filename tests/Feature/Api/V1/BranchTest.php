@@ -98,6 +98,51 @@ describe('Branches', function (): void {
             ->and($generalManager->activeBusinessBranchIds())->toBe([$matriz->id]);
     });
 
+    it('keeps a general manager fully global even when their OWN role row carries a branch_id', function (): void {
+        // Bug encontrado en una auditoria externa (confirmado aqui con una
+        // prueba real contra MySQL/MariaDB ademas de SQLite, no solo
+        // leyendo el codigo): hasGlobalBusinessRole()/isGeneralManager()
+        // forzaban el team_id de Spatie a null antes de consultar, así que
+        // solo reconocían al gerente general como global si SU PROPIA fila
+        // en model_has_roles traía branch_id NULL. Pero nada impide (y de
+        // hecho otra prueba de este mismo archivo lo hace, y así quedan
+        // asignados los gerentes generales reales que "también" son
+        // gerentes de una sucursal en particular) que esa fila SÍ traiga un
+        // branch_id -- en ese caso, antes, se le trataba como un rol de
+        // sucursal cualquiera y perdía su alcance global por completo: no
+        // podía ver ni administrar ninguna otra sucursal.
+        Role::query()->firstOrCreate(
+            ['name' => 'branch_manager', 'guard_name' => 'web'],
+            ['code' => 'branch_manager']
+        );
+
+        $generalManager = User::factory()->create();
+        $role = Role::query()->firstOrCreate(
+            ['name' => 'general_manager', 'guard_name' => 'web'],
+            ['code' => 'general_manager']
+        );
+        $matriz = Branch::factory()->create();
+        // A propósito CON branch_id -- el patrón que rompía el alcance
+        // global.
+        $generalManager->businessRoles()->attach($role, [
+            'branch_id' => $matriz->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($generalManager);
+
+        expect($generalManager->isGeneralManager())->toBeTrue()
+            ->and($generalManager->hasGlobalBusinessRole())->toBeTrue();
+
+        // Sigue pudiendo ver y administrar OTRA sucursal (distinta a la de
+        // su propia fila de rol), sin necesitar ningún vínculo ahí.
+        $otherBranch = Branch::factory()->create();
+        $this->getJson("/api/v1/branches/{$otherBranch->id}")->assertOk();
+        $this->patchJson("/api/v1/branches/{$otherBranch->id}", ['name' => 'Otra Sucursal'])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Otra Sucursal');
+    });
+
     it('allows a coordinator to view but not modify a branch', function (): void {
         $coordinator = User::factory()->create();
         $branch = Branch::factory()->create();
