@@ -206,6 +206,61 @@ describe('Staff management', function (): void {
         $this->assertDatabaseHas('people', ['curp' => 'LOPA920514MDFRLN03']);
     });
 
+    it('rejects creating a branch manager when the branch already has an active one', function (): void {
+        $branch = Branch::factory()->create();
+        staffSignIn('general_manager');
+
+        $existingManager = User::factory()->create();
+        $existingManager->businessRoles()->attach(staffRole('branch_manager'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->postJson('/api/v1/staff', getValidStaffPayload([
+            'curp' => 'GOME900101MNLXXX01',
+            'role_code' => 'branch_manager',
+            'branch_id' => $branch->id,
+        ]))->assertStatus(422);
+    });
+
+    it('rejects switching a staff member to branch_manager when the branch already has an active one', function (): void {
+        $branch = Branch::factory()->create();
+        staffSignIn('general_manager');
+
+        $existingManager = User::factory()->create();
+        $existingManager->businessRoles()->attach(staffRole('branch_manager'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $cashier = User::factory()->create();
+        $cashier->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->patchJson("/api/v1/staff/{$cashier->id}", [
+            'is_active' => true,
+            'role_code' => 'branch_manager',
+            'branch_id' => $branch->id,
+        ])->assertStatus(422);
+
+        // El gerente existente sigue activo y el aspirante sigue como cajero: nada cambio.
+        $this->assertDatabaseHas('model_has_roles', [
+            'model_id' => $existingManager->id,
+            'branch_id' => $branch->id,
+            'revoked_at' => null,
+        ]);
+        $this->assertDatabaseHas('model_has_roles', [
+            'model_id' => $cashier->id,
+            'branch_id' => $branch->id,
+            'revoked_at' => null,
+        ]);
+    });
+
     it('rejects creating staff without a valid CURP', function (): void {
         $branch = Branch::factory()->create();
         staffSignIn('general_manager');
@@ -329,6 +384,35 @@ describe('Staff management', function (): void {
         ])->assertOk()
             ->assertJsonPath('data.is_active', true)
             ->assertJsonPath('data.roles.0.code', 'cashier');
+    });
+
+    it('reuses an existing model_has_roles row created outside the staff flow instead of crashing on duplicate key', function (): void {
+        // Reproduce el bug: BranchController asigna 'branch_manager' via Spatie::assignRole(),
+        // lo que deja una fila activa (revoked_at null, is_primary false) en model_has_roles
+        // que UpdateStaffService no conocia al buscar solo filas revocadas para reutilizar.
+        $branch = Branch::factory()->create();
+        staffSignIn('general_manager');
+
+        $cashier = User::factory()->create();
+        $cashier->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        // Fila "huerfana" para branch_manager en la misma sucursal, como la que dejaba
+        // BranchController::update() al usar assignRole() directamente.
+        $cashier->businessRoles()->attach(staffRole('branch_manager'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => false,
+        ]);
+
+        $this->patchJson("/api/v1/staff/{$cashier->id}", [
+            'is_active' => true,
+            'role_code' => 'branch_manager',
+        ])->assertOk()
+            ->assertJsonPath('data.roles.0.code', 'branch_manager');
     });
 
     it('updates status only (no role fields) without errors', function (): void {

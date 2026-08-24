@@ -126,16 +126,37 @@ final class UpdateStaffService
             }
 
             if (($data['role_code'] ?? null) !== null && $primaryPivot !== null && $primaryPivot->name !== $data['role_code']) {
-                $staff->businessRoles()->updateExistingPivot($primaryPivot->id, ['revoked_at' => now()]);
-
                 $newRole = Role::query()->where('code', $data['role_code'])->firstOrFail();
-                $revokedPivot = $staff->businessRoles()
-                    ->wherePivotNotNull('revoked_at')
-                    ->where('roles.id', $newRole->id)
-                    ->first();
 
-                if ($revokedPivot !== null) {
-                    $staff->businessRoles()->updateExistingPivot($revokedPivot->id, [
+                if ($newRole->name === 'branch_manager' && $branchId !== null) {
+                    $hasOtherActiveManager = User::query()
+                        ->where('id', '!=', $staff->id)
+                        ->whereHas('businessRoles', fn ($q) => $q->where('roles.name', 'branch_manager')
+                            ->where('model_has_roles.branch_id', $branchId)
+                            ->whereNull('model_has_roles.revoked_at'))
+                        ->exists();
+
+                    abort_if($hasOtherActiveManager, 422, 'Esta sucursal ya tiene un gerente asignado. Cambia su rol antes de asignar uno nuevo.');
+                }
+
+                $staff->businessRoles()->updateExistingPivot($primaryPivot->id, [
+                    'revoked_at' => now(),
+                    'is_primary' => false,
+                ]);
+
+                // Buscamos cualquier fila existente para este rol+sucursal (activa o revocada),
+                // no solo revocadas: el mismo rol puede haberse asignado por otra vía (p. ej.
+                // BranchController::store/update asigna 'branch_manager' directo con
+                // Spatie::assignRole(), sin pasar por este flujo de revoked_at/is_primary), y
+                // un attach() a ciegas choca con la unique (branch_id, role_id, model_id, model_type).
+                $existingPivotQuery = $staff->businessRoles()->where('roles.id', $newRole->id);
+                $existingPivotQuery = $branchId === null
+                    ? $existingPivotQuery->whereNull('model_has_roles.branch_id')
+                    : $existingPivotQuery->where('model_has_roles.branch_id', $branchId);
+                $existingPivot = $existingPivotQuery->first();
+
+                if ($existingPivot !== null) {
+                    $staff->businessRoles()->updateExistingPivot($existingPivot->id, [
                         'branch_id' => $branchId,
                         'revoked_at' => null,
                         'is_primary' => true,
@@ -148,6 +169,17 @@ final class UpdateStaffService
                     ]);
                 }
             } elseif ($branchId !== null && $primaryPivot !== null && (int) $primaryPivot->pivot->branch_id !== $branchId) {
+                if ($primaryPivot->name === 'branch_manager') {
+                    $hasOtherActiveManager = User::query()
+                        ->where('id', '!=', $staff->id)
+                        ->whereHas('businessRoles', fn ($q) => $q->where('roles.name', 'branch_manager')
+                            ->where('model_has_roles.branch_id', $branchId)
+                            ->whereNull('model_has_roles.revoked_at'))
+                        ->exists();
+
+                    abort_if($hasOtherActiveManager, 422, 'Esta sucursal ya tiene un gerente asignado. Cambia su rol antes de asignar uno nuevo.');
+                }
+
                 $staff->businessRoles()->updateExistingPivot($primaryPivot->id, ['branch_id' => $branchId]);
             }
 

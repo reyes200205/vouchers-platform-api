@@ -60,6 +60,16 @@ final class StoreStaffService
             abort_unless(in_array($data['branch_id'], $actor->activeBusinessBranchIds(), true), 403, 'Solo puedes asignar personal a tus sucursales.');
         }
 
+        if ($role->name === 'branch_manager') {
+            $hasActiveManager = User::query()
+                ->whereHas('businessRoles', fn ($q) => $q->where('roles.name', 'branch_manager')
+                    ->where('model_has_roles.branch_id', $data['branch_id'])
+                    ->whereNull('model_has_roles.revoked_at'))
+                ->exists();
+
+            abort_if($hasActiveManager, 422, 'Esta sucursal ya tiene un gerente asignado. Cambia su rol antes de asignar uno nuevo.');
+        }
+
         return DB::transaction(function () use ($data, $role): User {
             $person = Person::query()->create([
                 'first_name' => $data['first_name'],
