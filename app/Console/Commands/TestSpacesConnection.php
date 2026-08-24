@@ -10,7 +10,7 @@ use Throwable;
 
 final class TestSpacesConnection extends Command
 {
-    protected $signature = 'spaces:test';
+    protected $signature = 'spaces:test {--region=} {--endpoint=}';
     protected $description = 'Test the connection, credentials, and write permissions for DigitalOcean Spaces';
 
     public function handle(): int
@@ -19,9 +19,15 @@ final class TestSpacesConnection extends Command
 
         $key = config('filesystems.disks.spaces.key');
         $secret = config('filesystems.disks.spaces.secret');
-        $region = config('filesystems.disks.spaces.region');
+        
+        $region = $this->option('region') ?: config('filesystems.disks.spaces.region');
         $bucket = config('filesystems.disks.spaces.bucket');
-        $endpoint = config('filesystems.disks.spaces.endpoint');
+        $endpoint = $this->option('endpoint') ?: config('filesystems.disks.spaces.endpoint');
+
+        config([
+            'filesystems.disks.spaces.region' => $region,
+            'filesystems.disks.spaces.endpoint' => $endpoint,
+        ]);
 
         $this->table(
             ['Configuration Key', 'Value'],
