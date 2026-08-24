@@ -61,27 +61,23 @@ final class StoreStaffService
         }
 
         if ($role->name === 'branch_manager') {
-            $hasActiveManager = User::query()
-                ->whereHas('businessRoles', fn ($q) => $q->where('roles.name', 'branch_manager')
-                    ->where('model_has_roles.branch_id', $data['branch_id'])
-                    ->whereNull('model_has_roles.revoked_at'))
-                ->exists();
-
-            abort_if($hasActiveManager, 422, 'Esta sucursal ya tiene un gerente asignado. Cambia su rol antes de asignar uno nuevo.');
+            abort_if(
+                BranchManagerAvailability::hasAnyManager($data['branch_id']),
+                422,
+                'Esta sucursal ya tiene un gerente asignado. Cambia su rol antes de asignar uno nuevo.'
+            );
         }
 
         // La sucursal "base" de un gerente general es solo informativa (ver
         // home_branch_id en users): no limita sus permisos, que siguen siendo
-        // globales. Aun asi, no tiene sentido que comparta sucursal con un
-        // branch_manager dedicado, asi que se valida igual que arriba.
+        // globales. Aun asi, no puede compartirse con un branch_manager
+        // dedicado ni con otro gerente general que ya la tenga como base.
         if ($role->name === 'general_manager' && ! empty($data['branch_id'])) {
-            $hasActiveManager = User::query()
-                ->whereHas('businessRoles', fn ($q) => $q->where('roles.name', 'branch_manager')
-                    ->where('model_has_roles.branch_id', $data['branch_id'])
-                    ->whereNull('model_has_roles.revoked_at'))
-                ->exists();
-
-            abort_if($hasActiveManager, 422, 'Esta sucursal ya tiene un gerente de sucursal asignado.');
+            abort_if(
+                BranchManagerAvailability::hasAnyManager($data['branch_id']),
+                422,
+                'Esta sucursal ya tiene un gerente asignado.'
+            );
         }
 
         return DB::transaction(function () use ($data, $role): User {

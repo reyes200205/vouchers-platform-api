@@ -51,6 +51,46 @@ describe('Branches', function (): void {
         ]);
     });
 
+    it('creates a branch with no manager, to be assigned later', function (): void {
+        $manager = User::factory()->create();
+        actingAsBusinessRole($manager, 'general_manager');
+
+        $this->postJson('/api/v1/branches', [
+            'name' => 'Sucursal Sin Gerente',
+            'address' => 'Calle 1',
+            'phone' => '8180000001',
+        ])->assertCreated()->assertJsonPath('data.manager', null);
+    });
+
+    it('shows a general manager as the branch manager only when it is explicitly their home branch', function (): void {
+        Role::query()->firstOrCreate(
+            ['name' => 'general_manager', 'guard_name' => 'web'],
+            ['code' => 'general_manager']
+        );
+
+        $utt = Branch::factory()->create();
+        $otherBranch = Branch::factory()->create();
+
+        $gm = User::factory()->create(['home_branch_id' => $utt->id]);
+        $gm->businessRoles()->attach(
+            Role::where('name', 'general_manager')->first(),
+            ['branch_id' => null, 'assigned_at' => now(), 'is_primary' => true]
+        );
+
+        Sanctum::actingAs($gm);
+
+        // UTT es su sucursal base explicita: debe aparecer como su "Gerente".
+        $this->getJson("/api/v1/branches/{$utt->id}")
+            ->assertOk()
+            ->assertJsonPath('data.manager.id', $gm->id);
+
+        // La otra sucursal NO es su base -- aunque el gerente general tenga
+        // acceso global, no debe aparecer "por defecto" como su gerente.
+        $this->getJson("/api/v1/branches/{$otherBranch->id}")
+            ->assertOk()
+            ->assertJsonPath('data.manager', null);
+    });
+
     it('lets a general manager also be assigned as a branch\'s manager without losing their global reach', function (): void {
         // El gerente general de la sucursal matriz, por ejemplo, también
         // funge como gerente de esa sucursal en particular -- hoy no hay

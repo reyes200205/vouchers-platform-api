@@ -13,6 +13,7 @@ use App\Models\Branch;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
+use App\Services\Staff\BranchManagerAvailability;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -157,6 +158,16 @@ final class BranchController extends ApiController
      */
     private function assignBranchManager(User $manager, int $branchId): void
     {
+        // Si otro gerente general ya tiene esta sucursal como base
+        // (home_branch_id), no se le puede poner encima un branch_manager
+        // dedicado sin antes quitarle esa asignacion -- evita que la sucursal
+        // tenga dos "gerentes" (uno visible, uno invisible) al mismo tiempo.
+        abort_if(
+            BranchManagerAvailability::hasHomeBasedGeneralManager($branchId, $manager->id),
+            422,
+            'Esta sucursal ya tiene un gerente general asignado como sucursal base.'
+        );
+
         $role = Role::query()->where('name', 'branch_manager')->firstOrFail();
 
         $existingPivot = $manager->businessRoles()

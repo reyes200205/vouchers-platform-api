@@ -33,6 +33,19 @@ final class BranchResource extends JsonResource
             ->with('person')
             ->first();
 
+        // Si no hay un branch_manager dedicado, mostramos al gerente general
+        // que tiene esta sucursal como base -- pero SOLO cuando de verdad se
+        // le asigno esa sucursal especifica (home_branch_id = esta sucursal),
+        // nunca "por defecto" a un gerente general cualquiera.
+        if ($managerUser === null) {
+            $managerUser = User::query()
+                ->where('home_branch_id', $this->id)
+                ->whereHas('businessRoles', fn ($q) => $q->where('roles.name', 'general_manager')
+                    ->whereNull('model_has_roles.revoked_at'))
+                ->with('person')
+                ->first();
+        }
+
         if ($managerUser) {
             $manager = [
                 'id' => $managerUser->id,
