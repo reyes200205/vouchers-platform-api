@@ -16,7 +16,7 @@ final class ShowStaffService
      */
     public function execute(User $actor, User $target): User
     {
-        $target->loadMissing(['person', 'businessRoles']);
+        $target->loadMissing(['person', 'businessRoles', 'homeBranch']);
 
         $isStaff = $target->businessRoles()
             ->whereIn('roles.name', ListStaffService::STAFF_ROLES)

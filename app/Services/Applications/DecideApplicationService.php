@@ -7,6 +7,7 @@ namespace App\Services\Applications;
 use App\Enums\ApplicationStatus;
 use App\Enums\DistributorStatus;
 use App\Enums\ManagerDecisionEventType;
+use App\Mail\DistributorApprovedMail;
 use App\Models\Application;
 use App\Models\Distributor;
 use App\Models\ManagerDecisionLog;
@@ -14,7 +15,10 @@ use Spatie\Permission\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Throwable;
 
 final class DecideApplicationService
 {
@@ -24,7 +28,7 @@ final class DecideApplicationService
      */
     public function execute(Application $application, User $manager, array $data): array
     {
-        return DB::transaction(function () use ($application, $manager, $data): array {
+        $result = DB::transaction(function () use ($application, $manager, $data): array {
             $application->refresh();
 
             if ($application->status !== ApplicationStatus::POSIBLE_DISTRIBUIDORA) {
@@ -106,6 +110,38 @@ final class DecideApplicationService
                 'temporary_password' => $temporaryPassword,
             ];
         });
+
+        if ($result['distributor'] !== null) {
+            $this->sendApprovedMail($result['distributor'], $result['temporary_password']);
+        }
+
+        return $result;
+    }
+
+    private function sendApprovedMail(Distributor $distributor, string $temporaryPassword): void
+    {
+        $distributor->loadMissing('person');
+
+        $person = $distributor->person;
+        $email = $person?->email;
+        if ($email === null || $email === '') {
+            return;
+        }
+
+        $distributorName = trim(($person?->first_name ?? '').' '.($person?->last_name ?? '')) ?: 'Distribuidor';
+
+        try {
+            Mail::to($email)->send(new DistributorApprovedMail(
+                distributorName: $distributorName,
+                loginEmail: $email,
+                temporaryPassword: $temporaryPassword,
+            ));
+        } catch (Throwable $e) {
+            Log::error('No se pudo enviar el correo de distribuidora aprobada.', [
+                'distributor_id' => $distributor->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function uniqueUsername(Application $application): string

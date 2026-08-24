@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
@@ -26,6 +27,7 @@ use Spatie\Permission\Traits\HasRoles;
  */
 #[Fillable([
     'person_id',
+    'home_branch_id',
     'username',
     'password_hash',
     'is_active',
@@ -42,7 +44,6 @@ final class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens;
-
     use HasFactory;
     use HasRoles;
     use Notifiable;
@@ -59,6 +60,16 @@ final class User extends Authenticatable
     }
 
     /**
+     * Sucursal "base" de un gerente general (solo informativo, no limita permisos).
+     *
+     * @return BelongsTo<Branch, $this>
+     */
+    public function homeBranch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'home_branch_id');
+    }
+
+    /**
      * Registro de Distribuidora asociado a este usuario (cuando su rol de negocio es `distributor`).
      *
      * @return HasOne<Distributor, $this>
@@ -70,6 +81,8 @@ final class User extends Authenticatable
 
     /**
      * Roles de negocio asignados (vía tabla pivot de Spatie `model_has_roles`).
+     *
+     * @return MorphToMany
      */
     public function businessRoles(): MorphToMany
     {
@@ -140,10 +153,17 @@ final class User extends Authenticatable
             return $query->where(function ($q) use ($branchId, $allowedGlobalRoles) {
                 $q->where('model_has_roles.branch_id', $branchId);
                 if ($allowedGlobalRoles !== []) {
-                    $q->orWhere(function ($sq) use ($allowedGlobalRoles) {
-                        $sq->whereNull('model_has_roles.branch_id')
-                            ->whereIn('roles.name', $allowedGlobalRoles);
-                    });
+                    // Un rol global (general_manager/super-admin) da acceso a
+                    // CUALQUIER sucursal sin importar qué branch_id traiga su
+                    // propio pivot -- ese campo no lo hace "menos global":
+                    // puede traer un branch_id nada más porque así se le
+                    // asignó (p.ej. también quedó como gerente de una
+                    // sucursal en particular, ver BranchController::update),
+                    // no porque su alcance como rol global se haya limitado.
+                    // Antes se exigía además branch_id NULL en esa fila, así
+                    // que un general_manager cuyo propio vínculo trajera
+                    // sucursal perdía silenciosamente el acceso a las demás.
+                    $q->orWhereIn('roles.name', $allowedGlobalRoles);
                 }
             })->exists();
         }
@@ -151,47 +171,44 @@ final class User extends Authenticatable
         return $query->exists();
     }
 
+    /**
+     * Un rol global lo es por su NOMBRE (general_manager/super-admin), no
+     * por traer branch_id NULL en su fila de model_has_roles -- antes esto
+     * se resolvía forzando el team_id de Spatie a null y usando hasAnyRole(),
+     * lo que solo encontraba la fila si esa fila en particular no tenía
+     * sucursal asignada. Si al gerente general se le asignó su propio rol
+     * CON una sucursal (p.ej. "su" matriz, un patrón que sí se usa en otras
+     * partes de la app), esa comprobación fallaba y lo trataba como si fuera
+     * un rol de sucursal cualquiera -- perdiendo su alcance global por
+     * completo. Aquí se consulta directo por nombre de rol, sin importar qué
+     * branch_id traiga esa fila.
+     */
     public function hasGlobalBusinessRole(): bool
     {
-        $registrar = app(\Spatie\Permission\PermissionRegistrar::class);
-        $originalTeamId = $registrar->getPermissionsTeamId();
-        $registrar->setPermissionsTeamId(null);
-        $hasGlobal = $this->hasAnyRole(config('business-authorization.global_role_codes', []));
-        $registrar->setPermissionsTeamId($originalTeamId);
-
-        return $hasGlobal;
+        return $this->businessRoles()
+            ->whereIn('roles.name', config('business-authorization.global_role_codes', []))
+            ->exists();
     }
 
     public function isGeneralManager(): bool
     {
-        $registrar = app(\Spatie\Permission\PermissionRegistrar::class);
-        $originalTeamId = $registrar->getPermissionsTeamId();
-        $registrar->setPermissionsTeamId(null);
-        $isGm = $this->hasRole('general_manager');
-        $registrar->setPermissionsTeamId($originalTeamId);
-
-        return $isGm;
+        return $this->businessRoles()->where('roles.name', 'general_manager')->exists();
     }
 
     /**
-     * Si el rol del usuario exige verificar un codigo OTP por correo
-     * ademas de la contrasena para iniciar sesion (ver AuthController).
+     * Si alguno de los roles de negocio del usuario esta en
+     * `business-authorization.otp_required_role_codes`, debe verificar un
+     * codigo OTP por correo ademas de su contrasena (ver AuthController::login()).
      */
     public function requiresOtp(): bool
     {
-        $otpRoles = config('business-authorization.otp_required_role_codes', []);
+        $requiredRoleCodes = config('business-authorization.otp_required_role_codes', []);
 
-        if (empty($otpRoles)) {
+        if ($requiredRoleCodes === []) {
             return false;
         }
 
-        return $this->businessRoles()
-            ->wherePivotNull('revoked_at')
-            ->where(function ($q) use ($otpRoles) {
-                $q->whereIn('roles.name', $otpRoles)
-                  ->orWhereIn('roles.code', $otpRoles);
-            })
-            ->exists();
+        return $this->businessRoles()->whereIn('roles.name', $requiredRoleCodes)->exists();
     }
 
     public function sendOneTimePassword(): void

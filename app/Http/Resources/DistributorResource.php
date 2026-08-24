@@ -31,6 +31,7 @@ final class DistributorResource extends JsonResource
             'person' => new PersonResource($this->whenLoaded('person')),
             'branch' => new BranchResource($this->whenLoaded('branch')),
             'category' => new DistributorCategoryResource($this->whenLoaded('category')),
+            'coordinator' => new UserResource($this->whenLoaded('coordinator')),
         ];
     }
 }

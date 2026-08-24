@@ -18,12 +18,12 @@
                         <td style="padding:24px;">
                             <p style="margin:0 0 16px 0; font-size:14px;">Hola {{ $customerName }},</p>
                             <p style="margin:0 0 20px 0; font-size:14px; line-height:1.5;">
-                                Tu distribuidora <strong>{{ $distributorName }}</strong> te emitió un vale. Aquí están los detalles:
+                                Tu distribuidora <strong>{{ $distributorName }}</strong> te emitió un vale. Aquí están los detalles. Muéstraselos a la cajera cuando vayas a canjearlo.
                             </p>
 
                             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f8fafc; border-radius:12px; padding:4px;">
                                 <tr>
-                                    <td style="padding:12px 16px; font-size:13px; color:#64748b;">Número de vale</td>
+                                    <td style="padding:12px 16px; font-size:13px; color:#64748b;">Número del vale</td>
                                     <td style="padding:12px 16px; font-size:13px; font-weight:bold; text-align:right;">{{ $voucherNumber }}</td>
                                 </tr>
                                 <tr>

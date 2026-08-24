@@ -30,7 +30,10 @@ final class StoreBranchRequest extends FormRequest
             'address' => ['required', 'string', 'max:255'],
             'phone' => ['required', 'string', 'max:30'],
             'is_active' => ['sometimes', 'boolean'],
-            'manager_user_id' => ['required', 'integer', 'exists:users,id'],
+            // Opcional: una sucursal se puede crear vacia (sin gerente) y el
+            // personal -- incluido su gerente -- se asigna despues, desde
+            // Staff o editando la sucursal.
+            'manager_user_id' => ['nullable', 'integer', 'exists:users,id'],
         ];
     }
 }
