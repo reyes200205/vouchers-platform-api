@@ -147,7 +147,7 @@ final class User extends Authenticatable
         $globalRoleCodes = config('business-authorization.global_role_codes', []);
         $allowedGlobalRoles = array_intersect($allowedRoleCodes, $globalRoleCodes);
 
-        $query = $this->businessRoles()->whereIn('roles.name', $allowedRoleCodes);
+        $query = $this->businessRoles()->wherePivotNull('revoked_at')->whereIn('roles.name', $allowedRoleCodes);
 
         if ($branchId !== null) {
             return $query->where(function ($q) use ($branchId, $allowedGlobalRoles) {
@@ -186,13 +186,27 @@ final class User extends Authenticatable
     public function hasGlobalBusinessRole(): bool
     {
         return $this->businessRoles()
+            ->wherePivotNull('revoked_at')
             ->whereIn('roles.name', config('business-authorization.global_role_codes', []))
             ->exists();
     }
 
     public function isGeneralManager(): bool
     {
-        return $this->businessRoles()->where('roles.name', 'general_manager')->exists();
+        return $this->businessRoles()->wherePivotNull('revoked_at')->where('roles.name', 'general_manager')->exists();
+    }
+
+    /**
+     * A diferencia de $this->hasRole('super-admin') (metodo nativo de Spatie),
+     * esto SI respeta revoked_at: Spatie no conoce esa columna -- es una
+     * columna propia de este proyecto agregada a model_has_roles -- asi que
+     * hasRole() sigue devolviendo true para un super-admin al que ya se le
+     * revoco el rol (fila con revoked_at != null pero sin borrar). Usar este
+     * metodo en su lugar para cualquier chequeo de autorizacion real.
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->businessRoles()->wherePivotNull('revoked_at')->where('roles.name', 'super-admin')->exists();
     }
 
     /**
@@ -208,7 +222,7 @@ final class User extends Authenticatable
             return false;
         }
 
-        return $this->businessRoles()->whereIn('roles.name', $requiredRoleCodes)->exists();
+        return $this->businessRoles()->wherePivotNull('revoked_at')->whereIn('roles.name', $requiredRoleCodes)->exists();
     }
 
     public function sendOneTimePassword(): void
@@ -227,6 +241,7 @@ final class User extends Authenticatable
     public function activeBusinessBranchIds(): array
     {
         return $this->businessRoles()
+            ->wherePivotNull('revoked_at')
             ->whereNotNull('model_has_roles.branch_id')
             ->pluck('model_has_roles.branch_id')
             ->map(static fn (mixed $branchId): int => (int) $branchId)

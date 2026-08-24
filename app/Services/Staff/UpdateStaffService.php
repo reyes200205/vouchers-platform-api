@@ -42,22 +42,22 @@ final class UpdateStaffService
             abort(422, 'El usuario no pertenece al módulo de personal.');
         }
 
-        if ($staff->isGeneralManager() && ! $actor->hasRole('super-admin')) {
+        if ($staff->isGeneralManager() && ! $actor->isSuperAdmin()) {
             abort(403, 'Solo el super administrador puede modificar a un gerente general.');
         }
 
         if (isset($data['role_code'])) {
             $targetRole = Role::query()->where('code', $data['role_code'])->firstOrFail();
-            if ($targetRole->name === 'general_manager' && ! $actor->hasRole('super-admin')) {
+            if ($targetRole->name === 'general_manager' && ! $actor->isSuperAdmin()) {
                 abort(403, 'Solo el super administrador puede asignar el rol de gerente general.');
             }
         }
 
-        if ($actor->id === $staff->id && ! $actor->hasRole('super-admin')) {
+        if ($actor->id === $staff->id && ! $actor->isSuperAdmin()) {
             abort(403, 'No puedes modificar tu propia cuenta desde el módulo de personal.');
         }
 
-        if (! $actor->isGeneralManager() && ! $actor->hasRole('super-admin')) {
+        if (! $actor->isGeneralManager() && ! $actor->isSuperAdmin()) {
             $allowedBranchIds = $actor->activeBusinessBranchIds();
             $staffBranchIds = $staff->activeBusinessBranchIds();
 

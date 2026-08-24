@@ -25,7 +25,7 @@ final class ShowStaffService
 
         abort_unless($isStaff, 404, 'Miembro del personal no encontrado.');
 
-        if ($actor->isGeneralManager() || $actor->hasRole('super-admin')) {
+        if ($actor->isGeneralManager() || $actor->isSuperAdmin()) {
             return $target;
         }
 

@@ -34,12 +34,16 @@ final class BranchSettingController extends ApiController
             unset($data['insurance_rates']);
         }
 
-        $setting = DB::transaction(function () use ($request, $branch, $data): BranchSetting {
+        $before = null;
+        $after = null;
+
+        $setting = DB::transaction(function () use ($request, $branch, $data, &$before, &$after): BranchSetting {
             $setting = BranchSetting::query()->firstOrCreate(['branch_id' => $branch->id])->refresh();
             $before = $setting->only(array_keys($data));
             $setting->fill($data);
             $setting->updated_by_user_id = $request->user()->id;
             $setting->save();
+            $after = $setting->only(array_keys($data));
 
             BranchSettingsLog::query()->create([
                 'branch_setting_id' => $setting->id,
@@ -47,13 +51,22 @@ final class BranchSettingController extends ApiController
                 'updated_by_user_id' => $request->user()->id,
                 'event_type' => BranchSettingsLogEventType::SUCURSAL,
                 'before_changes_json' => $before,
-                'after_changes_json' => $setting->only(array_keys($data)),
+                'after_changes_json' => $after,
             ]);
 
             return $setting;
         });
 
-        $audit->record($request, AuditEventType::Updated, 'branch-settings', 'Configuracion de sucursal actualizada.', $branch->id);
+        $audit->record(
+            $request,
+            AuditEventType::Updated,
+            'branch-settings',
+            'Configuracion de sucursal actualizada.',
+            $branch->id,
+            ['branch_setting_id' => $setting->id, 'changed_fields' => array_keys($data), 'after' => $after],
+            null,
+            $before
+        );
 
         return $this->success(new BranchSettingResource($setting));
     }

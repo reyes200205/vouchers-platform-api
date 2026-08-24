@@ -115,7 +115,14 @@ final class BranchController extends ApiController
             return $branch;
         });
 
-        $audit->record($request, AuditEventType::Created, 'branches', 'Sucursal creada.', $branch->id);
+        $audit->record($request, AuditEventType::Created, 'branches', 'Sucursal creada.', $branch->id, [
+            'branch_id' => $branch->id,
+            'name' => $branch->name,
+            'code' => $branch->code,
+            'address' => $branch->address,
+            'phone' => $branch->phone,
+            'manager_user_id' => $request->input('manager_user_id'),
+        ]);
 
         return $this->created(new BranchResource($branch->fresh()));
     }
