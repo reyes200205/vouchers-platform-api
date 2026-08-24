@@ -36,7 +36,7 @@ final class BaseSeeder extends Seeder
                 'role' => 'super-admin',
             ],
             [
-                'name' => 'Abrham',
+                'name' => 'Abraham',
                 'email' => 'abrahamghj1@gmail.com',
                 'role' => 'super-admin',
             ],
@@ -52,7 +52,7 @@ final class BaseSeeder extends Seeder
             ],
             [
                 'name' => 'Axel',
-                'email' => 'axel.y.ya@gmail.com',
+                'email' => 'axel.y.ya.0@gmail.com',
                 'role' => 'super-admin'
             ]
         ];
