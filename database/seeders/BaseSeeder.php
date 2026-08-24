@@ -49,6 +49,11 @@ final class BaseSeeder extends Seeder
                 'name' => 'Diana',
                 'email' => 'dianaaochoa3@gmail.com',
                 'role' => 'super-admin',
+            ],
+            [
+                'name' => 'Axel',
+                'email' => 'axel.y.ya@gmail.com',
+                'role' => 'super-admin'
             ]
         ];
 
