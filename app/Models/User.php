@@ -25,6 +25,7 @@ use Spatie\Permission\Traits\HasRoles;
  */
 #[Fillable([
     'person_id',
+    'home_branch_id',
     'username',
     'password_hash',
     'is_active',
@@ -53,6 +54,16 @@ final class User extends Authenticatable
     public function person(): BelongsTo
     {
         return $this->belongsTo(Person::class);
+    }
+
+    /**
+     * Sucursal "base" de un gerente general (solo informativo, no limita permisos).
+     *
+     * @return BelongsTo<Branch, $this>
+     */
+    public function homeBranch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'home_branch_id');
     }
 
     /**

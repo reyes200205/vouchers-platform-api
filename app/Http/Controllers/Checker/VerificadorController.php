@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Checker;
 
 use App\Enums\ApplicationStatus;
+use App\Enums\AuditEventType;
 use App\Enums\VerificationResult;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Applications\StoreApplicationVerificationRequest;
@@ -46,7 +47,7 @@ final class VerificadorController extends ApiController
         // como old_data del log, consistente con el resto de los módulos.
         $audit->record(
             $request,
-            'APPLICATION_UPDATED',
+            AuditEventType::Updated,
             'applications',
             'Datos de la solicitud corregidos por el verificador.',
             $application->branch_id,
@@ -99,7 +100,7 @@ final class VerificadorController extends ApiController
             'reviewed_at' => now(),
         ]);
 
-        $audit->record($request, 'APPLICATION_VERIFIED', 'applications', 'Verificacion de solicitud registrada.', $application->branch_id, ['application_id' => $application->id, 'result' => $verification->result->value]);
+        $audit->record($request, AuditEventType::Verified, 'applications', 'Verificacion de solicitud registrada.', $application->branch_id, ['application_id' => $application->id, 'result' => $verification->result->value]);
 
         if ($application->coordinator) {
             Notification::send($application->coordinator, new ApplicationVerifiedByVerifierNotification($application, $verification));

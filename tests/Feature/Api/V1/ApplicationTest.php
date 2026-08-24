@@ -50,14 +50,13 @@ describe('Distributor onboarding', function (): void {
             'family_data' => [
                 'applicant_age' => 28,
                 'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
-                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
                 'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
             ],
             'requested_credit_limit' => '10000.00',
         ])->assertCreated();
 
         $response
-            ->assertJsonPath('data.family_data_json.applicant_age', 28)
             ->assertJsonPath('data.family_data_json.members.0.name', 'Maria Perez')
             ->assertJsonPath('data.family_data_json.occupation.place_name', 'ACME')
             ->assertJsonPath('data.family_data_json.housing.work_reference.name', 'Juan Lopez');
@@ -90,7 +89,12 @@ describe('Distributor onboarding', function (): void {
                 'state' => 'Coahuila',
                 'postal_code' => '27000',
             ],
-            'family_data' => ['children' => 2, 'applicant_age' => 28],
+            'family_data' => [
+                'children' => 2,
+                'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
+                'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
+            ],
             'vehicles' => [['type' => 'car']],
             'requested_credit_limit' => '10000.00',
         ])->assertCreated()->assertJsonPath('data.status', 'EN_REVISION')->json('data');
@@ -106,6 +110,8 @@ describe('Distributor onboarding', function (): void {
             'visit_date' => now()->toDateTimeString(),
             'checklist' => ['home_visited' => true],
             'front_photo' => 'verifications/1/front.jpg',
+            'id_with_person_photo' => 'verifications/1/id_with_person.jpg',
+            'proof_of_address_photo' => 'verifications/1/proof.jpg',
         ])->assertOk();
 
         $category = DistributorCategory::query()->create([
@@ -130,6 +136,53 @@ describe('Distributor onboarding', function (): void {
             'branch_id' => $branch->id,
             'status' => 'ACTIVA',
             'can_issue_vouchers' => true,
+        ]);
+    });
+
+    it('lets the verifier register a verification with only the front (fachada) photo, since the INE and proof of address were already uploaded by the coordinator', function (): void {
+        $branch = Branch::factory()->create();
+        $coordinator = User::factory()->create();
+        $verifier = User::factory()->create();
+        signInWithRole($coordinator, 'coordinator', $branch);
+
+        $application = $this->postJson('/api/v1/applications', [
+            'branch_id' => $branch->id,
+            'person' => [
+                'first_name' => 'Ana', 'last_name' => 'Distribuidora', 'second_last_name' => 'Materno',
+                'gender' => 'F', 'birth_date' => '1990-01-01', 'curp' => 'ABCD900101HNLXYZ04', 'rfc' => 'ABCD900101XY4',
+                'home_phone' => '8711234568', 'mobile_phone' => '8112345671', 'email' => 'ana4@distribuidora.com',
+                'street' => 'Av. Juarez 123', 'external_number' => '123', 'neighborhood' => 'Centro',
+                'city' => 'Torreon', 'state' => 'Coahuila', 'postal_code' => '27000',
+            ],
+            'family_data' => [
+                'applicant_age' => 28,
+                'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
+                'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
+            ],
+            'requested_credit_limit' => '10000.00',
+            'id_front_path' => 'applications/4/id_front.jpg',
+            'proof_of_address_path' => 'applications/4/comprobante.jpg',
+        ])->assertCreated()->json('data');
+
+        attachRole($verifier, 'verifier', $branch);
+        $this->patchJson("/api/v1/applications/{$application['id']}/verifier", [
+            'verifier_user_id' => $verifier->id,
+        ])->assertOk();
+
+        Sanctum::actingAs($verifier);
+        $this->postJson("/api/v1/applications/{$application['id']}/verification", [
+            'result' => 'VERIFICADA',
+            'visit_date' => now()->toDateTimeString(),
+            'front_photo' => 'verifications/4/fachada.jpg',
+        ])->assertOk()
+            ->assertJsonPath('data.front_photo', 'verifications/4/fachada.jpg')
+            ->assertJsonPath('data.id_with_person_photo', null)
+            ->assertJsonPath('data.proof_of_address_photo', null);
+
+        $this->assertDatabaseHas('applications', [
+            'id' => $application['id'],
+            'status' => 'POSIBLE_DISTRIBUIDORA',
         ]);
     });
 
@@ -171,7 +224,12 @@ describe('Distributor onboarding', function (): void {
                 'state' => 'Coahuila',
                 'postal_code' => '27000',
             ],
-            'family_data' => ['children' => 2, 'applicant_age' => 28],
+            'family_data' => [
+                'children' => 2,
+                'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
+                'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
+            ],
             'vehicles' => [['type' => 'car']],
             'requested_credit_limit' => '10000.00',
             'id_front_path' => 'applications/1/id_front.jpg',
@@ -190,6 +248,8 @@ describe('Distributor onboarding', function (): void {
             'visit_date' => now()->toDateTimeString(),
             'checklist' => ['home_visited' => true],
             'front_photo' => 'verifications/1/fachada.jpg',
+            'id_with_person_photo' => 'verifications/1/id_with_person.jpg',
+            'proof_of_address_photo' => 'verifications/1/proof.jpg',
         ])->assertOk();
 
         signInWithRole($manager, 'branch_manager', $branch);
@@ -199,7 +259,6 @@ describe('Distributor onboarding', function (): void {
             ->assertJsonPath('data.applicant.first_name', 'Ana')
             ->assertJsonPath('data.applicant.curp', 'ABCD900101HNLXYZ01')
             ->assertJsonPath('data.applicant.mobile_phone', '8112345678')
-            ->assertJsonPath('data.family_data_json.applicant_age', 28)
             ->assertJsonPath('data.id_front_url', fn ($url) => is_string($url)
                 && str_contains($url, 'applications/1/id_front.jpg')
                 && ! str_contains($url, '/storage/applications'))
@@ -238,7 +297,11 @@ describe('Distributor onboarding', function (): void {
                 'state' => 'Coahuila',
                 'postal_code' => '27000',
             ],
-            'family_data' => ['applicant_age' => 28],
+            'family_data' => [
+                'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
+                'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
+            ],
             'requested_credit_limit' => '10000.00',
         ])->assertCreated()->json('data');
 
@@ -272,7 +335,11 @@ function createApplicationEnRevision(Branch $branch, User $coordinator, User $ve
             'state' => 'Coahuila',
             'postal_code' => '27000',
         ],
-        'family_data' => ['applicant_age' => 28],
+        'family_data' => [
+            'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 27]],
+            'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
+            'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
+        ],
         'requested_credit_limit' => '10000.00',
     ])->assertCreated()->json('data');
 
@@ -338,6 +405,8 @@ describe('Update application (verifier corrections)', function (): void {
             'visit_date' => now()->toDateTimeString(),
             'checklist' => ['home_visited' => true],
             'front_photo' => 'verifications/1/front.jpg',
+            'id_with_person_photo' => 'verifications/1/id_with_person.jpg',
+            'proof_of_address_photo' => 'verifications/1/proof.jpg',
         ])->assertOk();
 
         $this->patchJson("/api/v1/applications/{$application['id']}", [
@@ -368,14 +437,12 @@ describe('Update application (verifier corrections)', function (): void {
 
         $this->patchJson("/api/v1/applications/{$application['id']}", [
             'family_data' => [
-                'applicant_age' => 30,
                 'members' => [['name' => 'Maria Perez', 'relationship' => 'Esposo(a)', 'phone' => '8710000000', 'age' => 28]],
-                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3],
+                'occupation' => ['type' => 'trabaja', 'place_name' => 'ACME', 'position' => 'Gerente', 'phone' => '8710000001', 'years' => 3, 'monthly_income' => 15000.00],
                 'housing' => ['ownership_type' => 'propia', 'dimensions' => '150 m2', 'years_at_address' => 5, 'work_reference' => ['name' => 'Juan Lopez', 'phone' => '8710000002']],
             ],
             'vehicles' => [['brand' => 'Nissan', 'model' => 'Versa', 'year' => '2020', 'plates' => 'ABC123']],
         ])->assertOk()
-            ->assertJsonPath('data.family_data_json.applicant_age', 30)
             ->assertJsonPath('data.family_data_json.occupation.place_name', 'ACME')
             ->assertJsonPath('data.vehicles_json.0.brand', 'Nissan')
             ->assertJsonPath('data.verifier_corrections_json.0.changes.0.field', 'family_data')

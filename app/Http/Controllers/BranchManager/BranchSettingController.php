@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\BranchManager;
 
+use App\Enums\AuditEventType;
 use App\Enums\BranchSettingsLogEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Branches\UpdateBranchSettingRequest;
@@ -52,7 +53,7 @@ final class BranchSettingController extends ApiController
             return $setting;
         });
 
-        $audit->record($request, 'BRANCH_SETTINGS_UPDATED', 'branch-settings', 'Configuracion de sucursal actualizada.', $branch->id);
+        $audit->record($request, AuditEventType::Updated, 'branch-settings', 'Configuracion de sucursal actualizada.', $branch->id);
 
         return $this->success(new BranchSettingResource($setting));
     }

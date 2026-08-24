@@ -120,7 +120,7 @@ final class RequestVoucherService
      */
     private function sendIssuedMail(VoucherRequest $voucherRequest): void
     {
-        $voucherRequest->loadMissing(['customer.person', 'distributor.person', 'branch.setting']);
+        $voucherRequest->loadMissing(['customer.person', 'distributor.person', 'branch.setting', 'financialProduct']);
 
         $email = $voucherRequest->customer?->person?->email;
         if ($email === null || $email === '') {
@@ -139,7 +139,7 @@ final class RequestVoucherService
             Mail::to($email)->send(new VoucherIssuedMail(
                 customerName: trim(($person?->first_name ?? '').' '.($person?->last_name ?? '')) ?: 'Cliente',
                 distributorName: trim(($distributorPerson?->first_name ?? '').' '.($distributorPerson?->last_name ?? '')) ?: 'Tu distribuidora',
-                voucherNumber: 'V-'.$voucherRequest->id,
+                voucherNumber: $voucherRequest->financialProduct?->code ?? 'V-'.$voucherRequest->id,
                 issuedAt: $voucherRequest->created_at,
                 expirationDate: $expirationDate,
                 amount: (float) $voucherRequest->requested_amount,

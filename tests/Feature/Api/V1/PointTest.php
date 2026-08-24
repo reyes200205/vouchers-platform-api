@@ -272,4 +272,140 @@ describe('Points', function (): void {
             'decision' => 'APROBADO',
         ])->assertForbidden();
     });
+
+    it('generates a folio as soon as the distributor requests a redemption', function (): void {
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create([
+            'branch_id' => $branch->id,
+            'current_points' => 500,
+        ]);
+
+        $distributorUser = User::factory()->create();
+        pointSignInAsDistributor($distributorUser, $distributor);
+
+        $this->postJson("/api/v1/distributors/{$distributor->id}/points/redeem", [
+            'points' => '200.00',
+        ])->assertCreated()
+            ->assertJsonPath('data.status', 'PENDIENTE')
+            ->assertJsonPath('data.folio', fn ($folio) => is_string($folio) && str_starts_with($folio, 'CANJE-'));
+    });
+
+    it('lets a cashier of the same branch pay out a redemption by folio, without manager approval', function (): void {
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create([
+            'branch_id' => $branch->id,
+            'current_points' => 500,
+        ]);
+
+        $distributorUser = User::factory()->create();
+        pointSignInAsDistributor($distributorUser, $distributor);
+
+        $folio = $this->postJson("/api/v1/distributors/{$distributor->id}/points/redeem", [
+            'points' => '200.00',
+        ])->assertCreated()->json('data.folio');
+
+        $cashier = User::factory()->create();
+        pointSignInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->getJson("/api/v1/point-redemptions/lookup/{$folio}")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'PENDIENTE')
+            ->assertJsonPath('data.amount_mxn', '400.00');
+
+        $this->postJson("/api/v1/point-redemptions/lookup/{$folio}/payout")
+            ->assertOk()
+            ->assertJsonPath('data.status', 'APROBADO')
+            ->assertJsonPath('data.decided_by_user_id', $cashier->id);
+
+        $this->assertDatabaseHas('distributors', [
+            'id' => $distributor->id,
+            'current_points' => 300.00,
+        ]);
+
+        $this->assertDatabaseHas('point_movements', [
+            'distributor_id' => $distributor->id,
+            'transaction_type' => 'CANJE',
+            'points' => -200.00,
+        ]);
+    });
+
+    it('forbids a cashier from another branch from paying out a redemption', function (): void {
+        $branch = Branch::factory()->create();
+        $otherBranch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create([
+            'branch_id' => $branch->id,
+            'current_points' => 500,
+        ]);
+
+        $distributorUser = User::factory()->create();
+        pointSignInAsDistributor($distributorUser, $distributor);
+
+        $folio = $this->postJson("/api/v1/distributors/{$distributor->id}/points/redeem", [
+            'points' => '200.00',
+        ])->assertCreated()->json('data.folio');
+
+        $cashier = User::factory()->create();
+        pointSignInBusinessRole($cashier, 'cashier', $otherBranch);
+
+        $this->postJson("/api/v1/point-redemptions/lookup/{$folio}/payout")->assertForbidden();
+
+        $this->assertDatabaseHas('distributors', [
+            'id' => $distributor->id,
+            'current_points' => 500.00,
+        ]);
+    });
+
+    it('rejects paying out an unknown folio', function (): void {
+        $branch = Branch::factory()->create();
+        $cashier = User::factory()->create();
+        pointSignInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson('/api/v1/point-redemptions/lookup/CANJE-00000000/payout')->assertNotFound();
+    });
+
+    it('lets a cashier list paid redemptions of their branch, filtered by distributor number', function (): void {
+        $branch = Branch::factory()->create();
+        $distributorA = Distributor::factory()->create(['branch_id' => $branch->id, 'current_points' => 500, 'distributor_number' => 'DIST-AAA111']);
+        $distributorB = Distributor::factory()->create(['branch_id' => $branch->id, 'current_points' => 500, 'distributor_number' => 'DIST-BBB222']);
+
+        $distributorAUser = User::factory()->create();
+        pointSignInAsDistributor($distributorAUser, $distributorA);
+        $folioA = $this->postJson("/api/v1/distributors/{$distributorA->id}/points/redeem", ['points' => '100.00'])->json('data.folio');
+
+        $distributorBUser = User::factory()->create();
+        pointSignInAsDistributor($distributorBUser, $distributorB);
+        $folioB = $this->postJson("/api/v1/distributors/{$distributorB->id}/points/redeem", ['points' => '150.00'])->json('data.folio');
+
+        $cashier = User::factory()->create();
+        pointSignInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/point-redemptions/lookup/{$folioA}/payout")->assertOk();
+        $this->postJson("/api/v1/point-redemptions/lookup/{$folioB}/payout")->assertOk();
+
+        $this->getJson('/api/v1/point-redemptions?status=APROBADO&distributor_number=AAA')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.data')
+            ->assertJsonPath('data.data.0.distributor.distributor_number', 'DIST-AAA111');
+    });
+
+    it('rejects paying out a redemption twice', function (): void {
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create([
+            'branch_id' => $branch->id,
+            'current_points' => 500,
+        ]);
+
+        $distributorUser = User::factory()->create();
+        pointSignInAsDistributor($distributorUser, $distributor);
+
+        $folio = $this->postJson("/api/v1/distributors/{$distributor->id}/points/redeem", [
+            'points' => '200.00',
+        ])->assertCreated()->json('data.folio');
+
+        $cashier = User::factory()->create();
+        pointSignInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/point-redemptions/lookup/{$folio}/payout")->assertOk();
+        $this->postJson("/api/v1/point-redemptions/lookup/{$folio}/payout")->assertStatus(422);
+    });
 });

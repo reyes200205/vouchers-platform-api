@@ -48,7 +48,6 @@ final class UpdateApplicationRequest extends FormRequest
             'person.notes' => ['nullable', 'string'],
             'person.street_references' => ['nullable', 'string'],
             'family_data' => ['sometimes', 'array'],
-            'family_data.applicant_age' => ['sometimes', 'integer', 'min:18'],
             'vehicles' => ['nullable', 'array'],
             'requested_credit_limit' => ['sometimes', 'decimal:0,2', 'min:1000'],
         ];

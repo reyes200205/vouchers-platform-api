@@ -145,6 +145,7 @@ describe('Auto-Cancel Expired Vouchers Command', function (): void {
             'financial_product_id' => $this->product->id,
             'status' => VoucherStatus::APROBADO,
             'issued_at' => now()->subDays(6), // expired
+            'amount' => 5000.00,
             'total_debt_amount' => 5000.00,
         ]);
 

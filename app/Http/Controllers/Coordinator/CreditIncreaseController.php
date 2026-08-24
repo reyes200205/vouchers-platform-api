@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Coordinator;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Credit\PreAuthorizeCreditIncreaseRequest;
 use App\Http\Requests\Credit\StoreCreditIncreaseRequest;
@@ -24,7 +25,7 @@ final class CreditIncreaseController extends ApiController
 
         $audit->record(
             $request,
-            'CREDIT_INCREASE_REQUESTED',
+            AuditEventType::Requested,
             'credit',
             'Solicitud de aumento de línea creada.',
             $distributor->branch_id,
@@ -40,7 +41,7 @@ final class CreditIncreaseController extends ApiController
 
         $audit->record(
             $request,
-            'CREDIT_INCREASE_PRE_AUTHORIZED',
+            AuditEventType::PreAuthorized,
             'credit',
             'Aumento de línea pre-autorizado por el coordinador.',
             $creditIncreaseRequest->branch_id,

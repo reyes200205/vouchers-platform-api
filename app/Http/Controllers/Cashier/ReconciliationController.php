@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Cashier;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Reconciliations\ImportBankDepositsRequest;
 use App\Http\Resources\BankTransactionResource;
@@ -26,7 +27,7 @@ final class ReconciliationController extends ApiController
 
         $audit->record(
             $request,
-            'BANK_IMPORT_COMPLETED',
+            AuditEventType::Completed,
             'reconciliations',
             'Archivo bancario importado.',
             $branch->id,

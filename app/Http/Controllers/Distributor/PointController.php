@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Distributor;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Points\StorePointRedemptionRequest;
 use App\Http\Resources\PointRedemptionResource;
@@ -30,7 +31,7 @@ final class PointController extends ApiController
 
         $audit->record(
             $request,
-            'POINT_REDEMPTION_REQUESTED',
+            AuditEventType::Requested,
             'points',
             'Canje de puntos solicitado.',
             $distributor->branch_id,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Coordinator;
 
 use App\Enums\ApplicationStatus;
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Applications\StoreApplicationRequest;
 use App\Models\Application;
@@ -112,7 +113,7 @@ final class CoordinadorController extends ApiController
             ]);
         });
 
-        $audit->record($request, 'APPLICATION_SUBMITTED', 'applications', 'Solicitud de distribuidora enviada a verificacion.', $application->branch_id, ['application_id' => $application->id]);
+        $audit->record($request, AuditEventType::Submitted, 'applications', 'Solicitud de distribuidora enviada a verificacion.', $application->branch_id, ['application_id' => $application->id]);
 
         return $this->created($application->load(['applicant', 'branch']));
     }
@@ -135,7 +136,7 @@ final class CoordinadorController extends ApiController
         }
 
         $application->update(['assigned_verifier_id' => $data['verifier_user_id'], 'reviewed_at' => now()]);
-        $audit->record($request, 'APPLICATION_VERIFIER_ASSIGNED', 'applications', 'Verificador asignado a solicitud.', $application->branch_id, ['application_id' => $application->id]);
+        $audit->record($request, AuditEventType::Assigned, 'applications', 'Verificador asignado a solicitud.', $application->branch_id, ['application_id' => $application->id]);
 
         $application = $application->fresh() ?? $application;
         Notification::send($verifier, new ApplicationAssignedToVerifierNotification($application));

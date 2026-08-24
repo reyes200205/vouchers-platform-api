@@ -27,6 +27,10 @@ final class AuditLogController extends ApiController
             });
         }
 
+        if ($request->filled('event_type')) {
+            $query->where('event_type', $request->input('event_type'));
+        }
+
         if ($request->filled('level')) {
             $query->where('level', $request->input('level'));
         }

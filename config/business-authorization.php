@@ -8,7 +8,7 @@ return [
     // Roles que deben verificar un codigo OTP por correo (segundo factor)
     // ademas de su contrasena para poder iniciar sesion. Ver
     // AuthController::login()/verifyMfa() y User::requiresOtp().
-    'otp_required_role_codes' => ['super-admin', 'general_manager', 'branch_manager'],
+    'otp_required_role_codes' => ['super-admin', ],
 
     'abilities' => [
         'audit-logs.view' => ['super-admin'],
@@ -103,9 +103,10 @@ return [
         'reconciliations.import' => ['cashier', 'general_manager'],
         'reconciliations.view' => ['general_manager', 'branch_manager', 'coordinator', 'cashier'],
         'reconciliations.verify' => ['branch_manager', 'general_manager'],
-        'points.view' => ['general_manager', 'branch_manager', 'coordinator', 'distributor'],
+        'points.view' => ['general_manager', 'branch_manager', 'coordinator', 'distributor', 'cashier'],
         'points.redeem.request' => ['distributor'],
         'points.redeem.decide' => ['branch_manager', 'general_manager'],
+        'points.redeem.payout' => ['cashier'],
         'points.category' => ['branch_manager', 'general_manager'],
     ],
 ];

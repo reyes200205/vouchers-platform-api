@@ -27,7 +27,7 @@ final class ListStaffService
     public function execute(User $actor, array $filters = []): LengthAwarePaginator
     {
         $query = User::query()
-            ->with(['person', 'businessRoles'])
+            ->with(['person', 'businessRoles', 'homeBranch'])
             ->whereHas('businessRoles', function ($q): void {
                 $q->whereIn('roles.name', self::STAFF_ROLES)
                     ->whereNull('model_has_roles.revoked_at');
@@ -43,7 +43,7 @@ final class ListStaffService
             $branchIds = $actor->activeBusinessBranchIds();
             $perPage = (int) ($filters['per_page'] ?? 15);
             $query = User::query()
-                ->with(['person', 'businessRoles'])
+                ->with(['person', 'businessRoles', 'homeBranch'])
                 ->where('users.id', '!=', $actor->id)
                 ->whereHas('businessRoles', fn ($q) => $q
                     ->whereIn('model_has_roles.branch_id', $branchIds)

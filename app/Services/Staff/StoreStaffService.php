@@ -36,7 +36,7 @@ final class StoreStaffService
      *     username: string,
      *     password: string,
      *     role_code: string,
-     *     branch_id: int
+     *     branch_id?: int|null
      * }  $data
      */
     public function execute(User $actor, array $data): User
@@ -58,6 +58,26 @@ final class StoreStaffService
                 'Solo el gerente general puede crear personal de otro tipo.'
             );
             abort_unless(in_array($data['branch_id'], $actor->activeBusinessBranchIds(), true), 403, 'Solo puedes asignar personal a tus sucursales.');
+        }
+
+        if ($role->name === 'branch_manager') {
+            abort_if(
+                BranchManagerAvailability::hasAnyManager($data['branch_id']),
+                422,
+                'Esta sucursal ya tiene un gerente asignado. Cambia su rol antes de asignar uno nuevo.'
+            );
+        }
+
+        // La sucursal "base" de un gerente general es solo informativa (ver
+        // home_branch_id en users): no limita sus permisos, que siguen siendo
+        // globales. Aun asi, no puede compartirse con un branch_manager
+        // dedicado ni con otro gerente general que ya la tenga como base.
+        if ($role->name === 'general_manager' && ! empty($data['branch_id'])) {
+            abort_if(
+                BranchManagerAvailability::hasAnyManager($data['branch_id']),
+                422,
+                'Esta sucursal ya tiene un gerente asignado.'
+            );
         }
 
         return DB::transaction(function () use ($data, $role): User {
@@ -83,6 +103,7 @@ final class StoreStaffService
 
             $user = User::query()->create([
                 'person_id' => $person->id,
+                'home_branch_id' => $role->name === 'general_manager' ? ($data['branch_id'] ?? null) : null,
                 'username' => $data['username'],
                 'password_hash' => Hash::make($data['password']),
                 'is_active' => true,
@@ -94,7 +115,7 @@ final class StoreStaffService
                 'is_primary' => true,
             ]);
 
-            return $user->load(['person', 'businessRoles']);
+            return $user->load(['person', 'businessRoles', 'homeBranch']);
         });
     }
 }

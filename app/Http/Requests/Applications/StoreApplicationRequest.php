@@ -45,17 +45,17 @@ final class StoreApplicationRequest extends FormRequest
             'person.longitude' => ['nullable', 'decimal:0,7'],
             'person.notes' => ['nullable', 'string'],
             'person.street_references' => ['nullable', 'string'],
-            // family_data agrupa: familiares/conyuge, ocupacion (donde trabaja o estudia, edad)
+            // family_data agrupa: familiares/conyuge, ocupacion (donde trabaja o estudia)
             // y vivienda (tenencia, dimensiones, referencia laboral). Ver new.vue en el frontend
             // para la forma exacta que arma el coordinador.
             'family_data' => ['required', 'array'],
-            'family_data.applicant_age' => ['required', 'integer', 'min:18'],
             'family_data.occupation' => ['required', 'array'],
             'family_data.occupation.type' => ['required', 'string', 'max:100'],
             'family_data.occupation.place_name' => ['required', 'string', 'max:150'],
             'family_data.occupation.position' => ['required', 'string', 'max:100'],
             'family_data.occupation.phone' => ['required', 'string', 'max:30'],
             'family_data.occupation.years' => ['required', 'integer', 'min:0'],
+            'family_data.occupation.monthly_income' => ['required', 'numeric', 'min:0'],
             'family_data.housing' => ['required', 'array'],
             'family_data.housing.ownership_type' => ['required', 'string', 'max:50'],
             'family_data.housing.dimensions' => ['required', 'string', 'max:100'],

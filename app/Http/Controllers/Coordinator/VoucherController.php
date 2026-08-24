@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Coordinator;
 
+use App\Enums\AuditEventType;
 use App\Enums\VoucherRequestStatus;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Vouchers\ApproveVoucherRequest;
@@ -76,7 +77,7 @@ final class VoucherController extends ApiController
 
         $audit->record(
             $request,
-            'VOUCHER_APPROVED',
+            AuditEventType::Approved,
             'vouchers',
             'Vale aprobado; credito disponible descontado.',
             $voucher->branch_id,
@@ -92,7 +93,7 @@ final class VoucherController extends ApiController
 
         $audit->record(
             $request,
-            'VOUCHER_REQUEST_REJECTED',
+            AuditEventType::Rejected,
             'vouchers',
             'Solicitud de vale rechazada.',
             $voucherRequest->branch_id,

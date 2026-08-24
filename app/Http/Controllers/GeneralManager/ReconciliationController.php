@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\GeneralManager;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Reconciliations\ManualMatchDepositRequest;
 use App\Http\Requests\Reconciliations\RejectReconciliationRequest;
@@ -25,7 +26,7 @@ final class ReconciliationController extends ApiController
 
         $audit->record(
             $request,
-            'RECONCILIATION_MANUAL_MATCHED',
+            AuditEventType::Matched,
             'reconciliations',
             'Conciliación manual registrada, pendiente de segunda autorización.',
             null,
@@ -51,7 +52,7 @@ final class ReconciliationController extends ApiController
 
         $audit->record(
             $request,
-            'RECONCILIATION_VERIFIED',
+            AuditEventType::Verified,
             'reconciliations',
             'Segunda autorización de conciliación completada.',
             null,
@@ -88,7 +89,7 @@ final class ReconciliationController extends ApiController
 
         $audit->record(
             $request,
-            'RECONCILIATION_REJECTED',
+            AuditEventType::Rejected,
             'reconciliations',
             'Conciliación manual rechazada; la transacción bancaria vuelve a estar disponible.',
             null,

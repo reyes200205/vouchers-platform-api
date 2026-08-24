@@ -35,6 +35,26 @@ final class BaseSeeder extends Seeder
                 'email' => 'jorgerenteriareyes4@gmail.com',
                 'role' => 'super-admin',
             ],
+            [
+                'name' => 'Abraham',
+                'email' => 'abrahamghj1@gmail.com',
+                'role' => 'super-admin',
+            ],
+            [
+                'name' => 'Brisa',
+                'email' => 'daniela.lunaa185@gmail.com',
+                'role' => 'super-admin',
+            ],
+            [
+                'name' => 'Diana',
+                'email' => 'dianaaochoa3@gmail.com',
+                'role' => 'super-admin',
+            ],
+            [
+                'name' => 'Axel',
+                'email' => 'axel.y.ya.0@gmail.com',
+                'role' => 'super-admin'
+            ]
         ];
 
         foreach ($users as $userData) {

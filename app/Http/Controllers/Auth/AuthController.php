@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auth;
 
+use App\Enums\AuditEventType;
 use App\Enums\LoginChannel;
 use App\Enums\OtpVerificationResult;
 use App\Http\Controllers\ApiController;
@@ -49,7 +50,7 @@ final class AuthController extends ApiController
             // AuditLogger lee el actor desde $request->user(); el usuario aun no
             // tiene token, asi que lo forzamos temporalmente para poder auditar.
             Auth::setUser($user);
-            $audit->record($request, 'MFA_CHALLENGE_SENT', 'auth', 'Codigo OTP enviado para segundo factor de autenticacion.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
+            $audit->record($request, AuditEventType::Sent, 'auth', 'Codigo OTP enviado para segundo factor de autenticacion.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
 
             return $this->success([
                 'requires_otp' => true,
@@ -79,7 +80,7 @@ final class AuthController extends ApiController
         if (! $result->isOk()) {
             $audit->record(
                 $request,
-                'MFA_FAILED',
+                AuditEventType::Failed,
                 'auth',
                 'Intento fallido de verificacion OTP: '.$result->value.'.',
                 $user->activeBusinessBranchIds()[0] ?? null,
@@ -92,7 +93,7 @@ final class AuthController extends ApiController
 
         $challenges->forget($request->challenge_id);
 
-        $audit->record($request, 'MFA_VERIFIED', 'auth', 'Segundo factor verificado exitosamente.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
+        $audit->record($request, AuditEventType::Verified, 'auth', 'Segundo factor verificado exitosamente.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
 
         return $this->finishLogin($user, $request, $audit, $financial, $challenge['channel']);
     }
@@ -109,7 +110,7 @@ final class AuthController extends ApiController
         $user->sendOneTimePassword();
 
         Auth::setUser($user);
-        $audit->record($request, 'MFA_CHALLENGE_RESENT', 'auth', 'Reenvio de codigo OTP.', null, $this->getUserAuditData($user));
+        $audit->record($request, AuditEventType::Resent, 'auth', 'Reenvio de codigo OTP.', null, $this->getUserAuditData($user));
 
         return $this->success([
             'masked_email' => self::maskEmail($user->person?->email),
@@ -125,7 +126,7 @@ final class AuthController extends ApiController
 
         $token?->delete();
 
-        $audit->record($request, 'LOGOUT', 'auth', 'Cierre de sesion.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
+        $audit->record($request, AuditEventType::Logout, 'auth', 'Cierre de sesion.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
 
         return $this->success(message: 'Logged out successfully');
     }
@@ -155,7 +156,7 @@ final class AuthController extends ApiController
             'password_confirmed_at' => now(),
         ]);
 
-        $audit->record($request, 'PASSWORD_CHANGED', 'auth', 'Cambio de contrasena por el propio usuario.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
+        $audit->record($request, AuditEventType::Changed, 'auth', 'Cambio de contrasena por el propio usuario.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
 
         return $this->success(message: 'Password changed successfully');
     }
@@ -173,7 +174,7 @@ final class AuthController extends ApiController
 
         $user->update(['password_confirmed_at' => now()]);
 
-        $audit->record($request, 'PASSWORD_CONFIRMED', 'auth', 'El usuario conservo su contrasena temporal.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
+        $audit->record($request, AuditEventType::Confirmed, 'auth', 'El usuario conservo su contrasena temporal.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
 
         return $this->success(message: 'Password confirmed successfully');
     }
@@ -192,7 +193,7 @@ final class AuthController extends ApiController
             // sesion, asi que lo forzamos temporalmente para dejar registrado
             // a quien se le envio el enlace (mismo patron que MFA_CHALLENGE_SENT).
             Auth::setUser($user);
-            $audit->record($request, 'PASSWORD_RESET_LINK_SENT', 'auth', 'Enlace de recuperacion de contrasena enviado.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
+            $audit->record($request, AuditEventType::Sent, 'auth', 'Enlace de recuperacion de contrasena enviado.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
         }
 
         return $this->success(message: 'Si el usuario existe, enviamos un enlace de recuperación a su correo registrado.');
@@ -207,7 +208,7 @@ final class AuthController extends ApiController
         }
 
         Auth::setUser($user);
-        $audit->record($request, 'PASSWORD_RESET_COMPLETED', 'auth', 'Contrasena restablecida mediante enlace de recuperacion.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
+        $audit->record($request, AuditEventType::Completed, 'auth', 'Contrasena restablecida mediante enlace de recuperacion.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
 
         return $this->success(message: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.');
     }
@@ -238,7 +239,7 @@ final class AuthController extends ApiController
         $token = $user->createToken('auth-token')->plainTextToken;
 
         Auth::setUser($user);
-        $audit->record($request, 'LOGIN', 'auth', 'Inicio de sesion exitoso.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
+        $audit->record($request, AuditEventType::Login, 'auth', 'Inicio de sesion exitoso.', $user->activeBusinessBranchIds()[0] ?? null, $this->getUserAuditData($user));
 
         $this->attachPreValeMaxAmount($user, $financial);
 

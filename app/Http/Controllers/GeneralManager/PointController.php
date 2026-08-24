@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\GeneralManager;
 
+use App\Enums\AuditEventType;
 use App\Http\Controllers\ApiController;
 use App\Http\Requests\Points\DecidePointRedemptionRequest;
 use App\Http\Requests\Points\UpdateDistributorCategoryRequest;
@@ -28,6 +29,10 @@ final class PointController extends ApiController
             ->with('distributor')
             ->when($branchIds !== [], fn ($query) => $query->whereIn('branch_id', $branchIds))
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
+            ->when($request->filled('distributor_number'), fn ($query) => $query->whereHas(
+                'distributor',
+                fn ($distributorQuery) => $distributorQuery->where('distributor_number', 'like', '%'.$request->string('distributor_number')->value().'%')
+            ))
             ->latest('id')
             ->paginate($request->integer('per_page', 15))
             ->appends($request->query());
@@ -43,7 +48,7 @@ final class PointController extends ApiController
 
         $audit->record(
             $request,
-            'POINT_REDEMPTION_DECIDED',
+            AuditEventType::Decided,
             'points',
             'Canje de puntos resuelto.',
             $redemption->branch_id,
@@ -63,7 +68,7 @@ final class PointController extends ApiController
 
         $audit->record(
             $request,
-            'DISTRIBUTOR_CATEGORY_CHANGED',
+            AuditEventType::Changed,
             'points',
             'Categoría de la distribuidora actualizada.',
             $distributor->branch_id,

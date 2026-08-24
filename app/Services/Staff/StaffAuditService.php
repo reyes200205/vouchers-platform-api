@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Staff;
 
+use App\Enums\AuditEventType;
 use App\Models\User;
 use App\Services\Audit\AuditLogger;
 use Illuminate\Http\Request;
@@ -23,7 +24,7 @@ final class StaffAuditService
     {
         $this->audit->record(
             $request,
-            'STAFF_CREATED',
+            AuditEventType::Created,
             'staff',
             'Miembro del personal creado.',
             $branchId,
@@ -49,7 +50,7 @@ final class StaffAuditService
 
         $this->audit->record(
             $request,
-            'STAFF_UPDATED',
+            AuditEventType::Updated,
             'staff',
             'Miembro del personal actualizado.',
             $staff->activeBusinessBranchIds()[0] ?? null,
