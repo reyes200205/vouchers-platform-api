@@ -58,6 +58,7 @@ final class CustomerTransferController extends ApiController
             [
                 'customer_id' => $customer->id,
                 'transfer_request_id' => $transferRequest->id,
+                'source_distributor_id' => $transferRequest->source_distributor_id,
                 'destination_distributor_id' => $transferRequest->destination_distributor_id,
             ]
         );
@@ -82,7 +83,12 @@ final class CustomerTransferController extends ApiController
             'customers',
             'Solicitud de transferencia de cliente cancelada.',
             $transferRequest->customer->branch_id,
-            ['transfer_request_id' => $transferRequest->id, 'customer_id' => $transferRequest->customer_id]
+            [
+                'transfer_request_id' => $transferRequest->id,
+                'customer_id' => $transferRequest->customer_id,
+                'source_distributor_id' => $transferRequest->source_distributor_id,
+                'destination_distributor_id' => $transferRequest->destination_distributor_id,
+            ]
         );
 
         return $this->success(new CustomerTransferRequestResource($transferRequest->load('customer')));

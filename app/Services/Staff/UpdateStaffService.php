@@ -42,22 +42,22 @@ final class UpdateStaffService
             abort(422, 'El usuario no pertenece al módulo de personal.');
         }
 
-        if ($staff->isGeneralManager() && ! $actor->hasRole('super-admin')) {
+        if ($staff->isGeneralManager() && ! $actor->isSuperAdmin()) {
             abort(403, 'Solo el super administrador puede modificar a un gerente general.');
         }
 
         if (isset($data['role_code'])) {
             $targetRole = Role::query()->where('code', $data['role_code'])->firstOrFail();
-            if ($targetRole->name === 'general_manager' && ! $actor->hasRole('super-admin')) {
+            if ($targetRole->name === 'general_manager' && ! $actor->isSuperAdmin()) {
                 abort(403, 'Solo el super administrador puede asignar el rol de gerente general.');
             }
         }
 
-        if ($actor->id === $staff->id && ! $actor->hasRole('super-admin')) {
+        if ($actor->id === $staff->id && ! $actor->isSuperAdmin()) {
             abort(403, 'No puedes modificar tu propia cuenta desde el módulo de personal.');
         }
 
-        if (! $actor->isGeneralManager() && ! $actor->hasRole('super-admin')) {
+        if (! $actor->isGeneralManager() && ! $actor->isSuperAdmin()) {
             $allowedBranchIds = $actor->activeBusinessBranchIds();
             $staffBranchIds = $staff->activeBusinessBranchIds();
 
@@ -152,7 +152,7 @@ final class UpdateStaffService
                     'home_branch_id' => $newRole->name === 'general_manager' ? $requestedBranchId : null,
                 ]);
 
-                $staff->businessRoles()->updateExistingPivot($primaryPivot->id, [
+                $staff->updateBusinessRolePivot($primaryPivot->pivot->id, [
                     'revoked_at' => now(),
                     'is_primary' => false,
                 ]);
@@ -169,7 +169,7 @@ final class UpdateStaffService
                 $existingPivot = $existingPivotQuery->first();
 
                 if ($existingPivot !== null) {
-                    $staff->businessRoles()->updateExistingPivot($existingPivot->id, [
+                    $staff->updateBusinessRolePivot($existingPivot->pivot->id, [
                         'branch_id' => $branchId,
                         'revoked_at' => null,
                         'is_primary' => true,
@@ -202,7 +202,7 @@ final class UpdateStaffService
                     );
                 }
 
-                $staff->businessRoles()->updateExistingPivot($primaryPivot->id, ['branch_id' => $branchId]);
+                $staff->updateBusinessRolePivot($primaryPivot->pivot->id, ['branch_id' => $branchId]);
             }
 
             return $staff->fresh(['person', 'businessRoles', 'homeBranch']);

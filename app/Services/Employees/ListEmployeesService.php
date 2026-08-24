@@ -19,7 +19,7 @@ final class ListEmployeesService
     {
         $query = Employee::query()->with(['user', 'person', 'branch']);
 
-        if ($user->hasRole('general_manager')) {
+        if ($user->isGeneralManager()) {
             // General manager can see all or filter by a specific branch
             if (isset($filters['branch_id'])) {
                 $query->where('branch_id', $filters['branch_id']);

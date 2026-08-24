@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -92,7 +93,25 @@ final class User extends Authenticatable
             'model_has_roles',
             'model_id',
             'role_id'
-        )->withPivot(['branch_id', 'assigned_at', 'revoked_at', 'is_primary']);
+        )->withPivot(['id', 'branch_id', 'assigned_at', 'revoked_at', 'is_primary']);
+    }
+
+    /**
+     * Actualiza UNA fila especifica de model_has_roles por su propio id.
+     *
+     * NO usar `businessRoles()->updateExistingPivot($role->id, ...)` para esto:
+     * ese metodo filtra solo por role_id (+ model_id/model_type), sin
+     * considerar branch_id -- si el usuario tiene mas de una fila para el
+     * mismo rol en sucursales distintas (p.ej. verifier@SucursalA revocado
+     * hace tiempo y verifier@SucursalB por reactivar ahora), actualiza TODAS
+     * esas filas a la vez. Confirmado en pruebas: reactivar una sola fila via
+     * updateExistingPivot(roleId, ['revoked_at'=>null]) reactivaba tambien la
+     * de la otra sucursal. Por eso el pivot ahora expone su propio `id`
+     * (ver withPivot en businessRoles()) y este metodo actualiza por ese id.
+     */
+    public function updateBusinessRolePivot(int $pivotId, array $attributes): void
+    {
+        DB::table('model_has_roles')->where('id', $pivotId)->update($attributes);
     }
 
     /**
@@ -147,7 +166,7 @@ final class User extends Authenticatable
         $globalRoleCodes = config('business-authorization.global_role_codes', []);
         $allowedGlobalRoles = array_intersect($allowedRoleCodes, $globalRoleCodes);
 
-        $query = $this->businessRoles()->whereIn('roles.name', $allowedRoleCodes);
+        $query = $this->businessRoles()->wherePivotNull('revoked_at')->whereIn('roles.name', $allowedRoleCodes);
 
         if ($branchId !== null) {
             return $query->where(function ($q) use ($branchId, $allowedGlobalRoles) {
@@ -186,13 +205,27 @@ final class User extends Authenticatable
     public function hasGlobalBusinessRole(): bool
     {
         return $this->businessRoles()
+            ->wherePivotNull('revoked_at')
             ->whereIn('roles.name', config('business-authorization.global_role_codes', []))
             ->exists();
     }
 
     public function isGeneralManager(): bool
     {
-        return $this->businessRoles()->where('roles.name', 'general_manager')->exists();
+        return $this->businessRoles()->wherePivotNull('revoked_at')->where('roles.name', 'general_manager')->exists();
+    }
+
+    /**
+     * A diferencia de $this->hasRole('super-admin') (metodo nativo de Spatie),
+     * esto SI respeta revoked_at: Spatie no conoce esa columna -- es una
+     * columna propia de este proyecto agregada a model_has_roles -- asi que
+     * hasRole() sigue devolviendo true para un super-admin al que ya se le
+     * revoco el rol (fila con revoked_at != null pero sin borrar). Usar este
+     * metodo en su lugar para cualquier chequeo de autorizacion real.
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->businessRoles()->wherePivotNull('revoked_at')->where('roles.name', 'super-admin')->exists();
     }
 
     /**
@@ -208,7 +241,7 @@ final class User extends Authenticatable
             return false;
         }
 
-        return $this->businessRoles()->whereIn('roles.name', $requiredRoleCodes)->exists();
+        return $this->businessRoles()->wherePivotNull('revoked_at')->whereIn('roles.name', $requiredRoleCodes)->exists();
     }
 
     public function sendOneTimePassword(): void
@@ -227,6 +260,7 @@ final class User extends Authenticatable
     public function activeBusinessBranchIds(): array
     {
         return $this->businessRoles()
+            ->wherePivotNull('revoked_at')
             ->whereNotNull('model_has_roles.branch_id')
             ->pluck('model_has_roles.branch_id')
             ->map(static fn (mixed $branchId): int => (int) $branchId)

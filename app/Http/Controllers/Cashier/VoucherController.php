@@ -28,6 +28,10 @@ final class VoucherController extends ApiController
             [
                 'voucher_id' => $voucher->id,
                 'voucher_number' => $voucher->voucher_number,
+                'customer_id' => $voucher->customer_id,
+                'distributor_id' => $voucher->distributor_id,
+                'amount' => $voucher->amount,
+                'total_debt_amount' => $voucher->total_debt_amount,
                 'transfer_reference' => $voucher->transfer_reference,
                 'authorized_number' => $voucher->authorized_number,
             ]

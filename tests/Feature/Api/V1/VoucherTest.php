@@ -676,6 +676,167 @@ describe('Voucher rejection (cajera/gerente)', function (): void {
     });
 });
 
+<<<<<<< HEAD
+=======
+describe('Voucher disbursement (cajera)', function (): void {
+    it('disburses an approved voucher capturing the transfer reference', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $voucher = Voucher::factory()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'financial_product_id' => $product->id,
+            'status' => VoucherStatus::APROBADO,
+        ]);
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260816-001',
+            'authorized_number' => 'AUT-0001',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'ACTIVO')
+            ->assertJsonPath('data.transfer_reference', 'SPEI-20260816-001')
+            ->assertJsonPath('data.authorized_number', 'AUT-0001')
+            ->assertJsonPath('data.disbursed_by_user_id', $cashier->id);
+
+        $this->assertDatabaseHas('vouchers', [
+            'id' => $voucher->id,
+            'status' => 'ACTIVO',
+            'transfer_reference' => 'SPEI-20260816-001',
+            'authorized_number' => 'AUT-0001',
+        ]);
+    });
+
+    it('rolls the first payment_due_date to the NEXT cutoff period, never the current one', function (): void {
+        // El dia 27 cae en el periodo 16-31 (branch_settings.cutoff_day = 15 por
+        // default). El vale se acaba de pedir, asi que el primer pago NO debe
+        // caer el 30/31 de ESTE mes (el periodo actual, a solo unos dias) --
+        // debe caer hasta el 15 del mes SIGUIENTE. Ver CutoffPeriodCalculator.
+        $this->travelTo(now()->setDate(2026, 8, 27)->setTime(10, 0, 0));
+
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $voucher = Voucher::factory()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'financial_product_id' => $product->id,
+            'status' => VoucherStatus::APROBADO,
+        ]);
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260827-777',
+            'authorized_number' => 'AUT-0777',
+        ])->assertOk()
+            ->assertJsonPath('data.payment_due_date', '2026-09-15');
+
+        $this->assertDatabaseHas('vouchers', [
+            'id' => $voucher->id,
+            'payment_due_date' => '2026-09-15 00:00:00',
+        ]);
+    });
+
+    it('rejects disbursement of a voucher that is not approved', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $voucher = Voucher::factory()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'financial_product_id' => $product->id,
+            'status' => VoucherStatus::ACTIVO,
+        ]);
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260816-002',
+            'authorized_number' => 'AUT-0002',
+        ])->assertStatus(422);
+    });
+
+    it('rejects disbursement when the customer has not been verified by the cashier', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor] = voucherScenario();
+        $customer = Customer::factory()->create([
+            'branch_id' => $branch->id,
+            'status' => CustomerStatus::EN_VERIFICACION,
+            'verified_at' => null,
+        ]);
+        $voucher = Voucher::factory()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'financial_product_id' => $product->id,
+            'status' => VoucherStatus::APROBADO,
+        ]);
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260816-004',
+            'authorized_number' => 'AUT-0004',
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'El cliente debe ser verificado por la cajera antes de poder recibir el vale.');
+
+        $this->assertDatabaseHas('vouchers', [
+            'id' => $voucher->id,
+            'status' => 'APROBADO',
+        ]);
+    });
+
+    it('forbids a coordinator from disbursing vouchers', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $voucher = Voucher::factory()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'financial_product_id' => $product->id,
+            'status' => VoucherStatus::APROBADO,
+        ]);
+
+        $coordinator = User::factory()->create();
+        signInBusinessRole($coordinator, 'coordinator', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260816-003',
+            'authorized_number' => 'AUT-0003',
+        ])->assertForbidden();
+    });
+
+    it('forbids a branch manager and a general manager from disbursing vouchers — only the cashier hands over the money', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $voucher = Voucher::factory()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'financial_product_id' => $product->id,
+            'status' => VoucherStatus::APROBADO,
+        ]);
+
+        $branchManager = User::factory()->create();
+        signInBusinessRole($branchManager, 'branch_manager', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260816-005',
+            'authorized_number' => 'AUT-0005',
+        ])->assertForbidden();
+
+        $generalManager = User::factory()->create();
+        signInBusinessRole($generalManager, 'general_manager', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260816-006',
+            'authorized_number' => 'AUT-0006',
+        ])->assertForbidden();
+    });
+});
+
+>>>>>>> b19b1bf7cc09c2a40b6b793e27c7c3a8e942f0e9
 describe('Voucher views', function (): void {
     it('lets a distributor see only its own vouchers', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();

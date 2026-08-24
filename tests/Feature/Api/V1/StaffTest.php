@@ -415,6 +415,62 @@ describe('Staff management', function (): void {
             ->assertJsonPath('data.roles.0.code', 'branch_manager');
     });
 
+    it('does not resurrect an unrelated revoked role row at a different branch when reactivating the same role elsewhere', function (): void {
+        // Reproduce el bug: businessRoles()->updateExistingPivot($role->id, ...)
+        // solo filtra por role_id (Laravel ignora branch_id, columna custom que
+        // Spatie no conoce), asi que si el usuario tiene DOS filas revocadas
+        // para el mismo rol en sucursales distintas, reactivar una via
+        // updateExistingPivot reactivaba tambien la otra. Aqui el empleado ya
+        // fue verifier en SucursalA (revocado hace tiempo, sin relacion con
+        // esta prueba) Y verifier en SucursalB (revocado, es al que le toca
+        // reactivarse ahora) -- solo SucursalB debe quedar activa.
+        $branchA = Branch::factory()->create();
+        $branchB = Branch::factory()->create();
+        staffSignIn('general_manager');
+
+        $verifierRole = staffRole('verifier');
+        $employee = User::factory()->create();
+        $employee->businessRoles()->attach($verifierRole, [
+            'branch_id' => $branchA->id,
+            'assigned_at' => now(),
+            'revoked_at' => now(),
+            'is_primary' => false,
+        ]);
+        $employee->businessRoles()->attach($verifierRole, [
+            'branch_id' => $branchB->id,
+            'assigned_at' => now(),
+            'revoked_at' => now(),
+            'is_primary' => false,
+        ]);
+        $employee->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $branchB->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->patchJson("/api/v1/staff/{$employee->id}", [
+            'is_active' => true,
+            'role_code' => 'verifier',
+            'branch_id' => $branchB->id,
+        ])->assertOk()
+            ->assertJsonPath('data.roles.0.code', 'verifier')
+            ->assertJsonPath('data.roles.0.branch_id', $branchB->id);
+
+        $staleRowStillRevoked = \DB::table('model_has_roles')
+            ->where('model_id', $employee->id)
+            ->where('branch_id', $branchA->id)
+            ->value('revoked_at');
+
+        expect($staleRowStillRevoked)->not->toBeNull();
+
+        $activeRoles = \DB::table('model_has_roles')
+            ->where('model_id', $employee->id)
+            ->whereNull('revoked_at')
+            ->count();
+
+        expect($activeRoles)->toBe(1);
+    });
+
     it('updates status only (no role fields) without errors', function (): void {
         $branch = Branch::factory()->create();
         staffSignIn('general_manager');

@@ -80,7 +80,14 @@ final class VoucherController extends ApiController
             'vouchers',
             'Solicitud de vale creada por la distribuidora, pendiente de aprobacion.',
             $voucherRequest->branch_id,
-            ['voucher_request_id' => $voucherRequest->id, 'is_pre_vale' => $voucherRequest->is_pre_vale]
+            [
+                'voucher_request_id' => $voucherRequest->id,
+                'customer_id' => $voucherRequest->customer_id,
+                'distributor_id' => $voucherRequest->distributor_id,
+                'financial_product_id' => $voucherRequest->financial_product_id,
+                'requested_amount' => $voucherRequest->requested_amount,
+                'is_pre_vale' => $voucherRequest->is_pre_vale,
+            ]
         );
 
         return $this->created(

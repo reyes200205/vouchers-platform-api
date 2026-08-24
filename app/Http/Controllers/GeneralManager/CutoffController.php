@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\GeneralManager;
 
 use App\Enums\AuditEventType;
+use App\Enums\CutoffRelationStatus;
 use App\Http\Controllers\ApiController;
 use App\Http\Resources\CutoffResource;
 use App\Models\Cutoff;
@@ -36,6 +37,10 @@ final class CutoffController extends ApiController
 
     public function close(Request $request, Cutoff $cutoff, CloseCutoffService $service, AuditLogger $audit): JsonResponse
     {
+        $unpaidRelations = $cutoff->relations()
+            ->whereIn('status', [CutoffRelationStatus::GENERADA, CutoffRelationStatus::PARCIAL])
+            ->get(['id', 'total_amount_due']);
+
         $cutoff = $service->execute($cutoff);
 
         $audit->record(
@@ -46,6 +51,9 @@ final class CutoffController extends ApiController
             $cutoff->branch_id,
             [
                 'cutoff_id' => $cutoff->id,
+                'relations_marked_overdue' => $unpaidRelations->count(),
+                'total_amount_overdue' => $unpaidRelations->sum('total_amount_due'),
+                'cutoff_relation_ids' => $unpaidRelations->pluck('id'),
             ]
         );
 
