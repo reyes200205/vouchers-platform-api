@@ -36,7 +36,7 @@ final class RelationController extends ApiController
             ->firstOrFail();
 
         $relations = CutoffRelation::query()
-            ->with(['items.customer.person'])
+            ->with(['items.customer.person', 'retroactiveReconciliation'])
             ->where('distributor_id', $distributor->id)
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->string('status')->value()))
             ->latest('generated_at')
@@ -63,7 +63,7 @@ final class RelationController extends ApiController
             abort(404);
         }
 
-        $cutoffRelation->load(['items.customer.person']);
+        $cutoffRelation->load(['items.customer.person', 'retroactiveReconciliation']);
 
         return $this->success(new CutoffRelationResource($cutoffRelation));
     }

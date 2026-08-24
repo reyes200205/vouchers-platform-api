@@ -31,7 +31,7 @@ final class CutoffController extends ApiController
             ]
         );
 
-        return $this->success(new CutoffResource($cutoff->load('relations.distributor.person', 'relations.items.customer.person')));
+        return $this->success(new CutoffResource($cutoff->load('relations.distributor.person', 'relations.items.customer.person', 'relations.retroactiveReconciliation')));
     }
 
     public function close(Request $request, Cutoff $cutoff, CloseCutoffService $service, AuditLogger $audit): JsonResponse
@@ -49,6 +49,6 @@ final class CutoffController extends ApiController
             ]
         );
 
-        return $this->success(new CutoffResource($cutoff->load('relations.distributor.person', 'relations.items.customer.person')));
+        return $this->success(new CutoffResource($cutoff->load('relations.distributor.person', 'relations.items.customer.person', 'relations.retroactiveReconciliation')));
     }
 }
