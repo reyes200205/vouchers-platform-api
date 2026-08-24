@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\LoginChannel;
+use App\Enums\OtpVerificationResult;
+use App\Services\Auth\OneTimePasswordService;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -32,6 +34,7 @@ use Spatie\Permission\Traits\HasRoles;
     'requires_vpn',
     'login_channel',
     'last_login_at',
+    'password_confirmed_at',
 ])]
 #[Hidden([
     'password_hash',
@@ -193,6 +196,32 @@ final class User extends Authenticatable
     }
 
     /**
+     * Si alguno de los roles de negocio del usuario esta en
+     * `business-authorization.otp_required_role_codes`, debe verificar un
+     * codigo OTP por correo ademas de su contrasena (ver AuthController::login()).
+     */
+    public function requiresOtp(): bool
+    {
+        $requiredRoleCodes = config('business-authorization.otp_required_role_codes', []);
+
+        if ($requiredRoleCodes === []) {
+            return false;
+        }
+
+        return $this->businessRoles()->whereIn('roles.name', $requiredRoleCodes)->exists();
+    }
+
+    public function sendOneTimePassword(): void
+    {
+        app(OneTimePasswordService::class)->generateAndSend($this);
+    }
+
+    public function consumeOneTimePassword(string $code): OtpVerificationResult
+    {
+        return app(OneTimePasswordService::class)->verify($this, $code);
+    }
+
+    /**
      * @return list<int>
      */
     public function activeBusinessBranchIds(): array
@@ -218,6 +247,7 @@ final class User extends Authenticatable
             'requires_vpn' => 'boolean',
             'login_channel' => LoginChannel::class,
             'last_login_at' => 'datetime',
+            'password_confirmed_at' => 'datetime',
         ];
     }
 }
