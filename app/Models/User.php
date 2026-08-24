@@ -19,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -92,7 +93,25 @@ final class User extends Authenticatable
             'model_has_roles',
             'model_id',
             'role_id'
-        )->withPivot(['branch_id', 'assigned_at', 'revoked_at', 'is_primary']);
+        )->withPivot(['id', 'branch_id', 'assigned_at', 'revoked_at', 'is_primary']);
+    }
+
+    /**
+     * Actualiza UNA fila especifica de model_has_roles por su propio id.
+     *
+     * NO usar `businessRoles()->updateExistingPivot($role->id, ...)` para esto:
+     * ese metodo filtra solo por role_id (+ model_id/model_type), sin
+     * considerar branch_id -- si el usuario tiene mas de una fila para el
+     * mismo rol en sucursales distintas (p.ej. verifier@SucursalA revocado
+     * hace tiempo y verifier@SucursalB por reactivar ahora), actualiza TODAS
+     * esas filas a la vez. Confirmado en pruebas: reactivar una sola fila via
+     * updateExistingPivot(roleId, ['revoked_at'=>null]) reactivaba tambien la
+     * de la otra sucursal. Por eso el pivot ahora expone su propio `id`
+     * (ver withPivot en businessRoles()) y este metodo actualiza por ese id.
+     */
+    public function updateBusinessRolePivot(int $pivotId, array $attributes): void
+    {
+        DB::table('model_has_roles')->where('id', $pivotId)->update($attributes);
     }
 
     /**

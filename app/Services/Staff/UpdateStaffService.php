@@ -152,7 +152,7 @@ final class UpdateStaffService
                     'home_branch_id' => $newRole->name === 'general_manager' ? $requestedBranchId : null,
                 ]);
 
-                $staff->businessRoles()->updateExistingPivot($primaryPivot->id, [
+                $staff->updateBusinessRolePivot($primaryPivot->pivot->id, [
                     'revoked_at' => now(),
                     'is_primary' => false,
                 ]);
@@ -169,7 +169,7 @@ final class UpdateStaffService
                 $existingPivot = $existingPivotQuery->first();
 
                 if ($existingPivot !== null) {
-                    $staff->businessRoles()->updateExistingPivot($existingPivot->id, [
+                    $staff->updateBusinessRolePivot($existingPivot->pivot->id, [
                         'branch_id' => $branchId,
                         'revoked_at' => null,
                         'is_primary' => true,
@@ -202,7 +202,7 @@ final class UpdateStaffService
                     );
                 }
 
-                $staff->businessRoles()->updateExistingPivot($primaryPivot->id, ['branch_id' => $branchId]);
+                $staff->updateBusinessRolePivot($primaryPivot->pivot->id, ['branch_id' => $branchId]);
             }
 
             return $staff->fresh(['person', 'businessRoles', 'homeBranch']);
