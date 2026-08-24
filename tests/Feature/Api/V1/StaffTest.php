@@ -642,6 +642,41 @@ describe('Staff management', function (): void {
         ]))->assertStatus(422);
     });
 
+    it('rejects assigning a second general manager to a branch another general manager already calls home', function (): void {
+        // Reproduce el bug reportado: se crea "Sucursal UTT" sin gerente, se
+        // crea un gerente general con UTT como sucursal base (sin problema),
+        // y al crear un SEGUNDO gerente general con la misma sucursal base
+        // debe bloquearse -- antes no habia ninguna validacion cruzada entre
+        // gerentes generales, solo contra branch_manager.
+        $utt = Branch::factory()->create();
+
+        $superAdmin = User::factory()->create();
+        $superAdmin->businessRoles()->attach(staffRole('super-admin'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($superAdmin);
+
+        $this->postJson('/api/v1/staff', getValidStaffPayload([
+            'first_name' => 'Jorge',
+            'last_name' => 'Primero',
+            'username' => 'jorge.gm1',
+            'curp' => 'PRIJ900101MDFRLM05',
+            'role_code' => 'general_manager',
+            'branch_id' => $utt->id,
+        ]))->assertCreated();
+
+        $this->postJson('/api/v1/staff', getValidStaffPayload([
+            'first_name' => 'Segundo',
+            'last_name' => 'Gerente',
+            'username' => 'segundo.gm2',
+            'curp' => 'GERS900101MDFRLM06',
+            'role_code' => 'general_manager',
+            'branch_id' => $utt->id,
+        ]))->assertStatus(422);
+    });
+
     it('lets a super-admin change and clear a general manager\'s home branch', function (): void {
         $matriz = Branch::factory()->create();
         $other = Branch::factory()->create();

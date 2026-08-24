@@ -24,7 +24,7 @@ final class DistributorController extends ApiController
         $branchIds = $user->activeBusinessBranchIds();
 
         $distributors = Distributor::query()
-            ->with(['person', 'branch'])
+            ->with(['person', 'branch', 'coordinator.person'])
             ->when($branchIds !== [], fn ($query) => $query->whereIn('branch_id', $branchIds))
             ->when($request->filled('search'), function ($query) use ($request) {
                 $search = $request->string('search')->value();
