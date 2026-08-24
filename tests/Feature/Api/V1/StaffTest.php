@@ -206,6 +206,61 @@ describe('Staff management', function (): void {
         $this->assertDatabaseHas('people', ['curp' => 'LOPA920514MDFRLN03']);
     });
 
+    it('rejects creating a branch manager when the branch already has an active one', function (): void {
+        $branch = Branch::factory()->create();
+        staffSignIn('general_manager');
+
+        $existingManager = User::factory()->create();
+        $existingManager->businessRoles()->attach(staffRole('branch_manager'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->postJson('/api/v1/staff', getValidStaffPayload([
+            'curp' => 'GOME900101MNLXXX01',
+            'role_code' => 'branch_manager',
+            'branch_id' => $branch->id,
+        ]))->assertStatus(422);
+    });
+
+    it('rejects switching a staff member to branch_manager when the branch already has an active one', function (): void {
+        $branch = Branch::factory()->create();
+        staffSignIn('general_manager');
+
+        $existingManager = User::factory()->create();
+        $existingManager->businessRoles()->attach(staffRole('branch_manager'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $cashier = User::factory()->create();
+        $cashier->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->patchJson("/api/v1/staff/{$cashier->id}", [
+            'is_active' => true,
+            'role_code' => 'branch_manager',
+            'branch_id' => $branch->id,
+        ])->assertStatus(422);
+
+        // El gerente existente sigue activo y el aspirante sigue como cajero: nada cambio.
+        $this->assertDatabaseHas('model_has_roles', [
+            'model_id' => $existingManager->id,
+            'branch_id' => $branch->id,
+            'revoked_at' => null,
+        ]);
+        $this->assertDatabaseHas('model_has_roles', [
+            'model_id' => $cashier->id,
+            'branch_id' => $branch->id,
+            'revoked_at' => null,
+        ]);
+    });
+
     it('rejects creating staff without a valid CURP', function (): void {
         $branch = Branch::factory()->create();
         staffSignIn('general_manager');
@@ -329,6 +384,35 @@ describe('Staff management', function (): void {
         ])->assertOk()
             ->assertJsonPath('data.is_active', true)
             ->assertJsonPath('data.roles.0.code', 'cashier');
+    });
+
+    it('reuses an existing model_has_roles row created outside the staff flow instead of crashing on duplicate key', function (): void {
+        // Reproduce el bug: BranchController asigna 'branch_manager' via Spatie::assignRole(),
+        // lo que deja una fila activa (revoked_at null, is_primary false) en model_has_roles
+        // que UpdateStaffService no conocia al buscar solo filas revocadas para reutilizar.
+        $branch = Branch::factory()->create();
+        staffSignIn('general_manager');
+
+        $cashier = User::factory()->create();
+        $cashier->businessRoles()->attach(staffRole('cashier'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        // Fila "huerfana" para branch_manager en la misma sucursal, como la que dejaba
+        // BranchController::update() al usar assignRole() directamente.
+        $cashier->businessRoles()->attach(staffRole('branch_manager'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => false,
+        ]);
+
+        $this->patchJson("/api/v1/staff/{$cashier->id}", [
+            'is_active' => true,
+            'role_code' => 'branch_manager',
+        ])->assertOk()
+            ->assertJsonPath('data.roles.0.code', 'branch_manager');
     });
 
     it('updates status only (no role fields) without errors', function (): void {
@@ -496,6 +580,110 @@ describe('Staff management', function (): void {
             'role_code' => 'general_manager',
             'branch_id' => null,
         ]))->assertStatus(403);
+    });
+
+    it('lets a general manager be assigned a home branch without losing global access', function (): void {
+        $matriz = Branch::factory()->create();
+        $otherBranch = Branch::factory()->create();
+
+        $superAdmin = User::factory()->create();
+        $superAdmin->businessRoles()->attach(staffRole('super-admin'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($superAdmin);
+
+        $response = $this->postJson('/api/v1/staff', getValidStaffPayload([
+            'first_name' => 'Carla',
+            'last_name' => 'Ruiz',
+            'username' => 'carla.gm',
+            'curp' => 'RUIC900101MDFRLL03',
+            'role_code' => 'general_manager',
+            'branch_id' => $matriz->id,
+        ]))->assertCreated()
+            ->assertJsonPath('data.home_branch.id', $matriz->id);
+
+        $newGm = User::findOrFail($response->json('data.id'));
+
+        // El pivot de permisos sigue siendo global (branch_id null): home_branch_id
+        // es puramente informativo y no debe limitar su alcance.
+        expect($newGm->home_branch_id)->toBe($matriz->id)
+            ->and($newGm->businessRoles()->first()->pivot->branch_id)->toBeNull()
+            ->and($newGm->hasBusinessAbility('staff.manage', $otherBranch->id))
+            ->toBe($newGm->hasBusinessAbility('staff.manage', $matriz->id));
+    });
+
+    it('rejects assigning a general manager to a branch that already has an active branch manager', function (): void {
+        $branch = Branch::factory()->create();
+
+        $existingManager = User::factory()->create();
+        $existingManager->businessRoles()->attach(staffRole('branch_manager'), [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $superAdmin = User::factory()->create();
+        $superAdmin->businessRoles()->attach(staffRole('super-admin'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($superAdmin);
+
+        $this->postJson('/api/v1/staff', getValidStaffPayload([
+            'first_name' => 'Mario',
+            'last_name' => 'Diaz',
+            'username' => 'mario.gm',
+            'curp' => 'DIAM900101MDFZRL04',
+            'role_code' => 'general_manager',
+            'branch_id' => $branch->id,
+        ]))->assertStatus(422);
+    });
+
+    it('lets a super-admin change and clear a general manager\'s home branch', function (): void {
+        $matriz = Branch::factory()->create();
+        $other = Branch::factory()->create();
+
+        $gm = User::factory()->create(['home_branch_id' => $matriz->id]);
+        $gm->businessRoles()->attach(staffRole('general_manager'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $superAdmin = User::factory()->create();
+        $superAdmin->businessRoles()->attach(staffRole('super-admin'), [
+            'branch_id' => null,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+        Sanctum::actingAs($superAdmin);
+
+        // Cambiar la sucursal base (rol sin cambios).
+        $this->patchJson("/api/v1/staff/{$gm->id}", [
+            'is_active' => true,
+            'role_code' => 'general_manager',
+            'branch_id' => $other->id,
+        ])->assertOk()->assertJsonPath('data.home_branch.id', $other->id);
+
+        $this->assertDatabaseHas('users', ['id' => $gm->id, 'home_branch_id' => $other->id]);
+        // El pivot de permisos nunca se toca: sigue global.
+        $this->assertDatabaseHas('model_has_roles', [
+            'model_id' => $gm->id,
+            'branch_id' => null,
+            'revoked_at' => null,
+        ]);
+
+        // Quitarle la sucursal base (branch_id null explicito).
+        $this->patchJson("/api/v1/staff/{$gm->id}", [
+            'is_active' => true,
+            'role_code' => 'general_manager',
+            'branch_id' => null,
+        ])->assertOk()->assertJsonPath('data.home_branch', null);
+
+        $this->assertDatabaseHas('users', ['id' => $gm->id, 'home_branch_id' => null]);
     });
 
     it('allows only super-admin to update or deactivate a general manager', function (): void {

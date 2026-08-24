@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Models\Branch;
-use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -21,22 +20,26 @@ final class BranchResource extends JsonResource
     public function toArray(Request $request): array
     {
         $manager = null;
-        $registrar = app(\Spatie\Permission\PermissionRegistrar::class);
-        $originalTeamId = $registrar->getPermissionsTeamId();
-        $registrar->setPermissionsTeamId($this->id);
 
-        $managerUser = Role::where('name', 'branch_manager')->where('guard_name', 'web')->exists()
-            ? User::role('branch_manager')->first()
-            : null;
+        // Usamos businessRoles() filtrando por revoked_at (igual que el resto del
+        // sistema), no Spatie::role()/User::role(): ese scope nativo solo revisa
+        // si existe una fila en model_has_roles para el rol+sucursal, ignorando
+        // por completo revoked_at, asi que seguia mostrando como gerente a
+        // alguien cuyo rol ya habia sido revocado desde el modulo de Staff.
+        $managerUser = User::query()
+            ->whereHas('businessRoles', fn ($q) => $q->where('roles.name', 'branch_manager')
+                ->where('model_has_roles.branch_id', $this->id)
+                ->whereNull('model_has_roles.revoked_at'))
+            ->with('person')
+            ->first();
+
         if ($managerUser) {
-            $managerUser->loadMissing('person');
             $manager = [
                 'id' => $managerUser->id,
                 'username' => $managerUser->username,
                 'name' => $managerUser->person ? trim($managerUser->person->first_name.' '.$managerUser->person->last_name) : $managerUser->username,
             ];
         }
-        $registrar->setPermissionsTeamId($originalTeamId);
 
         return [
             'id' => $this->id,

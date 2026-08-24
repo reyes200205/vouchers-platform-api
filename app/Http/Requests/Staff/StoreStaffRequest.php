@@ -53,7 +53,7 @@ final class StoreStaffRequest extends FormRequest
             'gender' => ['required', 'in:M,F,OTHER'],
             'birth_date' => ['required', 'date', 'before_or_equal:18 years ago'],
             'curp' => ['required', 'string', 'size:18', new ValidCurp(), 'unique:people,curp'],
-            'rfc' => ['required', 'string', 'max:13', new ValidRfc(), 'unique:people,rfc'],
+            'rfc' => ['required', 'string', 'size:13', new ValidRfc(), 'unique:people,rfc'],
             'home_phone' => ['nullable', 'string', 'max:20'],
             'mobile_phone' => ['required', 'string', 'max:20'],
             'email' => ['required', 'email', 'max:150'],

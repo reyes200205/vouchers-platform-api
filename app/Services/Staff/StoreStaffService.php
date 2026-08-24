@@ -36,7 +36,7 @@ final class StoreStaffService
      *     username: string,
      *     password: string,
      *     role_code: string,
-     *     branch_id: int
+     *     branch_id?: int|null
      * }  $data
      */
     public function execute(User $actor, array $data): User
@@ -58,6 +58,30 @@ final class StoreStaffService
                 'Solo el gerente general puede crear personal de otro tipo.'
             );
             abort_unless(in_array($data['branch_id'], $actor->activeBusinessBranchIds(), true), 403, 'Solo puedes asignar personal a tus sucursales.');
+        }
+
+        if ($role->name === 'branch_manager') {
+            $hasActiveManager = User::query()
+                ->whereHas('businessRoles', fn ($q) => $q->where('roles.name', 'branch_manager')
+                    ->where('model_has_roles.branch_id', $data['branch_id'])
+                    ->whereNull('model_has_roles.revoked_at'))
+                ->exists();
+
+            abort_if($hasActiveManager, 422, 'Esta sucursal ya tiene un gerente asignado. Cambia su rol antes de asignar uno nuevo.');
+        }
+
+        // La sucursal "base" de un gerente general es solo informativa (ver
+        // home_branch_id en users): no limita sus permisos, que siguen siendo
+        // globales. Aun asi, no tiene sentido que comparta sucursal con un
+        // branch_manager dedicado, asi que se valida igual que arriba.
+        if ($role->name === 'general_manager' && ! empty($data['branch_id'])) {
+            $hasActiveManager = User::query()
+                ->whereHas('businessRoles', fn ($q) => $q->where('roles.name', 'branch_manager')
+                    ->where('model_has_roles.branch_id', $data['branch_id'])
+                    ->whereNull('model_has_roles.revoked_at'))
+                ->exists();
+
+            abort_if($hasActiveManager, 422, 'Esta sucursal ya tiene un gerente de sucursal asignado.');
         }
 
         return DB::transaction(function () use ($data, $role): User {
@@ -83,6 +107,7 @@ final class StoreStaffService
 
             $user = User::query()->create([
                 'person_id' => $person->id,
+                'home_branch_id' => $role->name === 'general_manager' ? ($data['branch_id'] ?? null) : null,
                 'username' => $data['username'],
                 'password_hash' => Hash::make($data['password']),
                 'is_active' => true,
@@ -94,7 +119,7 @@ final class StoreStaffService
                 'is_primary' => true,
             ]);
 
-            return $user->load(['person', 'businessRoles']);
+            return $user->load(['person', 'businessRoles', 'homeBranch']);
         });
     }
 }

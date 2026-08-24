@@ -30,7 +30,7 @@ final class StoreCustomerChangeRequest extends FormRequest
             'change_type' => ['required', new Enum(ChangeType::class)],
             'new_values' => ['required', 'array'],
             'new_values.curp' => ['sometimes', 'nullable', 'string', 'size:18', new ValidCurp(), Rule::unique('people', 'curp')->ignore($personId)],
-            'new_values.rfc' => ['sometimes', 'nullable', 'string', 'max:13', new ValidRfc(), Rule::unique('people', 'rfc')->ignore($personId)],
+            'new_values.rfc' => ['sometimes', 'nullable', 'string', 'size:13', new ValidRfc(), Rule::unique('people', 'rfc')->ignore($personId)],
             'evidence' => ['nullable', 'array'],
             'evidence.*' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:1000'],
