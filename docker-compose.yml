@@ -7,4 +7,14 @@ services:
     working_dir: /var/www
     volumes:
       - ./:/var/www
+      # vendor/ vive en un volumen nativo de Docker, NO en el disco de Windows:
+      # leer miles de archivos PHP a traves del bind mount de Windows es
+      # brutalmente lento (segundos por archivo en vez de milisegundos), y es
+      # exactamente lo que hacia que hasta un simple ping tardara ~1 minuto en
+      # local. El codigo propio (app/, routes/, etc.) si sigue en vivo desde
+      # Windows para poder editarlo y verlo reflejado al momento.
+      - vendor_data:/var/www/vendor
     command: ["php-fpm"]
+
+volumes:
+  vendor_data:
