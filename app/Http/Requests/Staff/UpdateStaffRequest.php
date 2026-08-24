@@ -49,7 +49,7 @@ final class UpdateStaffRequest extends FormRequest
         return [
             'is_active' => ['required', 'boolean'],
             'role_code' => ['sometimes', 'string', 'max:50', 'exists:roles,code'],
-            'branch_id' => ['sometimes', 'integer', 'exists:branches,id'],
+            'branch_id' => ['sometimes', 'nullable', 'integer', 'exists:branches,id'],
             'first_name' => ['sometimes', 'string', 'max:100'],
             'middle_name' => ['sometimes', 'nullable', 'string', 'max:100'],
             'last_name' => ['sometimes', 'string', 'max:100'],

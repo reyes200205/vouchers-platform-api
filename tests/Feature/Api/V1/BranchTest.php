@@ -98,6 +98,47 @@ describe('Branches', function (): void {
             ->and($generalManager->activeBusinessBranchIds())->toBe([$matriz->id]);
     });
 
+    it('stops showing a branch manager once their role is revoked from the staff module', function (): void {
+        // Reproduce el bug: BranchResource usaba User::role('branch_manager'),
+        // el scope nativo de Spatie, que solo mira si existe una fila en
+        // model_has_roles e ignora por completo revoked_at. Al cambiarle el rol
+        // a alguien desde Staff (que revoca la fila en vez de borrarla), la
+        // sucursal seguia mostrando a esa persona como "Gerente".
+        $branchManagerRole = Role::query()->firstOrCreate(
+            ['name' => 'branch_manager', 'guard_name' => 'web'],
+            ['code' => 'branch_manager']
+        );
+        Role::query()->firstOrCreate(
+            ['name' => 'coordinator', 'guard_name' => 'web'],
+            ['code' => 'coordinator']
+        );
+
+        $branch = Branch::factory()->create();
+
+        $diana = User::factory()->create();
+        $diana->businessRoles()->attach($branchManagerRole, [
+            'branch_id' => $branch->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $generalManager = User::factory()->create();
+        actingAsBusinessRole($generalManager, 'general_manager');
+
+        $this->getJson("/api/v1/branches/{$branch->id}")
+            ->assertOk()
+            ->assertJsonPath('data.manager.id', $diana->id);
+
+        $this->patchJson("/api/v1/staff/{$diana->id}", [
+            'is_active' => true,
+            'role_code' => 'coordinator',
+        ])->assertOk();
+
+        $this->getJson("/api/v1/branches/{$branch->id}")
+            ->assertOk()
+            ->assertJsonPath('data.manager', null);
+    });
+
     it('allows a coordinator to view but not modify a branch', function (): void {
         $coordinator = User::factory()->create();
         $branch = Branch::factory()->create();

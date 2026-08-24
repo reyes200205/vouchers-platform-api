@@ -29,6 +29,12 @@ final class UserResource extends JsonResource
             // contrasena o cambiala" en su primer login.
             'requires_password_confirmation' => $this->password_confirmed_at === null,
             'login_channel' => $this->login_channel?->value,
+            // Sucursal "base" de un gerente general: solo informativo, no limita
+            // sus permisos (esos siguen siendo globales via businessRoles).
+            'home_branch' => $this->whenLoaded('homeBranch', fn () => $this->homeBranch ? [
+                'id' => $this->homeBranch->id,
+                'name' => $this->homeBranch->name,
+            ] : null),
             'person' => $this->whenLoaded('person', fn () => [
                 'id' => $this->person?->id,
                 'first_name' => $this->person?->first_name,
