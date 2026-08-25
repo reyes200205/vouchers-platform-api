@@ -3,6 +3,11 @@
 declare(strict_types=1);
 
 use App\Exceptions\DatabaseUnavailableResponder;
+use App\Exceptions\ExternalServiceUnavailableResponder;
+use App\Exceptions\MailUnavailableResponder;
+use App\Exceptions\SpacesStorageException;
+use App\Exceptions\SpacesUnavailableResponder;
+use App\Exceptions\UnexpectedErrorResponder;
 use App\Http\Middleware\EnsureBusinessAbility;
 use App\Http\Middleware\EnsureEmailVerified;
 use App\Http\Middleware\EnsureUserIsActive;
@@ -13,7 +18,9 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -123,5 +130,67 @@ return Application::configure(basePath: dirname(__DIR__))
                     'message' => 'Endpoint not found',
                 ], 404);
             }
+        });
+
+        // Fallo al conectar con un servicio HTTP de terceros (hoy: Cloudflare
+        // Turnstile en app/Rules/Turnstile.php) -> misma filosofia que la
+        // conexion a MySQL: 503 generico + codigo propio + log tecnico
+        // completo. Ver App\Exceptions\ExternalServiceUnavailableResponder.
+        $exceptions->reportable(fn (ConnectionException $e) => false);
+        $exceptions->render(function (ConnectionException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ExternalServiceUnavailableResponder::handle($e);
+        });
+
+        // Fallo real al guardar un archivo en DigitalOcean Spaces (ver
+        // SpacesStorageService::storeAndSign()/assertConfigured()). No
+        // aplica a temporaryUrlFor(), que a proposito absorbe el error y
+        // regresa null para no tumbar una pantalla completa por una sola
+        // URL firmada que no cargo.
+        $exceptions->reportable(fn (SpacesStorageException $e) => false);
+        $exceptions->render(function (SpacesStorageException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return SpacesUnavailableResponder::handle($e);
+        });
+
+        // Fallo al ENVIAR un correo (SMTP caido, timeout, credenciales
+        // invalidas). Solo se dispara para envios que no estan ya envueltos
+        // en su propio try/catch silencioso (ver
+        // App\Exceptions\MailUnavailableResponder para el detalle de cuales).
+        $exceptions->reportable(fn (TransportExceptionInterface $e) => false);
+        $exceptions->render(function (TransportExceptionInterface $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return MailUnavailableResponder::handle($e);
+        });
+
+        // Red de seguridad final: cualquier excepcion no anticipada que no
+        // haya sido manejada por algo mas especifico arriba -- incluye un
+        // error SQL genuino (QueryException que NO fue fallo de conexion,
+        // ver DatabaseUnavailableResponder) y cualquier bug real. Debe ir
+        // AL FINAL: Handler::render() prueba los render() en el orden en que
+        // se registraron y usa el primero que regrese algo no nulo, asi que
+        // todo lo especifico de arriba sigue teniendo prioridad. Ver
+        // App\Exceptions\UnexpectedErrorResponder para la lista exacta de
+        // exclusiones (validacion, autenticacion, HTTP con status propio).
+        $exceptions->reportable(function (Throwable $e) {
+            if (UnexpectedErrorResponder::isEligible($e)) {
+                return false;
+            }
+        });
+        $exceptions->render(function (Throwable $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return UnexpectedErrorResponder::handle($e);
         });
     })->create();

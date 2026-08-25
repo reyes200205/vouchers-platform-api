@@ -27,11 +27,13 @@ final class Turnstile implements ValidationRule
             return;
         }
 
-        $response = Http::asForm()->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
-            'secret' => $secret,
-            'response' => $value,
-            'remoteip' => request()->ip(),
-        ]);
+        $response = Http::asForm()
+            ->timeout((int) config('services.turnstile.timeout', 5))
+            ->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
+                'secret' => $secret,
+                'response' => $value,
+                'remoteip' => request()->ip(),
+            ]);
 
         if (!$response->successful() || !$response->json('success')) {
             Log::error('Turnstile validation failed', [

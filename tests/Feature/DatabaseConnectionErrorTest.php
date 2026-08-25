@@ -35,7 +35,11 @@ it('returns a generic 503 with internal code 105020 when MySQL connection fails,
         ]);
 });
 
-it('does not intercept a normal SQL error on an already-established connection', function (): void {
+it('does not treat a normal SQL error as a connection failure, but still falls through to the generic fallback (code 105099, not 105020)', function (): void {
+    // "Manejo normal de errores existente" para case B, tras agregar el
+    // catch-all de UnexpectedErrorResponder, es ESTE: el error SQL genuino
+    // ya no queda sin codigo -- tambien se vuelve rastreable por su propio
+    // codigo generico, distinto del especifico de fallo de conexion.
     Route::get('/api/v1/__test/db-normal-sql-error', function (): never {
         throw new QueryException(
             'mysql',
@@ -47,8 +51,11 @@ it('does not intercept a normal SQL error on an already-established connection',
 
     $response = $this->getJson('/api/v1/__test/db-normal-sql-error');
 
-    $response->assertStatus(500);
-    expect($response->json('code'))->not->toBe(105020);
+    $response->assertStatus(500)
+        ->assertExactJson([
+            'code' => 105099,
+            'message' => 'Ocurrió un error inesperado. Intenta nuevamente más tarde. (Código: 105099)',
+        ]);
 });
 
 it('treats a raw PDOException the same way as a wrapped QueryException', function (): void {

@@ -165,7 +165,6 @@ final class RequestVoucherService
         }
     }
 
-<<<<<<< HEAD
     /**
      * Una distribuidora que acumuló 3 cortes consecutivos sin pagar queda
      * MOROSA (ver MarkOverdueRelationsCommand) y can_issue_vouchers pasa a
@@ -182,10 +181,7 @@ final class RequestVoucherService
         }
     }
 
-    private function assertCustomerBelongsToDistributor(Distributor $distributor, Customer $customer): void
-=======
     private function assertCustomerBelongsToDistributor(Distributor $distributor, Customer $customer): CustomerDistributor
->>>>>>> 334d93f908e5cd70ff96cbd9687b3407adf77ba2
     {
         $linked = CustomerDistributor::query()
             ->where('customer_id', $customer->id)

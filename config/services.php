@@ -41,6 +41,10 @@ return [
         'site_key' => env('TURNSTILE_SITE_KEY'),
         'secret_key' => env('TURNSTILE_SECRET_KEY'),
         'enabled' => env('TURNSTILE_ENABLED', env('APP_ENV') !== 'testing'),
+        // Segundos maximos para la llamada a Cloudflare al verificar el
+        // captcha (ver app/Rules/Turnstile.php). Sin esto, un login se puede
+        // quedar esperando indefinidamente si Cloudflare no responde.
+        'timeout' => (int) env('TURNSTILE_TIMEOUT', 5),
     ],
 
 ];
