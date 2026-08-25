@@ -12,15 +12,22 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement("ALTER TABLE customer_transfer_requests MODIFY status ENUM(
-            'PENDIENTE_DESTINO',
-            'RECHAZADA_DESTINO',
-            'PENDIENTE_COORDINADOR',
-            'RECHAZADA_COORDINADOR',
-            'AUTORIZADA',
-            'EJECUTADA',
-            'CANCELADA'
-        ) NOT NULL DEFAULT 'PENDIENTE_DESTINO'");
+        // Schema::table()->enum(...)->change() en vez de un ALTER TABLE ...
+        // MODIFY crudo: ese SQL es sintaxis exclusiva de MySQL/MariaDB y
+        // truena con "syntax error" en SQLite (la conexion que usan las
+        // pruebas automatizadas via RefreshDatabase) -- el builder de
+        // Schema si sabe generar el DDL correcto para cada motor.
+        Schema::table('customer_transfer_requests', function (Blueprint $table) {
+            $table->enum('status', [
+                'PENDIENTE_DESTINO',
+                'RECHAZADA_DESTINO',
+                'PENDIENTE_COORDINADOR',
+                'RECHAZADA_COORDINADOR',
+                'AUTORIZADA',
+                'EJECUTADA',
+                'CANCELADA',
+            ])->default('PENDIENTE_DESTINO')->change();
+        });
 
         Schema::table('customer_transfer_requests', function (Blueprint $table) {
             $table->unsignedBigInteger('destination_decided_by_user_id')->nullable()->after('requested_by_user_id');
@@ -49,12 +56,14 @@ return new class extends Migration
             ]);
         });
 
-        DB::statement("ALTER TABLE customer_transfer_requests MODIFY status ENUM(
-            'PENDIENTE_COORDINADOR',
-            'APROBADA',
-            'RECHAZADA',
-            'CANCELADA',
-            'EJECUTADA'
-        ) NOT NULL DEFAULT 'PENDIENTE_COORDINADOR'");
+        Schema::table('customer_transfer_requests', function (Blueprint $table) {
+            $table->enum('status', [
+                'PENDIENTE_COORDINADOR',
+                'APROBADA',
+                'RECHAZADA',
+                'CANCELADA',
+                'EJECUTADA',
+            ])->default('PENDIENTE_COORDINADOR')->change();
+        });
     }
 };
