@@ -14,7 +14,12 @@ final class CancelCustomerTransferService
     public function execute(User $user, CustomerTransferRequest $transferRequest): CustomerTransferRequest
     {
         return DB::transaction(static function () use ($user, $transferRequest): CustomerTransferRequest {
-            if ($transferRequest->status !== CustomerTransferRequestStatus::PENDIENTE_COORDINADOR) {
+            $cancellableStatuses = [
+                CustomerTransferRequestStatus::PENDIENTE_DESTINO,
+                CustomerTransferRequestStatus::PENDIENTE_COORDINADOR,
+            ];
+
+            if (! in_array($transferRequest->status, $cancellableStatuses, true)) {
                 abort(422, 'Solo puede cancelarse una solicitud pendiente de decisión.');
             }
 

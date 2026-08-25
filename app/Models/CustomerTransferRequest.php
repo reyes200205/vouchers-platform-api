@@ -14,7 +14,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'source_distributor_id',
     'destination_distributor_id',
     'requested_by_user_id',
+    'destination_decided_by_user_id',
+    'destination_decided_at',
     'coordinator_user_id',
+    'coordinator_decided_at',
+    'finalized_by_user_id',
     'status',
     'executed_at',
     'request_reason',
@@ -26,6 +30,8 @@ final class CustomerTransferRequest extends Model
     protected $casts = [
         'status' => CustomerTransferRequestStatus::class,
         'executed_at' => 'datetime',
+        'destination_decided_at' => 'datetime',
+        'coordinator_decided_at' => 'datetime',
     ];
 
     /**
@@ -66,5 +72,21 @@ final class CustomerTransferRequest extends Model
     public function coordinator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'coordinator_user_id');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function destinationDecidedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'destination_decided_by_user_id');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function finalizedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'finalized_by_user_id');
     }
 }

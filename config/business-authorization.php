@@ -64,6 +64,12 @@ return [
         // Para elegir una distribuidora al pedir un aumento de linea de credito
         // (ver credit-increase.request); no expone datos fuera de la sucursal.
         'distributors.view' => ['administrator', 'general_manager', 'branch_manager', 'coordinator'],
+        // Version acotada de distributors.view para que una distribuidora
+        // pueda buscar a otra distribuidora destino al iniciar una
+        // transferencia de cliente -- expone solo id/numero/nombre/sucursal,
+        // nunca credit_limit ni available_credit (ver
+        // Distributor\CustomerTransferController::directory).
+        'distributors.directory' => ['distributor'],
         'credit-accounts.open' => ['general_manager', 'branch_manager'],
         'credit-limits.increase' => ['general_manager'],
         'voucher-plans.manage' => ['general_manager'],
@@ -81,6 +87,8 @@ return [
         'customers.transfer.view' => ['general_manager', 'branch_manager', 'coordinator', 'distributor'],
         'customers.transfer.request' => ['distributor'],
         'customers.transfer.decide' => ['coordinator', 'general_manager'],
+        'customers.transfer.respond' => ['distributor'],
+        'customers.transfer.accept-client' => ['distributor'],
         'customers.transfer.cancel' => ['distributor'],
         'reconciliations.manual' => ['cashier', 'general_manager'],
         'credit-increase.view' => ['general_manager', 'branch_manager', 'coordinator', 'distributor'],
