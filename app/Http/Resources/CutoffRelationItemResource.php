@@ -36,17 +36,17 @@ final class CutoffRelationItemResource extends JsonResource
             'previous_paid_amount' => $this->previous_paid_amount,
             'origin_cutoff_id' => $this->origin_cutoff_id,
             'origin_relation_id' => $this->origin_relation_id,
-            // Solo informativo: cuánta comisión hubiera ganado la
-            // distribuidora sobre este vale si hubiera pagado a tiempo
-            // (según su categoría/producto -- ver
-            // GenerateCutoffService::calculateDistributorCommission). No
-            // cambia commission_amount (0 real, la distribuidora sí la
-            // pierde por el atraso -- ver MarkOverdueRelationsService); esto
-            // solo se muestra en el detalle para que quede claro cuánto se
-            // perdió, no para volver a sumarlo a ningún total.
+            // Cuanta comision perdio la distribuidora por el atraso de este
+            // item (ver MarkOverdueRelationsService). Ya no se recalcula al
+            // vuelo aqui -- es un valor guardado que, a diferencia de
+            // commission_amount (siempre 0 en un item atrasado), SI se va
+            // acumulando cada corte que la quincena FINAL del vale se
+            // vuelve a vencer sin pagarse (junto con late_fee_amount), y
+            // tambien esta incluido en line_total_amount desde esa segunda
+            // vez en adelante.
             'commission_forfeited_amount' => $this->when(
-                $this->is_late_payment && $this->relationLoaded('voucher') && $this->voucher !== null && $this->voucher->total_fortnights > 0,
-                fn () => round((float) $this->voucher->distributor_profit_amount / $this->voucher->total_fortnights, 2)
+                $this->is_late_payment,
+                fn () => (float) $this->commission_forfeited_amount
             ),
             'customer' => $this->whenLoaded('customer', fn () => $this->customer ? [
                 'id' => $this->customer->id,

@@ -9,12 +9,14 @@ use App\Mail\VoucherIssuedMail;
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\CustomerDistributor;
+use App\Models\CutoffRelation;
 use App\Models\Distributor;
 use App\Models\DistributorCategory;
 use App\Models\FinancialProduct;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Voucher;
+use App\Models\VoucherRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
@@ -346,6 +348,24 @@ describe('Voucher request (pre-issue por la distribuidora)', function (): void {
         $this->assertDatabaseCount('voucher_requests', 0);
     });
 
+    it('rejects a request when the distributor is blocked (MOROSA/can_issue_vouchers=false) for consecutive overdue cutoffs', function (): void {
+        ['product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $distributor->update([
+            'status' => \App\Enums\DistributorStatus::MOROSA,
+            'can_issue_vouchers' => false,
+        ]);
+        $user = User::factory()->create();
+        signInDistributor($user, $distributor);
+
+        $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'La distribuidora está bloqueada por adeudo vencido y no puede pedir vales nuevos hasta regularizar el pago.');
+
+        $this->assertDatabaseCount('voucher_requests', 0);
+    });
+
     it('emails the customer as soon as the request is created, with distributor name, number, dates and amount', function (): void {
         Mail::fake();
 
@@ -409,20 +429,25 @@ describe('Voucher approval (cajera/gerente)', function (): void {
         $cashier = User::factory()->create();
         signInBusinessRole($cashier, 'cashier', $branch);
 
-        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+        $response = $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
             ->assertOk()
-            ->assertJsonPath('data.status', 'APROBADO')
+            ->assertJsonPath('data.status', 'ACTIVO')
             ->assertJsonPath('data.is_pre_vale', true)
             ->assertJsonPath('data.voucher_number', 'V-1')
             ->assertJsonPath('data.total_debt_amount', '22600.00')
             ->assertJsonPath('data.fortnightly_payment_amount', '2825.00')
-            ->assertJsonPath('data.approved_by_user_id', $cashier->id);
+            ->assertJsonPath('data.approved_by_user_id', $cashier->id)
+            ->assertJsonPath('data.disbursed_by_user_id', $cashier->id);
+
+        expect($response->json('data.transfer_reference'))->not->toBeNull();
+        expect($response->json('data.authorized_number'))->not->toBeNull();
+        expect($response->json('data.payment_due_date'))->not->toBeNull();
 
         $this->assertDatabaseHas('vouchers', [
             'voucher_number' => 'V-1',
             'distributor_id' => $distributor->id,
             'customer_id' => $customer->id,
-            'status' => 'APROBADO',
+            'status' => 'ACTIVO',
             'is_pre_vale' => true,
             'current_balance' => 22600.00,
         ]);
@@ -517,6 +542,34 @@ describe('Voucher approval (cajera/gerente)', function (): void {
         $this->assertDatabaseHas('distributors', ['id' => $distributor->id, 'available_credit' => 15000.00]);
     });
 
+    it('rejects approving a request when the distributor became blocked (MOROSA) after the request was already pending', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        // La distribuidora se atrasó y quedó MOROSA DESPUES de pedir el vale
+        // (mientras la solicitud seguía pendiente de aprobación) -- no debe
+        // poder recibirlo de todos modos.
+        $distributor->update([
+            'status' => \App\Enums\DistributorStatus::MOROSA,
+            'can_issue_vouchers' => false,
+        ]);
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'La distribuidora está bloqueada por adeudo vencido y no puede recibir vales nuevos hasta regularizar el pago.');
+
+        $this->assertDatabaseCount('vouchers', 0);
+    });
+
     it('forbids the distributor from approving requests', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
         $distributorUser = User::factory()->create();
@@ -544,6 +597,245 @@ describe('Voucher approval (cajera/gerente)', function (): void {
         signInBusinessRole($coordinator, 'coordinator', $branch);
 
         $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")->assertForbidden();
+    });
+
+    it('rejects approval when the customer has not been verified by the cashier', function (): void {
+        // Solo el PRIMER vale de un cliente puede ser pre-vale (y ese si
+        // auto-verifica al cliente al aprobarse -- ver ApproveVoucherService).
+        // Para llegar a la red de seguridad hace falta una solicitud NO
+        // pre-vale con un cliente que, por alguna razon, sigue sin verificar
+        // -- se construye directo con el factory, sin pasar por
+        // RequestVoucherService, igual que antes se hacia con Voucher::factory().
+        ['branch' => $branch, 'distributor' => $distributor] = voucherScenario();
+        $customer = Customer::factory()->create([
+            'branch_id' => $branch->id,
+            'status' => CustomerStatus::EN_VERIFICACION,
+            'verified_at' => null,
+        ]);
+        $voucherRequest = VoucherRequest::factory()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'is_pre_vale' => false,
+            'requested_amount' => 15000.00,
+        ]);
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$voucherRequest->id}/approve")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'El cliente debe ser verificado antes de poder otorgarle el vale.');
+
+        $this->assertDatabaseCount('vouchers', 0);
+    });
+
+    it('assigns the first payment_due_date to the CURRENT cutoff period (revision del profesor: la relacion nueva debe aparecer en el corte que ya esta abierto, no en el siguiente)', function (): void {
+        // El dia 27 cae en el periodo 16-31 (branch_settings.cutoff_day = 15 por
+        // default). El vale se acaba de otorgar; su primer pago debe caer
+        // dentro de ESE MISMO periodo (31 de agosto), no en el que sigue --
+        // asi, si ya hay un corte abierto para 16-31 de agosto, esta relacion
+        // aparece ahi al reprocesarlo. Ver CutoffPeriodCalculator::currentPeriodEnd().
+        $this->travelTo(now()->setDate(2026, 8, 27)->setTime(10, 0, 0));
+
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.payment_due_date', '2026-08-31');
+
+        $this->assertDatabaseHas('vouchers', [
+            'voucher_number' => 'V-1',
+            'payment_due_date' => '2026-08-31 00:00:00',
+        ]);
+    });
+
+    it('makes a newly-approved voucher show up when the CURRENTLY OPEN cutoff is reprocessed', function (): void {
+        // El escenario exacto que se reporto: van en un corte abierto (16-31
+        // de agosto), la distribuidora ya tiene una relacion ahi por otro
+        // cliente, y le otorgan un vale a un cliente nuevo. Al reprocesar ese
+        // MISMO corte, el vale nuevo debe aparecer -- no quedar oculto hasta
+        // el siguiente periodo. Como es la MISMA distribuidora, se agrega
+        // como un item nuevo a su relacion existente en este corte (una
+        // relacion por corte+distribuidora, no una por cliente -- ver
+        // GenerateCutoffService::generateRelation()), pero con su propio
+        // customer_id/voucher_id, distinto del item del cliente original.
+        $this->travelTo(now()->setDate(2026, 8, 27)->setTime(10, 0, 0));
+
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $existingCustomer] = voucherScenario();
+
+        Voucher::factory()->create([
+            'branch_id' => $branch->id,
+            'distributor_id' => $distributor->id,
+            'customer_id' => $existingCustomer->id,
+            'status' => VoucherStatus::ACTIVO,
+            'payment_due_date' => '2026-08-31',
+            'fortnightly_payment_amount' => 1000.00,
+            'total_debt_amount' => 8000.00,
+            'total_fortnights' => 8,
+            'distributor_profit_amount' => 400.00,
+        ]);
+
+        $branchManager = User::factory()->create();
+        signInBusinessRole($branchManager, 'branch_manager', $branch);
+        $cutoff = $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+            'period_start' => '2026-08-16',
+            'period_end' => '2026-08-31',
+        ])->assertCreated()->json('data');
+
+        $this->assertDatabaseCount('cutoff_relations', 1);
+
+        $newCustomer = Customer::factory()->create(['branch_id' => $branch->id]);
+        CustomerDistributor::query()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $newCustomer->id,
+            'relationship_status' => CustomerDistributorRelationshipStatus::ACTIVA,
+            'linked_at' => now(),
+        ]);
+
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $newCustomer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.payment_due_date', '2026-08-31');
+
+        // El reprocess requiere permiso de cutoffs.manage (branch_manager o
+        // general_manager) -- el ultimo usuario autenticado en este punto es
+        // la cajera (que solo puede aprobar/rechazar vales), asi que hay que
+        // volver a autenticar al gerente antes de llamarlo. No se vuelve a
+        // llamar signInBusinessRole() -- ya tiene el rol asignado desde que
+        // genero el corte, y reasignarlo violaria el indice unico de
+        // model_has_roles -- solo hace falta cambiar de nuevo el usuario
+        // autenticado.
+        Sanctum::actingAs($branchManager);
+        $this->postJson("/api/v1/cutoffs/{$cutoff['id']}/reprocess")->assertOk();
+
+        // Sigue siendo UNA sola relacion para esta distribuidora en este
+        // corte (no una por cliente), pero ahora con dos items: el original
+        // (cliente existente) y el nuevo (cliente nuevo, vale recien
+        // aprobado) -- ambos visibles en el corte actual, no en el siguiente.
+        $this->assertDatabaseCount('cutoff_relations', 1);
+        $relation = CutoffRelation::query()
+            ->where('cutoff_id', $cutoff['id'])
+            ->where('distributor_id', $distributor->id)
+            ->firstOrFail();
+        $this->assertSame(2, $relation->items()->count());
+        $newVoucherId = Voucher::query()->where('customer_id', $newCustomer->id)->value('id');
+        $this->assertDatabaseHas('cutoff_relation_items', [
+            'cutoff_relation_id' => $relation->id,
+            'customer_id' => $newCustomer->id,
+            'voucher_id' => $newVoucherId,
+        ]);
+    });
+
+    it('assigns the first payment_due_date to the branch open cutoff even when it is far from the real calendar date', function (): void {
+        // Lo que se reporto en produccion: la sucursal habia generado y
+        // cerrado varios cortes de prueba muy adelantados respecto al reloj
+        // real (ej. llegaron hasta un corte de noviembre mientras la fecha
+        // real seguia siendo agosto). Un vale nuevo NO debe calcularse contra
+        // el reloj real en ese caso -- debe caer en el periodo del corte que
+        // la sucursal ya tiene abierto (sin cerrar), sea cual sea la fecha
+        // real, para que aparezca ahi al reprocesarlo.
+        $this->travelTo(now()->setDate(2026, 8, 25)->setTime(10, 0, 0));
+
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+
+        $branchManager = User::factory()->create();
+        signInBusinessRole($branchManager, 'branch_manager', $branch);
+
+        // Cortes de prueba, generados en secuencia (los periodos deben ser
+        // consecutivos -- ver GenerateCutoffService::execute()) y cerrados
+        // uno por uno, muy adelantados respecto al 25/08 real -- como en el
+        // caso reportado (la sucursal llego hasta un corte de noviembre).
+        $periods = [
+            ['2026-09-01', '2026-09-15'],
+            ['2026-09-16', '2026-09-30'],
+            ['2026-10-01', '2026-10-15'],
+            ['2026-10-16', '2026-10-31'],
+        ];
+        foreach ($periods as [$start, $end]) {
+            $created = $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+                'period_start' => $start,
+                'period_end' => $end,
+            ])->assertCreated()->json('data');
+            \Illuminate\Support\Facades\DB::table('cutoffs')->where('id', $created['id'])->update(['status' => 'CERRADO']);
+        }
+
+        // El corte MAS RECIENTE, todavia SIN cerrar -- este es el "abierto".
+        $openCutoff = $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+            'period_start' => '2026-11-01',
+            'period_end' => '2026-11-15',
+        ])->assertCreated()->json('data');
+
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        // El vale debe caer en el periodo del corte de noviembre (el
+        // abierto), NO en el 31/08 que tocaria segun el reloj real (25/08 +
+        // cutoff_day 15 -> periodo 16-31 agosto).
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.payment_due_date', '2026-11-15');
+
+        $this->assertDatabaseHas('vouchers', [
+            'voucher_number' => 'V-'.$request['id'],
+            'payment_due_date' => '2026-11-15 00:00:00',
+        ]);
+
+        Sanctum::actingAs($branchManager);
+        $this->postJson("/api/v1/cutoffs/{$openCutoff['id']}/reprocess")->assertOk();
+
+        $relation = CutoffRelation::query()
+            ->where('cutoff_id', $openCutoff['id'])
+            ->where('distributor_id', $distributor->id)
+            ->first();
+        $this->assertNotNull($relation, 'la relacion debio aparecer en el corte abierto (noviembre), no en el que tocaria segun la fecha real');
+    });
+
+    it('rejects approving a request that was already decided', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")->assertOk();
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'La solicitud ya fue resuelta.');
+
+        $this->assertDatabaseCount('vouchers', 1);
     });
 });
 
@@ -611,164 +903,6 @@ describe('Voucher rejection (cajera/gerente)', function (): void {
 
         $this->postJson("/api/v1/voucher-requests/{$request['id']}/reject", ['rejection_reason' => 'x'])
             ->assertForbidden();
-    });
-});
-
-describe('Voucher disbursement (cajera)', function (): void {
-    it('disburses an approved voucher capturing the transfer reference', function (): void {
-        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
-        $voucher = Voucher::factory()->create([
-            'distributor_id' => $distributor->id,
-            'customer_id' => $customer->id,
-            'branch_id' => $branch->id,
-            'financial_product_id' => $product->id,
-            'status' => VoucherStatus::APROBADO,
-        ]);
-
-        $cashier = User::factory()->create();
-        signInBusinessRole($cashier, 'cashier', $branch);
-
-        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
-            'transfer_reference' => 'SPEI-20260816-001',
-            'authorized_number' => 'AUT-0001',
-        ])->assertOk()
-            ->assertJsonPath('data.status', 'ACTIVO')
-            ->assertJsonPath('data.transfer_reference', 'SPEI-20260816-001')
-            ->assertJsonPath('data.authorized_number', 'AUT-0001')
-            ->assertJsonPath('data.disbursed_by_user_id', $cashier->id);
-
-        $this->assertDatabaseHas('vouchers', [
-            'id' => $voucher->id,
-            'status' => 'ACTIVO',
-            'transfer_reference' => 'SPEI-20260816-001',
-            'authorized_number' => 'AUT-0001',
-        ]);
-    });
-
-    it('rolls the first payment_due_date to the NEXT cutoff period, never the current one', function (): void {
-        // El dia 27 cae en el periodo 16-31 (branch_settings.cutoff_day = 15 por
-        // default). El vale se acaba de pedir, asi que el primer pago NO debe
-        // caer el 30/31 de ESTE mes (el periodo actual, a solo unos dias) --
-        // debe caer hasta el 15 del mes SIGUIENTE. Ver CutoffPeriodCalculator.
-        $this->travelTo(now()->setDate(2026, 8, 27)->setTime(10, 0, 0));
-
-        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
-        $voucher = Voucher::factory()->create([
-            'distributor_id' => $distributor->id,
-            'customer_id' => $customer->id,
-            'branch_id' => $branch->id,
-            'financial_product_id' => $product->id,
-            'status' => VoucherStatus::APROBADO,
-        ]);
-
-        $cashier = User::factory()->create();
-        signInBusinessRole($cashier, 'cashier', $branch);
-
-        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
-            'transfer_reference' => 'SPEI-20260827-777',
-            'authorized_number' => 'AUT-0777',
-        ])->assertOk()
-            ->assertJsonPath('data.payment_due_date', '2026-09-15');
-
-        $this->assertDatabaseHas('vouchers', [
-            'id' => $voucher->id,
-            'payment_due_date' => '2026-09-15 00:00:00',
-        ]);
-    });
-
-    it('rejects disbursement of a voucher that is not approved', function (): void {
-        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
-        $voucher = Voucher::factory()->create([
-            'distributor_id' => $distributor->id,
-            'customer_id' => $customer->id,
-            'branch_id' => $branch->id,
-            'financial_product_id' => $product->id,
-            'status' => VoucherStatus::ACTIVO,
-        ]);
-
-        $cashier = User::factory()->create();
-        signInBusinessRole($cashier, 'cashier', $branch);
-
-        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
-            'transfer_reference' => 'SPEI-20260816-002',
-            'authorized_number' => 'AUT-0002',
-        ])->assertStatus(422);
-    });
-
-    it('rejects disbursement when the customer has not been verified by the cashier', function (): void {
-        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor] = voucherScenario();
-        $customer = Customer::factory()->create([
-            'branch_id' => $branch->id,
-            'status' => CustomerStatus::EN_VERIFICACION,
-            'verified_at' => null,
-        ]);
-        $voucher = Voucher::factory()->create([
-            'distributor_id' => $distributor->id,
-            'customer_id' => $customer->id,
-            'branch_id' => $branch->id,
-            'financial_product_id' => $product->id,
-            'status' => VoucherStatus::APROBADO,
-        ]);
-
-        $cashier = User::factory()->create();
-        signInBusinessRole($cashier, 'cashier', $branch);
-
-        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
-            'transfer_reference' => 'SPEI-20260816-004',
-            'authorized_number' => 'AUT-0004',
-        ])->assertStatus(422)
-            ->assertJsonPath('message', 'El cliente debe ser verificado por la cajera antes de poder recibir el vale.');
-
-        $this->assertDatabaseHas('vouchers', [
-            'id' => $voucher->id,
-            'status' => 'APROBADO',
-        ]);
-    });
-
-    it('forbids a coordinator from disbursing vouchers', function (): void {
-        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
-        $voucher = Voucher::factory()->create([
-            'distributor_id' => $distributor->id,
-            'customer_id' => $customer->id,
-            'branch_id' => $branch->id,
-            'financial_product_id' => $product->id,
-            'status' => VoucherStatus::APROBADO,
-        ]);
-
-        $coordinator = User::factory()->create();
-        signInBusinessRole($coordinator, 'coordinator', $branch);
-
-        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
-            'transfer_reference' => 'SPEI-20260816-003',
-            'authorized_number' => 'AUT-0003',
-        ])->assertForbidden();
-    });
-
-    it('forbids a branch manager and a general manager from disbursing vouchers — only the cashier hands over the money', function (): void {
-        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
-        $voucher = Voucher::factory()->create([
-            'distributor_id' => $distributor->id,
-            'customer_id' => $customer->id,
-            'branch_id' => $branch->id,
-            'financial_product_id' => $product->id,
-            'status' => VoucherStatus::APROBADO,
-        ]);
-
-        $branchManager = User::factory()->create();
-        signInBusinessRole($branchManager, 'branch_manager', $branch);
-
-        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
-            'transfer_reference' => 'SPEI-20260816-005',
-            'authorized_number' => 'AUT-0005',
-        ])->assertForbidden();
-
-        $generalManager = User::factory()->create();
-        signInBusinessRole($generalManager, 'general_manager', $branch);
-
-        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
-            'transfer_reference' => 'SPEI-20260816-006',
-            'authorized_number' => 'AUT-0006',
-        ])->assertForbidden();
     });
 });
 

@@ -10,6 +10,8 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+use Illuminate\Validation\Rules\Password;
+
 /**
  * @property string $first_name
  * @property string|null $middle_name
@@ -55,16 +57,16 @@ final class StoreStaffRequest extends FormRequest
             'curp' => ['required', 'string', 'size:18', new ValidCurp(), 'unique:people,curp'],
             'rfc' => ['required', 'string', 'size:13', new ValidRfc(), 'unique:people,rfc'],
             'home_phone' => ['nullable', 'string', 'max:20'],
-            'mobile_phone' => ['required', 'string', 'max:20'],
+            'mobile_phone' => ['required', 'string', 'regex:/^\d{10}$/'],
             'email' => ['required', 'email', 'max:150'],
             'street' => ['required', 'string', 'max:150'],
-            'external_number' => ['required', 'string', 'max:30'],
+            'external_number' => ['required', 'string', 'regex:/^\d+$/', 'max:30'],
             'neighborhood' => ['required', 'string', 'max:120'],
             'city' => ['required', 'string', 'max:120'],
             'state' => ['required', 'string', 'max:120'],
-            'postal_code' => ['required', 'string', 'max:10'],
+            'postal_code' => ['required', 'string', 'regex:/^\d{5}$/'],
             'username' => ['required', 'string', 'max:80', 'unique:users,username'],
-            'password' => ['required', 'string', 'min:8'],
+            'password' => ['required', 'string', Password::min(22)->letters()->mixedCase()->numbers()->symbols()],
             'role_code' => ['required', 'string', 'max:50', 'exists:roles,code'],
             'branch_id' => [
                 Rule::requiredIf(fn () => $this->input('role_code') !== 'general_manager'),
@@ -72,6 +74,18 @@ final class StoreStaffRequest extends FormRequest
                 'integer',
                 'exists:branches,id',
             ],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'mobile_phone.regex' => 'El celular debe tener exactamente 10 dígitos, sin espacios ni letras.',
+            'external_number.regex' => 'El número exterior solo puede contener dígitos, sin letras ni espacios.',
+            'postal_code.regex' => 'El código postal debe tener exactamente 5 dígitos, sin letras.',
         ];
     }
 }

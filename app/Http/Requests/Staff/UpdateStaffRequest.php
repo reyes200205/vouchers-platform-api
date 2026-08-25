@@ -59,14 +59,26 @@ final class UpdateStaffRequest extends FormRequest
             'curp' => ['sometimes', 'nullable', 'string', 'size:18', new ValidCurp(), Rule::unique('people', 'curp')->ignore($person?->id)],
             'rfc' => ['sometimes', 'nullable', 'string', 'size:13', new ValidRfc(), Rule::unique('people', 'rfc')->ignore($person?->id)],
             'home_phone' => ['sometimes', 'nullable', 'string', 'max:20'],
-            'mobile_phone' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'mobile_phone' => ['sometimes', 'nullable', 'string', 'regex:/^\d{10}$/'],
             'email' => ['sometimes', 'nullable', 'email', 'max:150'],
             'street' => ['sometimes', 'nullable', 'string', 'max:150'],
-            'external_number' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'external_number' => ['sometimes', 'nullable', 'string', 'regex:/^\d+$/', 'max:30'],
             'neighborhood' => ['sometimes', 'nullable', 'string', 'max:120'],
             'city' => ['sometimes', 'nullable', 'string', 'max:120'],
             'state' => ['sometimes', 'nullable', 'string', 'max:120'],
-            'postal_code' => ['sometimes', 'nullable', 'string', 'max:10'],
+            'postal_code' => ['sometimes', 'nullable', 'string', 'regex:/^\d{5}$/'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'mobile_phone.regex' => 'El celular debe tener exactamente 10 dígitos, sin espacios ni letras.',
+            'external_number.regex' => 'El número exterior solo puede contener dígitos, sin letras ni espacios.',
+            'postal_code.regex' => 'El código postal debe tener exactamente 5 dígitos, sin letras.',
         ];
     }
 }

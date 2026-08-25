@@ -72,7 +72,7 @@ final class CutoffController extends ApiController
         // pueda calcular commission_forfeited_amount (cuánta comisión hubiera
         // ganado la distribuidora si el item no hubiera llegado tarde) sin
         // disparar una consulta por item.
-        $cutoff->load('relations.distributor.person', 'relations.items.customer.person', 'relations.items.voucher');
+        $cutoff->load('relations.distributor.person', 'relations.items.customer.person', 'relations.items.voucher', 'relations.retroactiveReconciliation');
 
         return $this->success(new CutoffResource($cutoff));
     }
@@ -94,6 +94,6 @@ final class CutoffController extends ApiController
             ]
         );
 
-        return $this->created(new CutoffResource($cutoff->load('relations.distributor.person', 'relations.items.customer.person', 'relations.items.voucher')));
+        return $this->created(new CutoffResource($cutoff->load('relations.distributor.person', 'relations.items.customer.person', 'relations.items.voucher', 'relations.retroactiveReconciliation')));
     }
 }

@@ -47,7 +47,12 @@ final class GeneralManagerController extends ApiController
             return $user;
         });
 
-        $audit->record($request, AuditEventType::Created, 'users', 'Gerente general creado.', null, ['user_id' => $user->id]);
+        $audit->record($request, AuditEventType::Created, 'users', 'Gerente general creado.', null, [
+            'user_id' => $user->id,
+            'username' => $user->username,
+            'first_name' => $request->first_name,
+            'last_name' => $request->last_name,
+        ]);
 
         return $this->created(
             new UserResource($user->load(['person', 'businessRoles'])),

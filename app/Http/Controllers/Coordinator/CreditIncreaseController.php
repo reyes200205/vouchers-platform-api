@@ -29,7 +29,13 @@ final class CreditIncreaseController extends ApiController
             'credit',
             'Solicitud de aumento de línea creada.',
             $distributor->branch_id,
-            ['credit_increase_request_id' => $creditRequest->id, 'requested_amount' => $creditRequest->requested_amount]
+            [
+                'credit_increase_request_id' => $creditRequest->id,
+                'distributor_id' => $distributor->id,
+                'requested_amount' => $creditRequest->requested_amount,
+                'current_credit_limit' => $distributor->credit_limit,
+                'current_available_credit' => $distributor->available_credit,
+            ]
         );
 
         return $this->created(new CreditIncreaseRequestResource($creditRequest->load('distributor')));
@@ -37,6 +43,8 @@ final class CreditIncreaseController extends ApiController
 
     public function preAuthorize(PreAuthorizeCreditIncreaseRequest $request, CreditIncreaseRequest $creditIncreaseRequest, PreAuthorizeCreditIncreaseService $service, AuditLogger $audit): JsonResponse
     {
+        $requestedAmount = $creditIncreaseRequest->requested_amount;
+
         $creditIncreaseRequest = $service->execute($request->user(), $creditIncreaseRequest, $request->validated());
 
         $audit->record(
@@ -45,7 +53,12 @@ final class CreditIncreaseController extends ApiController
             'credit',
             'Aumento de línea pre-autorizado por el coordinador.',
             $creditIncreaseRequest->branch_id,
-            ['credit_increase_request_id' => $creditIncreaseRequest->id, 'pre_authorized_amount' => $creditIncreaseRequest->pre_authorized_amount]
+            [
+                'credit_increase_request_id' => $creditIncreaseRequest->id,
+                'distributor_id' => $creditIncreaseRequest->distributor_id,
+                'requested_amount' => $requestedAmount,
+                'pre_authorized_amount' => $creditIncreaseRequest->pre_authorized_amount,
+            ]
         );
 
         return $this->success(new CreditIncreaseRequestResource($creditIncreaseRequest->load('distributor')));

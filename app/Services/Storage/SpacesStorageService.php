@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace App\Services\Storage;
 
+use App\Exceptions\SpacesStorageException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use RuntimeException;
 use Throwable;
 
 final class SpacesStorageService
@@ -98,7 +98,7 @@ final class SpacesStorageService
             );
 
             if ($storedPath === false) {
-                throw new RuntimeException('DigitalOcean Spaces did not return an object path.');
+                throw new SpacesStorageException('DigitalOcean Spaces did not return an object path.');
             }
 
             $expiresAt = now()->addMinutes($expiresInMinutes);
@@ -109,9 +109,12 @@ final class SpacesStorageService
                 'expires_at' => $expiresAt->toIso8601String(),
             ];
         } catch (Throwable $exception) {
-            report($exception);
-
-            throw new RuntimeException('No se pudo guardar el archivo en DigitalOcean Spaces. Revisa la configuración y los permisos de la llave.', previous: $exception);
+            // No se reporta aqui con report(): SpacesUnavailableResponder
+            // (bootstrap/app.php) ya loguea el detalle completo -- incluida
+            // esta causa original via getPrevious() -- cuando la excepcion
+            // llegue al manejador global. Reportar tambien aqui duplicaria
+            // el mismo incidente en el log con dos formatos distintos.
+            throw new SpacesStorageException('No se pudo guardar el archivo en DigitalOcean Spaces. Revisa la configuración y los permisos de la llave.', previous: $exception);
         }
     }
 
@@ -119,7 +122,7 @@ final class SpacesStorageService
     {
         foreach (['key', 'secret', 'region', 'bucket', 'endpoint'] as $key) {
             if (blank(config("filesystems.disks.spaces.{$key}"))) {
-                throw new RuntimeException('DigitalOcean Spaces no está configurado. Revisa las variables DO_SPACES_* del entorno.');
+                throw new SpacesStorageException('DigitalOcean Spaces no está configurado. Revisa las variables DO_SPACES_* del entorno.');
             }
         }
     }

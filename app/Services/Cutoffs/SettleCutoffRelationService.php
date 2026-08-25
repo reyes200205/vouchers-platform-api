@@ -6,6 +6,7 @@ namespace App\Services\Cutoffs;
 
 use App\Enums\CutoffRelationStatus;
 use App\Enums\DistributorPaymentStatus;
+use App\Enums\DistributorStatus;
 use App\Enums\PointMovementType;
 use App\Enums\VoucherStatus;
 use App\Models\CutoffRelation;
@@ -35,6 +36,11 @@ use App\Models\Voucher;
  *  2. Otorga los puntos a la distribuidora (nunca al cliente), aplicando el
  *     -20% (configurable) si la relación llegó a tener multa por atraso, o el
  *     bono por conciliación anticipada si se resolvió dentro de la ventana.
+ *  3. Si la distribuidora estaba MOROSA (bloqueada por 3 cortes consecutivos
+ *     sin pagar -- ver MarkOverdueRelationsCommand) y ya no le queda ninguna
+ *     otra relación VENCIDA, la reactiva sola (ver
+ *     maybeReactivateDistributor): esa es la única forma de quitarle el
+ *     bloqueo para pedir vales nuevos.
  *
  * Si la relación quedó PARCIAL (el depósito conciliado no cubre el total
  * adeudado), NINGÚN vale avanza ni se otorgan puntos -- solo se registra,
@@ -66,6 +72,41 @@ final class SettleCutoffRelationService
 
         $this->advanceVouchers($relation);
         $this->awardPoints($relation);
+        $this->maybeReactivateDistributor($relation);
+    }
+
+    /**
+     * Una distribuidora que acumuló 3 cortes consecutivos sin pagar queda
+     * MOROSA y can_issue_vouchers pasa a false (ver
+     * MarkOverdueRelationsCommand) -- ya no puede pedir ni recibir vales
+     * nuevos (ver RequestVoucherService/ApproveVoucherService). La única
+     * forma de quitarle ese bloqueo es pagando lo que debe: en cuanto esta
+     * relación queda PAGADA, si ya no le queda ninguna otra relación VENCIDA
+     * (adeudo vencido sin liquidar), se reactiva sola -- no hace falta que
+     * un gerente la desbloquee a mano. Una relación PARCIAL no cuenta como
+     * "ya pagó" (sigue debiendo el remanente), así que no dispara esto.
+     */
+    private function maybeReactivateDistributor(CutoffRelation $relation): void
+    {
+        $distributor = $relation->distributor()->first();
+
+        if ($distributor === null || $distributor->status !== DistributorStatus::MOROSA) {
+            return;
+        }
+
+        $stillHasOverdueDebt = CutoffRelation::query()
+            ->where('distributor_id', $distributor->id)
+            ->where('status', CutoffRelationStatus::VENCIDA)
+            ->exists();
+
+        if ($stillHasOverdueDebt) {
+            return;
+        }
+
+        $distributor->update([
+            'status' => DistributorStatus::ACTIVA,
+            'can_issue_vouchers' => true,
+        ]);
     }
 
     private function advanceVouchers(CutoffRelation $relation): void

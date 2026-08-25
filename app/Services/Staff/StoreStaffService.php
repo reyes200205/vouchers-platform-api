@@ -48,10 +48,10 @@ final class StoreStaffService
         }
 
         if ($role->name === 'general_manager') {
-            abort_unless($actor->hasRole('super-admin'), 403, 'Solo el super administrador puede crear un gerente general.');
+            abort_unless($actor->isSuperAdmin(), 403, 'Solo el super administrador puede crear un gerente general.');
         }
 
-        if (! $actor->isGeneralManager() && ! $actor->hasRole('super-admin')) {
+        if (! $actor->isGeneralManager() && ! $actor->isSuperAdmin()) {
             abort_unless(
                 in_array($role->name, ListStaffService::BRANCH_MANAGER_ROLES, true),
                 403,

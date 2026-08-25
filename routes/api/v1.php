@@ -13,7 +13,6 @@ use App\Http\Controllers\Cashier\CustomerController as CashierCustomerController
 use App\Http\Controllers\Cashier\PaymentController as CashierPaymentController;
 use App\Http\Controllers\Cashier\PointRedemptionController as CashierPointRedemptionController;
 use App\Http\Controllers\Cashier\ReconciliationController as CashierReconciliationController;
-use App\Http\Controllers\Cashier\VoucherController as CashierVoucherController;
 use App\Http\Controllers\Checker\VerificadorController;
 use App\Http\Controllers\Checker\VerificationPhotoController;
 use App\Http\Controllers\Coordinator\ApplicationDocumentController;
@@ -179,7 +178,10 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:authenticated'])->gr
         Route::get('/distributor/customer-transfer-requests', [DistributorCustomerTransferController::class, 'index'])->name('distributor.customer-transfer-requests.index');
     });
 
+    Route::middleware('business.ability:distributors.directory')->get('/distributor/transfer-candidates', [DistributorCustomerTransferController::class, 'directory'])->name('distributor.transfer-candidates.index');
     Route::middleware('business.ability:customers.transfer.request,customer')->post('/customers/{customer}/transfer-requests', [DistributorCustomerTransferController::class, 'store'])->name('customers.transfer-requests.store');
+    Route::middleware('business.ability:customers.transfer.respond,customerTransferRequest')->post('/customer-transfer-requests/{customerTransferRequest}/respond', [DistributorCustomerTransferController::class, 'respond'])->name('customer-transfer-requests.respond');
+    Route::middleware('business.ability:customers.transfer.accept-client,customerTransferRequest')->post('/customer-transfer-requests/{customerTransferRequest}/accept-client', [DistributorCustomerTransferController::class, 'acceptClient'])->name('customer-transfer-requests.accept-client');
     Route::middleware('business.ability:customers.transfer.cancel,customerTransferRequest')->post('/customer-transfer-requests/{customerTransferRequest}/cancel', [DistributorCustomerTransferController::class, 'cancel'])->name('customer-transfer-requests.cancel');
     // customers.transfer.decide tambien la usa coordinador (ver
     // config/business-authorization.php) — a diferencia de las demas
@@ -198,7 +200,6 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:authenticated'])->gr
     Route::middleware('business.ability:vouchers.approve')->get('/voucher-requests', [CoordinatorVoucherController::class, 'pendingRequests'])->name('voucher-requests.index');
     Route::middleware('business.ability:vouchers.approve,voucherRequest')->post('/voucher-requests/{voucherRequest}/approve', [CoordinatorVoucherController::class, 'approve'])->name('vouchers.approve');
     Route::middleware('business.ability:vouchers.reject,voucherRequest')->post('/voucher-requests/{voucherRequest}/reject', [CoordinatorVoucherController::class, 'reject'])->name('vouchers.reject');
-    Route::middleware('business.ability:vouchers.disburse,voucher')->post('/vouchers/{voucher}/disburse', [CashierVoucherController::class, 'disburse'])->name('vouchers.disburse');
 
     Route::middleware('business.ability:credit-increase.view')->get('/credit-increase-requests', [GeneralManagerCreditIncreaseController::class, 'index'])->name('credit-increase-requests.index');
     Route::middleware('business.ability:credit-increase.request')->post('/credit-increase-requests', [CoordinatorCreditIncreaseController::class, 'store'])->name('credit-increase-requests.store');

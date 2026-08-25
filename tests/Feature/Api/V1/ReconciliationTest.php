@@ -751,6 +751,211 @@ describe('Reconciliations', function (): void {
         ]);
     });
 
+    it('refunds the points penalty across the whole carryover chain when a retroactive correction proves the payment was on time', function (): void {
+        // Sigue el mismo escenario que la prueba anterior (cajera nunca
+        // registró un depósito que en realidad SÍ llegó a tiempo, la deuda
+        // se arrastró de cutoff1 a cutoff2), pero además simula que AMBAS
+        // relaciones ya le habían quitado puntos a la distribuidora al
+        // vencerse (MarkOverdueRelationsService::applyLatePenaltyToPoints) --
+        // el usuario preguntó explícitamente si esos puntos se le regresan
+        // cuando se comprueba que fue solo un error de la cajera, no un
+        // atraso real. Deben regresarse, uno por cada corte de la cadena que
+        // le quitó puntos.
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create([
+            'branch_id' => $branch->id,
+            'credit_limit' => 30000,
+            'available_credit' => 8000,
+            // Simula que ya traía 8 puntos DESPUÉS de que ambos cortes de la
+            // cadena le quitaran el 20% al vencerse (los movimientos
+            // PENALIZACION_ATRASO de abajo).
+            'current_points' => 8,
+        ]);
+
+        $voucherA = \App\Models\Voucher::factory()->create([
+            'branch_id' => $branch->id,
+            'distributor_id' => $distributor->id,
+            'status' => \App\Enums\VoucherStatus::MOROSO,
+            'amount' => 8000.00,
+            'distributor_profit_amount' => 400.00,
+            'total_debt_amount' => 9200.00,
+            'fortnightly_payment_amount' => 4600.00,
+            'total_fortnights' => 2,
+            'payments_made' => 0,
+            'current_balance' => 9200.00,
+        ]);
+
+        $voucherB = \App\Models\Voucher::factory()->create([
+            'branch_id' => $branch->id,
+            'distributor_id' => $distributor->id,
+            'status' => \App\Enums\VoucherStatus::ACTIVO,
+            'amount' => 6000.00,
+            'distributor_profit_amount' => 300.00,
+            'total_debt_amount' => 6000.00,
+            'fortnightly_payment_amount' => 2000.00,
+            'total_fortnights' => 3,
+            'payments_made' => 0,
+            'current_balance' => 6000.00,
+        ]);
+
+        $cutoff1 = \App\Models\Cutoff::factory()->create(['branch_id' => $branch->id]);
+        $original = CutoffRelation::query()->create([
+            'cutoff_id' => $cutoff1->id,
+            'distributor_id' => $distributor->id,
+            'relation_number' => 'REL-TEST-ORIGINAL-PTS',
+            'payment_reference' => 'REF-TEST-ORIGINAL-PTS',
+            'payment_due_date' => '2026-01-14',
+            'early_payment_start_date' => '2026-01-01',
+            'early_payment_end_date' => '2026-01-14',
+            'credit_limit_snapshot' => 30000,
+            'available_credit_snapshot' => 8000,
+            'total_payment' => 4600.00,
+            'total_commission' => 0.00,
+            'total_late_fees' => 100.00,
+            'total_amount_due' => 4700.00,
+            'status' => CutoffRelationStatus::CERRADA,
+            'closed_by_carryover_at' => now(),
+            'generated_at' => now(),
+        ]);
+        \App\Models\CutoffRelationItem::query()->create([
+            'cutoff_relation_id' => $original->id,
+            'voucher_id' => $voucherA->id,
+            'customer_id' => $voucherA->customer_id,
+            'product_name_snapshot' => 'Producto A',
+            'payments_made' => 0,
+            'total_payments' => 2,
+            'is_late_payment' => true,
+            'installment_number' => 1,
+            'accumulated_late_installments' => 1,
+            'commission_amount' => 0.00,
+            'payment_amount' => 4600.00,
+            'late_fee_amount' => 100.00,
+            'line_total_amount' => 4700.00,
+        ]);
+        // Este corte ya le quitó 2 puntos a la distribuidora al vencerse.
+        \App\Models\PointMovement::query()->create([
+            'distributor_id' => $distributor->id,
+            'cutoff_id' => $cutoff1->id,
+            'transaction_type' => 'PENALIZACION_ATRASO',
+            'points' => -2,
+            'point_value_snapshot' => 2.00,
+            'reason' => 'Corte REL-TEST-ORIGINAL-PTS vencido sin pagar (-20% de puntos).',
+            'transaction_date' => now(),
+        ]);
+
+        $cutoff2 = \App\Models\Cutoff::factory()->create(['branch_id' => $branch->id]);
+        $tip = CutoffRelation::query()->create([
+            'cutoff_id' => $cutoff2->id,
+            'distributor_id' => $distributor->id,
+            'previous_relation_id' => $original->id,
+            'relation_number' => 'REL-TEST-TIP-PTS',
+            'payment_reference' => 'REF-TEST-TIP-PTS',
+            'payment_due_date' => now()->addDays(10)->toDateString(),
+            'credit_limit_snapshot' => 30000,
+            'available_credit_snapshot' => 8000,
+            'total_payment' => 2000.00,
+            'total_commission' => 100.00,
+            'total_late_fees' => 100.00,
+            'total_amount_due' => 6600.00,
+            'status' => CutoffRelationStatus::VENCIDA,
+            'generated_at' => now(),
+        ]);
+        $carryoverItem = \App\Models\CutoffRelationItem::query()->create([
+            'cutoff_relation_id' => $tip->id,
+            'voucher_id' => $voucherA->id,
+            'customer_id' => $voucherA->customer_id,
+            'product_name_snapshot' => 'Producto A',
+            'payments_made' => 0,
+            'total_payments' => 2,
+            'is_late_payment' => true,
+            'installment_number' => 1,
+            'accumulated_late_installments' => 1,
+            'commission_amount' => 0.00,
+            'payment_amount' => 4700.00,
+            'late_fee_amount' => 100.00,
+            'line_total_amount' => 4700.00,
+            'origin_cutoff_id' => $cutoff1->id,
+            'origin_relation_id' => $original->id,
+        ]);
+        \App\Models\CutoffRelationItem::query()->create([
+            'cutoff_relation_id' => $tip->id,
+            'voucher_id' => $voucherB->id,
+            'customer_id' => $voucherB->customer_id,
+            'product_name_snapshot' => 'Producto B',
+            'payments_made' => 0,
+            'total_payments' => 3,
+            'is_late_payment' => false,
+            'installment_number' => 1,
+            'accumulated_late_installments' => 0,
+            'commission_amount' => 100.00,
+            'payment_amount' => 2000.00,
+            'late_fee_amount' => 0.00,
+            'line_total_amount' => 1900.00,
+        ]);
+        // Este corte TAMBIÉN le quitó 1 punto al vencerse.
+        \App\Models\PointMovement::query()->create([
+            'distributor_id' => $distributor->id,
+            'cutoff_id' => $cutoff2->id,
+            'transaction_type' => 'PENALIZACION_ATRASO',
+            'points' => -1,
+            'point_value_snapshot' => 2.00,
+            'reason' => 'Corte REL-TEST-TIP-PTS vencido sin pagar (-20% de puntos).',
+            'transaction_date' => now(),
+        ]);
+
+        $transaction = BankTransaction::query()->create([
+            'reference' => 'REF-EXCEL-REAL-PTS',
+            'transaction_date' => '2026-01-10',
+            'amount' => 6300.00,
+            'transaction_type' => 'DEPOSITO',
+        ]);
+
+        $cashier = User::factory()->create();
+        reconciliationSignIn($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/reconciliations/bank-transactions/{$transaction->id}/manual-match", [
+            'cutoff_relation_id' => $original->id,
+        ])->assertCreated()->assertJsonPath('data.is_retroactive_correction', true);
+
+        $branchManager = User::factory()->create();
+        reconciliationSignIn($branchManager, 'branch_manager', $branch);
+
+        $this->postJson('/api/v1/reconciliations/1/verify')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'CONCILIADA');
+
+        // Se le regresan los 2 puntos del corte original...
+        $this->assertDatabaseHas('point_movements', [
+            'distributor_id' => $distributor->id,
+            'cutoff_id' => $cutoff1->id,
+            'transaction_type' => 'REVERSO',
+            'points' => 2,
+        ]);
+        // ...y el punto del corte al que se había arrastrado la deuda.
+        $this->assertDatabaseHas('point_movements', [
+            'distributor_id' => $distributor->id,
+            'cutoff_id' => $cutoff2->id,
+            'transaction_type' => 'REVERSO',
+            'points' => 1,
+        ]);
+
+        // Sin multa, la relación viva ya no cuenta como "fuera de tiempo":
+        // se le otorgan los puntos completos de esa liquidación (3, igual
+        // que la prueba anterior) además de los 3 que se le regresaron.
+        $this->assertDatabaseHas('point_movements', [
+            'distributor_id' => $distributor->id,
+            'transaction_type' => 'GANADO_ANTICIPADO',
+            'points' => 3,
+        ]);
+
+        // 8 (ya traía) + 2 (reverso corte 1) + 1 (reverso corte 2) + 3
+        // (puntos ganados al liquidarse ya sin multa) = 14.
+        $this->assertDatabaseHas('distributors', [
+            'id' => $distributor->id,
+            'current_points' => 14.00,
+        ]);
+    });
+
     it('keeps the late fee when the real deposit date falls outside the on-time window', function (): void {
         $branch = Branch::factory()->create();
         $distributor = Distributor::factory()->create([
@@ -968,6 +1173,109 @@ describe('Reconciliations', function (): void {
         $this->assertDatabaseHas('distributors', [
             'id' => $distributor->id,
             'current_points' => 9.00,
+        ]);
+    });
+
+    it('reactivates a MOROSA distributor (can_issue_vouchers vuelve a true) once its only overdue relation gets fully paid', function (): void {
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create([
+            'branch_id' => $branch->id,
+            'status' => \App\Enums\DistributorStatus::MOROSA,
+            'can_issue_vouchers' => false,
+        ]);
+        $relation = reconciliationOpenRelation($branch, $distributor);
+
+        $transaction = BankTransaction::query()->create([
+            'reference' => $relation->payment_reference,
+            'transaction_date' => now()->subDay()->toDateString(),
+            'amount' => 2599.00,
+            'transaction_type' => 'DEPOSITO',
+        ]);
+
+        $cashier = User::factory()->create();
+        reconciliationSignIn($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/reconciliations/bank-transactions/{$transaction->id}/manual-match", [
+            'cutoff_relation_id' => $relation->id,
+        ])->assertCreated();
+
+        $branchManager = User::factory()->create();
+        reconciliationSignIn($branchManager, 'branch_manager', $branch);
+
+        $this->postJson('/api/v1/reconciliations/1/verify')->assertOk();
+
+        $this->assertDatabaseHas('cutoff_relations', [
+            'id' => $relation->id,
+            'status' => 'PAGADA',
+        ]);
+
+        // Ya no le queda ninguna relacion VENCIDA pendiente -- pagar lo que
+        // debia le quita el bloqueo solo, sin que un gerente tenga que
+        // desbloquearla a mano.
+        $this->assertDatabaseHas('distributors', [
+            'id' => $distributor->id,
+            'status' => 'ACTIVA',
+            'can_issue_vouchers' => true,
+        ]);
+    });
+
+    it('does NOT reactivate a MOROSA distributor while it still has another relation VENCIDA sin pagar', function (): void {
+        $branch = Branch::factory()->create();
+        $distributor = Distributor::factory()->create([
+            'branch_id' => $branch->id,
+            'status' => \App\Enums\DistributorStatus::MOROSA,
+            'can_issue_vouchers' => false,
+        ]);
+
+        // Esta es la relacion que SI se va a pagar en este test.
+        $relation = reconciliationOpenRelation($branch, $distributor);
+
+        // Pero le queda otra relacion, de un corte distinto, todavia VENCIDA
+        // sin pagar -- el bloqueo debe seguir en pie.
+        CutoffRelation::query()->create([
+            'cutoff_id' => \App\Models\Cutoff::factory()->create(['branch_id' => $branch->id])->id,
+            'distributor_id' => $distributor->id,
+            'relation_number' => 'REL-TEST-STILLOVERDUE',
+            'payment_reference' => 'REF-TEST-STILLOVERDUE',
+            'payment_due_date' => now()->subDays(20)->toDateString(),
+            'credit_limit_snapshot' => 20000,
+            'available_credit_snapshot' => 20000,
+            'total_payment' => 3000.00,
+            'total_commission' => 200.00,
+            'total_late_fees' => 300.00,
+            'total_amount_due' => 3300.00,
+            'status' => CutoffRelationStatus::VENCIDA,
+            'generated_at' => now(),
+        ]);
+
+        $transaction = BankTransaction::query()->create([
+            'reference' => $relation->payment_reference,
+            'transaction_date' => now()->subDay()->toDateString(),
+            'amount' => 2599.00,
+            'transaction_type' => 'DEPOSITO',
+        ]);
+
+        $cashier = User::factory()->create();
+        reconciliationSignIn($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/reconciliations/bank-transactions/{$transaction->id}/manual-match", [
+            'cutoff_relation_id' => $relation->id,
+        ])->assertCreated();
+
+        $branchManager = User::factory()->create();
+        reconciliationSignIn($branchManager, 'branch_manager', $branch);
+
+        $this->postJson('/api/v1/reconciliations/1/verify')->assertOk();
+
+        $this->assertDatabaseHas('cutoff_relations', [
+            'id' => $relation->id,
+            'status' => 'PAGADA',
+        ]);
+
+        $this->assertDatabaseHas('distributors', [
+            'id' => $distributor->id,
+            'status' => 'MOROSA',
+            'can_issue_vouchers' => false,
         ]);
     });
 

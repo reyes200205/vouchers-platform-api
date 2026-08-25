@@ -115,7 +115,14 @@ final class BranchController extends ApiController
             return $branch;
         });
 
-        $audit->record($request, AuditEventType::Created, 'branches', 'Sucursal creada.', $branch->id);
+        $audit->record($request, AuditEventType::Created, 'branches', 'Sucursal creada.', $branch->id, [
+            'branch_id' => $branch->id,
+            'name' => $branch->name,
+            'code' => $branch->code,
+            'address' => $branch->address,
+            'phone' => $branch->phone,
+            'manager_user_id' => $request->input('manager_user_id'),
+        ]);
 
         return $this->created(new BranchResource($branch->fresh()));
     }
@@ -175,8 +182,33 @@ final class BranchController extends ApiController
             ->where('model_has_roles.branch_id', $branchId)
             ->first();
 
+        // Un usuario solo debe tener un rol de negocio NO GLOBAL activo a la
+        // vez (mismo invariante que UpdateStaffService::execute() ya asume
+        // para el modulo de Personal) -- si a quien se asigna aqui como
+        // gerente ya tenia otro rol de sucursal activo en otro lado
+        // (coordinador en otra sucursal, branch_manager de otra sucursal,
+        // etc.), se revoca antes de activar este, para no dejarlo con dos
+        // roles de sucursal y dos filas is_primary=true simultaneas. Los
+        // roles GLOBALES (general_manager/super-admin) se excluyen a
+        // proposito: un gerente general puede "tambien" ser el gerente
+        // dedicado de una sucursal en particular sin perder su alcance
+        // global (patron ya soportado -- ver BranchTest "lets a general
+        // manager also be assigned as a branch's manager...").
+        $manager->businessRoles()
+            ->wherePivotNull('revoked_at')
+            ->whereNotIn('roles.name', config('business-authorization.global_role_codes', []))
+            ->when(
+                $existingPivot !== null,
+                fn ($query) => $query->where('model_has_roles.id', '!=', $existingPivot->pivot->id)
+            )
+            ->get()
+            ->each(fn ($otherRole) => $manager->updateBusinessRolePivot($otherRole->pivot->id, [
+                'revoked_at' => now(),
+                'is_primary' => false,
+            ]));
+
         if ($existingPivot !== null) {
-            $manager->businessRoles()->updateExistingPivot($existingPivot->id, [
+            $manager->updateBusinessRolePivot($existingPivot->pivot->id, [
                 'revoked_at' => null,
                 'is_primary' => true,
             ]);
@@ -212,7 +244,7 @@ final class BranchController extends ApiController
                 ->first();
 
             if ($pivot !== null) {
-                $manager->businessRoles()->updateExistingPivot($pivot->id, [
+                $manager->updateBusinessRolePivot($pivot->pivot->id, [
                     'revoked_at' => now(),
                     'is_primary' => false,
                 ]);

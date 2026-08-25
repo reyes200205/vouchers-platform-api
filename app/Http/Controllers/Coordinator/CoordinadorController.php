@@ -113,7 +113,12 @@ final class CoordinadorController extends ApiController
             ]);
         });
 
-        $audit->record($request, AuditEventType::Submitted, 'applications', 'Solicitud de distribuidora enviada a verificacion.', $application->branch_id, ['application_id' => $application->id]);
+        $audit->record($request, AuditEventType::Submitted, 'applications', 'Solicitud de distribuidora enviada a verificacion.', $application->branch_id, [
+            'application_id' => $application->id,
+            'applicant_person_id' => $application->applicant_person_id,
+            'requested_credit_limit' => $application->requested_credit_limit,
+            'initial_category_code' => $application->initial_category_code,
+        ]);
 
         return $this->created($application->load(['applicant', 'branch']));
     }
@@ -136,7 +141,10 @@ final class CoordinadorController extends ApiController
         }
 
         $application->update(['assigned_verifier_id' => $data['verifier_user_id'], 'reviewed_at' => now()]);
-        $audit->record($request, AuditEventType::Assigned, 'applications', 'Verificador asignado a solicitud.', $application->branch_id, ['application_id' => $application->id]);
+        $audit->record($request, AuditEventType::Assigned, 'applications', 'Verificador asignado a solicitud.', $application->branch_id, [
+            'application_id' => $application->id,
+            'verifier_user_id' => $data['verifier_user_id'],
+        ]);
 
         $application = $application->fresh() ?? $application;
         Notification::send($verifier, new ApplicationAssignedToVerifierNotification($application));

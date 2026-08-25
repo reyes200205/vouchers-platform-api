@@ -6,12 +6,20 @@ namespace App\Services\Vouchers;
 
 use App\Enums\CustomerDistributorRelationshipStatus;
 use App\Enums\CustomerStatus;
+use App\Enums\CutoffStatus;
+use App\Enums\CutoffType;
 use App\Enums\VoucherRequestStatus;
 use App\Enums\VoucherStatus;
+<<<<<<< HEAD
+=======
+use App\Models\BranchSetting;
+use App\Models\Cutoff;
+>>>>>>> fb10ae26d8b1c95e47a4a37af15cea604291d915
 use App\Models\CustomerDistributor;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherRequest;
+<<<<<<< HEAD
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -36,8 +44,35 @@ use Illuminate\Support\Facades\DB;
 final class ApproveVoucherService
 {
     public function execute(User $user, VoucherRequest $voucherRequest): Voucher
+=======
+use App\Services\Cutoffs\CutoffPeriodCalculator;
+use App\Services\Financial\FinancialCalculationService;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Aprobar una solicitud de vale y entregarle el dinero al cliente son el
+ * MISMO paso para la cajera (aclaracion del negocio): revisa/verifica al
+ * cliente en el modal de "Decidir" y, si todo esta bien, aprueba -- eso YA es
+ * la entrega. Por eso este servicio deja el Voucher directamente en estado
+ * ACTIVO, con sus fechas de pago calculadas (antes esto se dividia en dos
+ * pasos -- aprobar dejaba el vale en APROBADO, y hacia falta un segundo paso
+ * de "Entregar vale" pidiendole a la cajera capturar a mano una referencia de
+ * transferencia y un numero de autorizacion -- pero el dinero que se entrega
+ * sale de la linea de credito de la distribuidora, no de una transferencia
+ * bancaria real que alguien deba anotar, asi que no hay nada que la cajera
+ * tenga que capturar ahi: transfer_reference/authorized_number se generan
+ * solos, nada mas como folio interno de auditoria/conciliacion).
+ */
+final class ApproveVoucherService
+{
+    public function __construct(
+        private readonly FinancialCalculationService $financial,
+    ) {}
+
+    public function execute(User $user, VoucherRequest $voucherRequest, CutoffPeriodCalculator $periods = new CutoffPeriodCalculator()): Voucher
+>>>>>>> fb10ae26d8b1c95e47a4a37af15cea604291d915
     {
-        return DB::transaction(function () use ($user, $voucherRequest): Voucher {
+        $voucher = DB::transaction(function () use ($user, $voucherRequest, $periods): Voucher {
             if ($voucherRequest->status !== VoucherRequestStatus::PENDIENTE) {
                 abort(422, 'La solicitud ya fue resuelta.');
             }
@@ -46,6 +81,17 @@ final class ApproveVoucherService
             $voucherRequest->load(['distributor.person', 'customer.person']);
 
             $distributor = $voucherRequest->distributor;
+
+            // Red de seguridad: si la solicitud se creó antes de que la
+            // distribuidora quedara MOROSA (ver MarkOverdueRelationsCommand),
+            // RequestVoucherService ya no la habría dejado crearla hoy, pero
+            // pudo quedar pendiente de aprobación de antes -- no se debe
+            // aprobar/entregar un vale a una distribuidora bloqueada aunque
+            // la solicitud ya existiera.
+            if (! $distributor->can_issue_vouchers) {
+                abort(422, 'La distribuidora está bloqueada por adeudo vencido y no puede recibir vales nuevos hasta regularizar el pago.');
+            }
+
             $snapshot = $voucherRequest->snapshot_json ?? [];
             // total_debt_amount es el total COMPLETO que le cobra al cliente (con
             // la comisión de la distribuidora incluida — ver
@@ -88,11 +134,45 @@ final class ApproveVoucherService
             // coincida con lo que trae impreso/en el correo cuando se presente.
             $voucherNumber = 'V-'.$voucherRequest->id;
 
-            // El estado ACTIVO, la referencia de transferencia, el numero de
-            // autorizacion y las fechas de pago (que dependen de CUANDO se
-            // dispersa, no de cuando se aprueba) se calculan y capturan despues,
-            // en DisburseVoucherService, cuando el cliente se presenta con la
-            // cajera a "ferear" el vale y recibir el dinero.
+            // La primera quincena de un vale recien otorgado cae en el periodo
+            // del corte que esta sucursal tiene ACTUALMENTE ABIERTO (no
+            // cerrado) -- revision del profesor. No se usa el reloj real
+            // (now()) como referencia principal porque aqui las
+            // distribuidoras generan y cierran cortes de prueba muy
+            // adelantados o atrasados respecto a la fecha real (ver el corte
+            // mas reciente de la sucursal, que puede estar meses adelante o
+            // atras del dia de hoy) -- "el periodo actual" para un vale
+            // nuevo es el periodo del corte que ya esta en curso, no el que
+            // tocaria segun la fecha real. Si la sucursal ya tiene un corte
+            // sin cerrar, el vale cae exactamente en su fecha limite
+            // (scheduled_at), para que aparezca ahi al reprocesarlo (ver
+            // ReprocessCutoffService). Si todavia no tiene ningun corte
+            // abierto (sucursal nueva, o se cerraron todos y no se ha
+            // generado el siguiente), se usa el reloj real como respaldo
+            // (CutoffPeriodCalculator + branch_settings.cutoff_day, 1-15/16-31
+            // por default) -- el primer corte que se genere despues cae en
+            // ese mismo periodo.
+            $openCutoff = Cutoff::query()
+                ->where('branch_id', $distributor->branch_id)
+                ->where('cutoff_type', CutoffType::PAGOS)
+                ->where('status', '!=', CutoffStatus::CERRADO)
+                ->orderByDesc('period_start')
+                ->first();
+
+            $dueDays = (int) ($branchSetting->payment_due_days ?? 15);
+            $frequencyDays = (int) ($branchSetting->payment_frequency_days ?? 14);
+            $dueDate = $openCutoff !== null
+                ? $openCutoff->scheduled_at->copy()
+                : $periods->currentPeriodEnd(now(), $branchSetting->cutoff_day);
+
+            // No hay una transferencia bancaria real que registrar (el dinero
+            // sale de la linea de credito de la distribuidora, se entrega en el
+            // momento) -- estos dos folios son solo para conciliacion/auditoria
+            // interna, con el mismo formato que ya usa CutoffRelation.payment_reference
+            // para su propio folio auto-generado (ver GenerateCutoffService).
+            $transferReference = 'TRANS-'.mb_strtoupper(mb_substr(md5(uniqid((string) $distributor->id, true)), 0, 10));
+            $authorizedNumber = 'AUT-'.$voucherRequest->id;
+
             $voucher = Voucher::query()->create([
                 'voucher_number' => $voucherNumber,
                 'distributor_id' => $distributor->id,
@@ -102,7 +182,8 @@ final class ApproveVoucherService
                 'branch_id' => $distributor->branch_id,
                 'created_by_user_id' => $voucherRequest->created_by_user_id,
                 'approved_by_user_id' => $user->id,
-                'status' => VoucherStatus::APROBADO,
+                'disbursed_by_user_id' => $user->id,
+                'status' => VoucherStatus::ACTIVO,
                 'is_pre_vale' => $voucherRequest->is_pre_vale,
                 'amount' => $snapshot['principal'] ?? $voucherRequest->requested_amount,
                 'company_commission_percentage_snapshot' => $snapshot['company_commission_percentage_snapshot'] ?? 0,
@@ -118,12 +199,20 @@ final class ApproveVoucherService
                 'total_fortnights' => $snapshot['total_fortnights'] ?? 0,
                 'payments_made' => 0,
                 'current_balance' => $totalDebt,
+                'transfer_reference' => $transferReference,
+                'authorized_number' => $authorizedNumber,
                 // El vale se considera "emitido" desde que la distribuidora lo
                 // pidio (ese es el correo que recibio el cliente), no desde que
                 // la cajera lo aprueba -- para que la fecha de caducidad
                 // (issued_at + voucher_expiration_days) coincida con la que ya
-                // se le informo por correo.
+                // se le informo por correo. transferred_at, en cambio, SI es
+                // ahora: es el momento real en que la cajera le entrego el
+                // dinero.
                 'issued_at' => $voucherRequest->created_at,
+                'transferred_at' => now(),
+                'payment_due_date' => $dueDate->toDateString(),
+                'early_payment_start_date' => $dueDate->copy()->subDays($dueDays - 1)->toDateString(),
+                'early_payment_end_date' => $dueDate->copy()->subDays($dueDays - $frequencyDays)->toDateString(),
                 'is_canceled' => false,
             ]);
 
@@ -135,5 +224,7 @@ final class ApproveVoucherService
 
             return $voucher;
         });
+
+        return $voucher;
     }
 }

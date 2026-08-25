@@ -91,6 +91,57 @@ describe('Branches', function (): void {
             ->assertJsonPath('data.manager', null);
     });
 
+    it('revokes a user\'s other active business role when assigning them as a different branch\'s manager', function (): void {
+        // Reproduce el bug: assignBranchManager() solo revisaba colision con
+        // un gerente general "de casa", nunca si el usuario ya tenia OTRO rol
+        // de negocio no-global activo (coordinador en otra sucursal). Sin el
+        // fix, quedaba con dos filas activas is_primary=true simultaneas.
+        Role::query()->firstOrCreate(
+            ['name' => 'branch_manager', 'guard_name' => 'web'],
+            ['code' => 'branch_manager']
+        );
+        $coordinatorRole = Role::query()->firstOrCreate(
+            ['name' => 'coordinator', 'guard_name' => 'web'],
+            ['code' => 'coordinator']
+        );
+
+        $manager = User::factory()->create();
+        actingAsBusinessRole($manager, 'general_manager');
+
+        $branchA = Branch::factory()->create();
+        $branchB = Branch::factory()->create();
+
+        $employee = User::factory()->create();
+        $employee->businessRoles()->attach($coordinatorRole, [
+            'branch_id' => $branchA->id,
+            'assigned_at' => now(),
+            'is_primary' => true,
+        ]);
+
+        $this->patchJson("/api/v1/branches/{$branchB->id}", [
+            'manager_user_id' => $employee->id,
+        ])->assertOk()->assertJsonPath('data.manager.id', $employee->id);
+
+        $this->assertDatabaseHas('model_has_roles', [
+            'model_id' => $employee->id,
+            'branch_id' => $branchA->id,
+            'role_id' => $coordinatorRole->id,
+            'is_primary' => false,
+        ]);
+
+        $coordinatorRowRevoked = \DB::table('model_has_roles')
+            ->where('model_id', $employee->id)
+            ->where('branch_id', $branchA->id)
+            ->value('revoked_at');
+        expect($coordinatorRowRevoked)->not->toBeNull();
+
+        $activeRoles = \DB::table('model_has_roles')
+            ->where('model_id', $employee->id)
+            ->whereNull('revoked_at')
+            ->count();
+        expect($activeRoles)->toBe(1);
+    });
+
     it('lets a general manager also be assigned as a branch\'s manager without losing their global reach', function (): void {
         // El gerente general de la sucursal matriz, por ejemplo, también
         // funge como gerente de esa sucursal en particular -- hoy no hay
