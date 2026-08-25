@@ -127,5 +127,23 @@ return [
         'person.latitude' => 'latitud',
         'person.longitude' => 'longitud',
         'person.notes' => 'notas',
+        // La cajera solicita cambios de datos de un cliente bajo la llave
+        // `new_values.*` (ver StoreCustomerChangeRequest); sin este mapeo,
+        // Laravel imprime literalmente "new values.curp" en el mensaje.
+        'new_values.first_name' => 'nombre',
+        'new_values.middle_name' => 'segundo nombre',
+        'new_values.last_name' => 'apellido paterno',
+        'new_values.second_last_name' => 'apellido materno',
+        'new_values.curp' => 'CURP',
+        'new_values.rfc' => 'RFC',
+        'new_values.home_phone' => 'teléfono de casa',
+        'new_values.mobile_phone' => 'celular',
+        'new_values.email' => 'correo',
+        'new_values.street' => 'calle',
+        'new_values.external_number' => 'número exterior',
+        'new_values.neighborhood' => 'colonia',
+        'new_values.city' => 'ciudad',
+        'new_values.state' => 'estado',
+        'new_values.postal_code' => 'código postal',
     ],
 ];
