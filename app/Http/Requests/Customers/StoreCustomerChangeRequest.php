@@ -24,11 +24,16 @@ final class StoreCustomerChangeRequest extends FormRequest
      */
     public function rules(): array
     {
-        $personId = $this->route('customer')?->person?->id;
+        $customer = $this->route('customer');
+        if (! $customer instanceof \App\Models\Customer) {
+            $customer = \App\Models\Customer::find($customer);
+        }
+        $personId = $customer?->person_id;
 
         return [
             'change_type' => ['required', new Enum(ChangeType::class)],
             'new_values' => ['required', 'array'],
+            'new_values.*' => ['sometimes'],
             'new_values.curp' => ['sometimes', 'nullable', 'string', 'size:18', new ValidCurp(), Rule::unique('people', 'curp')->ignore($personId)],
             'new_values.rfc' => ['sometimes', 'nullable', 'string', 'size:13', new ValidRfc(), Rule::unique('people', 'rfc')->ignore($personId)],
             'evidence' => ['nullable', 'array'],

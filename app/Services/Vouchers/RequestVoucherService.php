@@ -17,6 +17,7 @@ use App\Models\FinancialProduct;
 use App\Models\User;
 use App\Models\VoucherRequest;
 use App\Services\Financial\FinancialCalculationService;
+use App\Services\Financial\PreValeValidationResult;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -43,7 +44,7 @@ final class RequestVoucherService
             $product = FinancialProduct::query()->findOrFail($data['financial_product_id']);
             $customer = Customer::query()->findOrFail($data['customer_id']);
 
-            $this->assertCustomerBelongsToDistributor($distributor, $customer);
+            $customerDistributor = $this->assertCustomerBelongsToDistributor($distributor, $customer);
             $this->assertCustomerEligible($customer);
             $this->assertNoActiveVoucher($customer);
             $this->assertProductActive($product);
@@ -81,14 +82,24 @@ final class RequestVoucherService
                 abort(422, 'El crédito disponible de la distribuidora es insuficiente para cubrir el monto del vale.');
             }
 
-            $preValeResult = $this->financial->validatePreVale(
-                requestedAmount: (float) $product->principal_amount,
-                availableCredit: $availableCredit,
-                totalCreditLimit: (float) $distributor->credit_limit,
-                maxPercentage: (float) $branchSetting->pre_vale_max_percentage,
-                toleranceAmount: (float) $branchSetting->pre_vale_tolerance_amount,
-                reactivationPending: $distributor->prevale_required_after_credit_increase_at !== null,
-            );
+            // Un cliente que ya viene con historial (prevale_approved en su
+            // vinculo con esta distribuidora -- p.ej. porque ya tuvo un vale
+            // aprobado antes, o porque llego por una transferencia desde otra
+            // distribuidora, ver FinalizeCustomerTransferService) no debe
+            // topar su primer vale con esta distribuidora al 50% del credito
+            // disponible: esa regla es para proteger a la distribuidora de su
+            // propio primer vale sin historial, no para castigar dos veces a
+            // un cliente ya conocido.
+            $preValeResult = $customerDistributor->prevale_approved
+                ? PreValeValidationResult::allowed()
+                : $this->financial->validatePreVale(
+                    requestedAmount: (float) $product->principal_amount,
+                    availableCredit: $availableCredit,
+                    totalCreditLimit: (float) $distributor->credit_limit,
+                    maxPercentage: (float) $branchSetting->pre_vale_max_percentage,
+                    toleranceAmount: (float) $branchSetting->pre_vale_tolerance_amount,
+                    reactivationPending: $distributor->prevale_required_after_credit_increase_at !== null,
+                );
 
             if (! $preValeResult->allowed) {
                 abort(422, $preValeResult->reason ?? 'El monto excede el máximo permitido para el primer vale.');
@@ -154,6 +165,7 @@ final class RequestVoucherService
         }
     }
 
+<<<<<<< HEAD
     /**
      * Una distribuidora que acumuló 3 cortes consecutivos sin pagar queda
      * MOROSA (ver MarkOverdueRelationsCommand) y can_issue_vouchers pasa a
@@ -171,16 +183,21 @@ final class RequestVoucherService
     }
 
     private function assertCustomerBelongsToDistributor(Distributor $distributor, Customer $customer): void
+=======
+    private function assertCustomerBelongsToDistributor(Distributor $distributor, Customer $customer): CustomerDistributor
+>>>>>>> 334d93f908e5cd70ff96cbd9687b3407adf77ba2
     {
         $linked = CustomerDistributor::query()
             ->where('customer_id', $customer->id)
             ->where('distributor_id', $distributor->id)
             ->where('relationship_status', CustomerDistributorRelationshipStatus::ACTIVA->value)
-            ->exists();
+            ->first();
 
-        if (! $linked) {
+        if ($linked === null) {
             abort(422, 'El cliente no pertenece a esta distribuidora.');
         }
+
+        return $linked;
     }
 
     /**

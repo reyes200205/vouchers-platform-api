@@ -10,6 +10,14 @@ use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Larastan resuelve las columnas via reflexion de BD usando el nombre de
+ * tabla por defecto (pluralizado del modelo); el #[Table] de abajo lo
+ * anula en runtime pero Larastan sigue mirando `customer_distributors`
+ * (que no existe), asi que no encuentra columnas -- de ahi el @property.
+ *
+ * @property bool $prevale_approved
+ */
 #[Fillable([
     'distributor_id',
     'customer_id',

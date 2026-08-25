@@ -32,7 +32,7 @@ final class CustomerTransferController extends ApiController
             ->paginate($request->integer('per_page', 15))
             ->appends($request->query());
 
-        return $this->success(CustomerTransferRequestResource::collection($requests));
+        return $this->success(CustomerTransferRequestResource::collection($requests)->response()->getData(true));
     }
 
     public function decide(DecideCustomerTransferRequest $request, CustomerTransferRequest $customerTransferRequest, DecideCustomerTransferService $service, AuditLogger $audit): JsonResponse
