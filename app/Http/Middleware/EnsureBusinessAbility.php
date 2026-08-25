@@ -14,7 +14,7 @@ final class EnsureBusinessAbility
     {
         $user = $request->user();
         $branch = $branchParameter === null ? null : $request->route($branchParameter);
-        $branchId = $this->resolveBranchId($branch);
+        $branchId = $this->resolveBranchId($branch, $branchParameter);
 
         if ($user === null || ! $user->hasBusinessAbility($ability, $branchId)) {
             return response()->json([
@@ -62,10 +62,33 @@ final class EnsureBusinessAbility
      * sucursal real vía `resolveBusinessBranchId()` en vez de renunciar a
      * validarla.
      */
-    private function resolveBranchId(mixed $branch): ?int
+    private function resolveBranchId(mixed $branch, ?string $parameterName = null): ?int
     {
         if (is_numeric($branch)) {
-            return (int) $branch;
+            // Si el parámetro enlazado es exactamente "branch", el ID numérico es el de la sucursal.
+            if ($parameterName === 'branch') {
+                return (int) $branch;
+            }
+            
+            // Si no, necesitamos instanciar el modelo para saber su branch_id
+            if ($parameterName === 'customer') {
+                $model = \App\Models\Customer::find($branch);
+                return $model ? (int) $model->branch_id : null;
+            }
+            if ($parameterName === 'customerChangeRequest') {
+                $model = \App\Models\CustomerChangeRequest::find($branch);
+                return $model ? (int) $model->customer?->branch_id : null;
+            }
+            if ($parameterName === 'customerPayment') {
+                $model = \App\Models\CustomerPayment::find($branch);
+                return $model ? (int) $model->customer?->branch_id : null;
+            }
+            if ($parameterName === 'customerTransferRequest') {
+                $model = \App\Models\CustomerTransferRequest::find($branch);
+                return $model ? (int) $model->customer?->branch_id : null;
+            }
+            // Fallback por defecto si no podemos resolver (no debería ocurrir si SubstituteBindings corre a tiempo)
+            return null;
         }
 
         if (! is_object($branch)) {
