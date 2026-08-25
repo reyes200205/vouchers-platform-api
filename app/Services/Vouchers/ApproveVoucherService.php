@@ -10,41 +10,12 @@ use App\Enums\CutoffStatus;
 use App\Enums\CutoffType;
 use App\Enums\VoucherRequestStatus;
 use App\Enums\VoucherStatus;
-<<<<<<< HEAD
-=======
 use App\Models\BranchSetting;
-use App\Models\Cutoff;
->>>>>>> fb10ae26d8b1c95e47a4a37af15cea604291d915
 use App\Models\CustomerDistributor;
+use App\Models\Cutoff;
 use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherRequest;
-<<<<<<< HEAD
-use Illuminate\Support\Facades\DB;
-
-/**
- * Aprobar una solicitud y entregarle el dinero al cliente son pasos
- * separados (ver aclaracion del negocio): el correo con los datos del vale
- * ya se le mando al cliente desde que la distribuidora lo pidio (ver
- * RequestVoucherService) -- no espera a que la cajera lo apruebe. Aqui solo
- * se materializa el Voucher en estado APROBADO, con el MISMO numero que ya
- * se le mando al cliente ('V-' + id de la solicitud), para que coincida con
- * lo que trae en su correo cuando se presente. El cliente lleva ese correo
- * en persona con la cajera, quien lo "ferea" (valida) y ahi si dispersa el
- * dinero — ver DisburseVoucherService, que es el que pone el vale en ACTIVO
- * y captura la referencia de transferencia y el numero de autorizacion.
- *
- * El credito disponible y la regla del pre-vale YA se validaron y se
- * apartaron cuando la distribuidora mando la solicitud (ver
- * RequestVoucherService) -- aqui no se vuelven a checar ni a descontar. Si
- * se hiciera aqui otra vez, el chequeo saldria mal: available_credit ya
- * refleja el apartado de ESTA solicitud, no tendria sentido exigir que
- * alcance para cubrirse a si misma de nuevo.
- */
-final class ApproveVoucherService
-{
-    public function execute(User $user, VoucherRequest $voucherRequest): Voucher
-=======
 use App\Services\Cutoffs\CutoffPeriodCalculator;
 use App\Services\Financial\FinancialCalculationService;
 use Illuminate\Support\Facades\DB;
@@ -70,7 +41,6 @@ final class ApproveVoucherService
     ) {}
 
     public function execute(User $user, VoucherRequest $voucherRequest, CutoffPeriodCalculator $periods = new CutoffPeriodCalculator()): Voucher
->>>>>>> fb10ae26d8b1c95e47a4a37af15cea604291d915
     {
         $voucher = DB::transaction(function () use ($user, $voucherRequest, $periods): Voucher {
             if ($voucherRequest->status !== VoucherRequestStatus::PENDIENTE) {
@@ -99,6 +69,36 @@ final class ApproveVoucherService
             // (current_balance también arranca ahí, para que las quincenas
             // completas lo vayan bajando a cero).
             $totalDebt = (float) ($snapshot['total_debt_amount'] ?? $voucherRequest->requested_amount);
+            // El crédito disponible mide cuánto CAPITAL (principal) puede tener
+            // prestado la distribuidora a la vez, no el total a cobrar (que ya
+            // trae intereses, seguro y comisiones encima) -- por eso se compara y
+            // se descuenta solo el principal. Se libera de vuelta cuando el vale
+            // se termina de pagar por completo (ver SettleCutoffRelationService).
+            $principal = (float) ($snapshot['principal'] ?? $voucherRequest->requested_amount);
+            $availableCredit = (float) $distributor->available_credit;
+
+            if ($availableCredit < $principal) {
+                abort(422, 'El crédito disponible de la distribuidora es insuficiente para aprobar el vale.');
+            }
+
+            $branchSetting = BranchSetting::query()
+                ->firstOrCreate(['branch_id' => $distributor->branch_id])
+                ->refresh();
+
+            $reactivationPending = $distributor->prevale_required_after_credit_increase_at !== null;
+
+            $preValeResult = $this->financial->validatePreVale(
+                requestedAmount: (float) $voucherRequest->requested_amount,
+                availableCredit: $availableCredit,
+                totalCreditLimit: (float) $distributor->credit_limit,
+                maxPercentage: (float) $branchSetting->pre_vale_max_percentage,
+                toleranceAmount: (float) $branchSetting->pre_vale_tolerance_amount,
+                reactivationPending: $reactivationPending,
+            );
+
+            if (! $preValeResult->allowed) {
+                abort(422, $preValeResult->reason ?? 'El monto excede el máximo permitido para el primer vale.');
+            }
 
             $customer = $voucherRequest->customer;
 
@@ -127,6 +127,15 @@ final class ApproveVoucherService
             // "Decidir" (antes de habilitar el boton de aprobar).
             if ($customer->status !== CustomerStatus::ACTIVO || $customer->verified_at === null) {
                 abort(422, 'El cliente debe ser verificado antes de poder otorgarle el vale.');
+            }
+
+            $distributor->decrement('available_credit', $principal);
+
+            if ($reactivationPending) {
+                // La regla del 50% ya se aplicó a este vale (el primero desde el
+                // aumento de línea); se libera para que los siguientes vuelvan a
+                // comportarse como vale digital normal.
+                $distributor->update(['prevale_required_after_credit_increase_at' => null]);
             }
 
             // Mismo numero que ya se le mando por correo al cliente al pedir el
