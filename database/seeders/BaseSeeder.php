@@ -31,7 +31,7 @@ final class BaseSeeder extends Seeder
         // 2. Create Super Admin User
         $users = [
             [
-                'name' => 'Super Admin',
+                'name' => 'Alejandro Renteria',
                 'email' => 'jorgerenteriareyes4@gmail.com',
                 'role' => 'super-admin',
             ],
@@ -54,6 +54,11 @@ final class BaseSeeder extends Seeder
                 'name' => 'Axel',
                 'email' => 'axel.y.ya.0@gmail.com',
                 'role' => 'super-admin'
+            ],
+            [
+                'name' => 'Marcelo Sifuentes',
+                'email' => 'sifuentesmarcelo78@gmail.com',
+                'role' => 'super-admin'
             ]
         ];
 
@@ -71,7 +76,7 @@ final class BaseSeeder extends Seeder
                 ['person_id' => $person->id],
                 [
                     'username' => $userData['email'],
-                    'password_hash' => Hash::make('password'),
+                    'password_hash' => Hash::make('iCclHXZ"eh5lq1q&pi6s5?'),
                     'is_active' => true,
                     'password_confirmed_at' => now(),
                 ]
