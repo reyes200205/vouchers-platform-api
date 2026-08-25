@@ -10,6 +10,8 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
+use Illuminate\Validation\Rules\Password;
+
 /**
  * @property string $first_name
  * @property string|null $middle_name
@@ -64,7 +66,7 @@ final class StoreStaffRequest extends FormRequest
             'state' => ['required', 'string', 'max:120'],
             'postal_code' => ['required', 'string', 'regex:/^\d{5}$/'],
             'username' => ['required', 'string', 'max:80', 'unique:users,username'],
-            'password' => ['required', 'string', 'min:8'],
+            'password' => ['required', 'string', Password::min(22)->letters()->mixedCase()->numbers()->symbols()],
             'role_code' => ['required', 'string', 'max:50', 'exists:roles,code'],
             'branch_id' => [
                 Rule::requiredIf(fn () => $this->input('role_code') !== 'general_manager'),
