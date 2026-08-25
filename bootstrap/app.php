@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Exceptions\DatabaseUnavailableResponder;
 use App\Http\Middleware\EnsureBusinessAbility;
 use App\Http\Middleware\EnsureEmailVerified;
 use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\EnsureVpnAccessForRoles;
 use App\Http\Middleware\ForceJsonResponse;
 use App\Http\Middleware\LogApiRequests;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -56,6 +58,51 @@ return Application::configure(basePath: dirname(__DIR__))
             }
 
             return $request->expectsJson();
+        });
+
+        // Evita que Laravel loguee esto una SEGUNDA vez con su formato
+        // generico (report() corre independiente de render()): cuando es un
+        // fallo de conexion, DatabaseUnavailableResponder::handle() ya lo
+        // registra con su propio detalle tecnico completo -- ese debe ser el
+        // unico registro de este incidente. Un error SQL normal (case B) no
+        // coincide con isConnectionFailure() y sigue reportandose como
+        // siempre.
+        $exceptions->reportable(function (QueryException $e) {
+            if (DatabaseUnavailableResponder::isConnectionFailure($e)) {
+                return false;
+            }
+        });
+        $exceptions->reportable(function (PDOException $e) {
+            if (DatabaseUnavailableResponder::isConnectionFailure($e)) {
+                return false;
+            }
+        });
+
+        // Fallo al ESTABLECER la conexion a MySQL (host caido, connection
+        // refused, timeout, red inalcanzable) -> respuesta generica 503 +
+        // log tecnico completo. Un error SQL normal sobre una conexion que
+        // SI se establecio (constraint, sintaxis, etc.) no coincide con la
+        // deteccion de DatabaseUnavailableResponder::handle() y regresa
+        // null, dejando que el manejo de excepciones normal de la app siga
+        // aplicando sin cambios. Ver App\Exceptions\DatabaseUnavailableResponder.
+        $exceptions->render(function (QueryException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return DatabaseUnavailableResponder::handle($e);
+        });
+
+        // Red de seguridad: cubre un PDOException crudo que llegara sin
+        // pasar por Illuminate\Database\Connection (que normalmente envuelve
+        // todo en QueryException). En el flujo normal de la app esto no
+        // deberia dispararse.
+        $exceptions->render(function (PDOException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return DatabaseUnavailableResponder::handle($e);
         });
 
         $exceptions->render(function (Symfony\Component\HttpKernel\Exception\NotFoundHttpException $e, Request $request) {

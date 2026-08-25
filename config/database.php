@@ -75,6 +75,13 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
+                // PDO::ATTR_TIMEOUT en el driver mysql controla especificamente
+                // el timeout de ESTABLECER la conexion (MYSQL_OPT_CONNECT_TIMEOUT),
+                // no el de las queries ya en curso. Sin esto, una peticion a la
+                // API puede quedar colgada indefinidamente si MySQL no responde
+                // (red caida, host inalcanzable) en vez de fallar rapido y dejar
+                // que el manejador global de excepciones responda 503.
+                PDO::ATTR_TIMEOUT => (int) env('DB_CONNECT_TIMEOUT', 5),
             ]) : [],
         ],
 
@@ -95,6 +102,7 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 (PHP_VERSION_ID >= 80500 ? \Pdo\Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) => env('MYSQL_ATTR_SSL_CA'),
+                PDO::ATTR_TIMEOUT => (int) env('DB_CONNECT_TIMEOUT', 5),
             ]) : [],
         ],
 
