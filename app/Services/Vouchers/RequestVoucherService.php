@@ -92,7 +92,7 @@ final class RequestVoucherService
                 abort(422, $preValeResult->reason ?? 'El monto excede el máximo permitido para el primer vale.');
             }
 
-            return VoucherRequest::query()->create([
+            $voucherRequest = VoucherRequest::query()->create([
                 'distributor_id' => $distributor->id,
                 'customer_id' => $customer->id,
                 'financial_product_id' => $product->id,
@@ -103,6 +103,25 @@ final class RequestVoucherService
                 'snapshot_json' => $snapshot->toArray(),
                 'created_by_user_id' => $user->id,
             ]);
+
+            // El credito disponible se aparta desde que la distribuidora pide el
+            // vale (no hasta que se aprueba -- ver ApproveVoucherService, que ya
+            // NO lo vuelve a descontar): asi nunca puede acumular varias
+            // solicitudes pendientes cuya suma exceda lo que en realidad tiene
+            // disponible. Se libera de vuelta si la solicitud se rechaza
+            // (RejectVoucherRequestService) o vence sin aprobarse
+            // (CancelExpiredVoucherRequestsService); si se aprueba, se queda
+            // apartado y pasa a materializarse en el Voucher.
+            $distributor->decrement('available_credit', (float) $product->principal_amount);
+
+            if ($distributor->prevale_required_after_credit_increase_at !== null) {
+                // La regla del 50% ya se aplico a esta solicitud (la primera
+                // desde el aumento de linea); se libera para que las
+                // siguientes vuelvan a comportarse como vale digital normal.
+                $distributor->update(['prevale_required_after_credit_increase_at' => null]);
+            }
+
+            return $voucherRequest;
         });
 
         $this->sendIssuedMail($voucherRequest);

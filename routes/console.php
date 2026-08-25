@@ -16,5 +16,6 @@ Schedule::command('cutoffs:generate')->dailyAt('23:50');
 // MarkOverdueRelationsService. Ya no existe un comando aparte a nivel de vale
 // (vouchers:mark-overdue): duplicaba esa misma decisión con su propia fecha.
 Schedule::command('cutoffs:mark-overdue')->dailyAt('23:55');
+Schedule::command('vouchers:cancel-expired-requests')->dailyAt('00:03');
 Schedule::command('vouchers:cancel-expired')->dailyAt('00:05');
 Schedule::command('vouchers:send-reminders')->dailyAt('09:00');

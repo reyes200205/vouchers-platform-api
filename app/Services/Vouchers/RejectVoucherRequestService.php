@@ -10,10 +10,10 @@ use App\Models\VoucherRequest;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Rechaza una solicitud de vale (pre-issue) pendiente. A diferencia de la
- * aprobacion, no hay credito que revertir: el credito disponible de la
- * distribuidora solo se descuenta al aprobar (ver ApproveVoucherService),
- * asi que rechazar es simplemente marcar el estado con el motivo.
+ * Rechaza una solicitud de vale (pre-issue) pendiente. El credito disponible
+ * ya se aparto desde que la distribuidora mando la solicitud (ver
+ * RequestVoucherService), asi que rechazar tiene que devolverselo -- si no,
+ * se quedaria descontado para siempre por un vale que nunca se va a otorgar.
  */
 final class RejectVoucherRequestService
 {
@@ -30,6 +30,8 @@ final class RejectVoucherRequestService
                 'decided_by_user_id' => $user->id,
                 'decided_at' => now(),
             ]);
+
+            $voucherRequest->distributor()->increment('available_credit', (float) $voucherRequest->requested_amount);
 
             return $voucherRequest;
         });
