@@ -38,6 +38,8 @@ final class RequestVoucherService
                 ->where('person_id', $user->person_id)
                 ->firstOrFail();
 
+            $this->assertDistributorCanIssue($distributor);
+
             $product = FinancialProduct::query()->findOrFail($data['financial_product_id']);
             $customer = Customer::query()->findOrFail($data['customer_id']);
 
@@ -149,6 +151,22 @@ final class RequestVoucherService
                 'voucher_request_id' => $voucherRequest->id,
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * Una distribuidora que acumuló 3 cortes consecutivos sin pagar queda
+     * MOROSA (ver MarkOverdueRelationsCommand) y can_issue_vouchers pasa a
+     * false -- antes esa bandera nunca se checaba aquí, así que seguía
+     * pudiendo pedir vales nuevos sin ningún límite aunque ya estuviera
+     * bloqueada. La única forma de quitarle el bloqueo es pagar lo que debe
+     * (ver SettleCutoffRelationService::maybeReactivateDistributor, que la
+     * reactiva sola en cuanto ya no le queda ninguna relación VENCIDA).
+     */
+    private function assertDistributorCanIssue(Distributor $distributor): void
+    {
+        if (! $distributor->can_issue_vouchers) {
+            abort(422, 'La distribuidora está bloqueada por adeudo vencido y no puede pedir vales nuevos hasta regularizar el pago.');
         }
     }
 

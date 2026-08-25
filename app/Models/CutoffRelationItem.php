@@ -22,6 +22,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'commission_amount',
     'payment_amount',
     'late_fee_amount',
+    'commission_forfeited_amount',
     'line_total_amount',
     'previous_paid_amount',
     'origin_cutoff_id',
@@ -36,6 +37,7 @@ final class CutoffRelationItem extends Model
         'commission_amount' => 'decimal:2',
         'payment_amount' => 'decimal:2',
         'late_fee_amount' => 'decimal:2',
+        'commission_forfeited_amount' => 'decimal:2',
         'line_total_amount' => 'decimal:2',
         'previous_paid_amount' => 'decimal:2',
     ];

@@ -11,6 +11,7 @@ use App\Enums\ReconciliationStatus;
 use App\Enums\VoucherStatus;
 use App\Models\CutoffRelation;
 use App\Models\CutoffRelationItem;
+use App\Models\Distributor;
 use App\Models\PointMovement;
 use App\Models\PointSetting;
 use App\Models\Reconciliation;
@@ -52,7 +53,12 @@ use Illuminate\Support\Facades\DB;
  *     fórmula original del vale (distributor_profit_amount /
  *     total_fortnights), no con lo que haya quedado guardado, porque
  *     MarkOverdueRelationsService pone la comisión en 0 sin conservar
- *     cuánto era.
+ *     cuánto era. Por cada relación de esa cadena que también le haya
+ *     quitado puntos a la distribuidora al vencerse (ver
+ *     MarkOverdueRelationsService::applyLatePenaltyToPoints), se le
+ *     regresan esos mismos puntos con un movimiento REVERSO -- el atraso
+ *     nunca fue real, fue un error de registro de la cajera, así que la
+ *     penalización tampoco debe quedarse.
  *  3. Si la relación viva ya estaba PAGADA (se liquidó con la multa
  *     incluida), no se vuelve a facturar el vale ni a liberar crédito otra
  *     vez (SettleCutoffRelationService::advanceVouchers ya lo hizo la
@@ -162,6 +168,8 @@ final class RetroactiveReconciliationService
      */
     private function waiveLateFeesAcrossChain(CutoffRelation $original, CutoffRelation $tip): float
     {
+        $distributor = Distributor::query()->find($original->distributor_id);
+
         // origin_relation_id se "aplana" hacia la primera relación sin pagar de
         // la cadena (ver GenerateCutoffService), así que normalmente basta con
         // buscar $original->id en las relaciones siguientes. Pero si $original
@@ -196,6 +204,10 @@ final class RetroactiveReconciliationService
             }
 
             $this->recalculateRelationTotals($current);
+
+            if ($distributor !== null) {
+                $this->reversePointsPenaltyForRelation($current, $distributor);
+            }
 
             if ($current->id === $tip->id) {
                 break;
@@ -253,6 +265,59 @@ final class RetroactiveReconciliationService
         if ($voucher !== null && $voucher->status === VoucherStatus::MOROSO) {
             $voucher->update(['status' => VoucherStatus::ACTIVO]);
         }
+    }
+
+    /**
+     * Si esta relación (identificada por su cutoff_id) le había quitado el
+     * 20% de sus puntos a la distribuidora al vencerse sin pagar (ver
+     * MarkOverdueRelationsService::applyLatePenaltyToPoints), y ahora se
+     * comprobó que en realidad SÍ pagó a tiempo (el depósito real cae en la
+     * ventana "a tiempo" -- fue un error de la cajera al registrarlo, no un
+     * atraso real), se le regresan esos puntos exactos con un movimiento
+     * REVERSO. El movimiento original (PENALIZACION_ATRASO) nunca se edita
+     * ni se borra, igual que el resto de las correcciones de este servicio,
+     * para no perder el rastro de auditoría. Idempotente: si ya se había
+     * revertido antes, no vuelve a duplicar la devolución.
+     */
+    private function reversePointsPenaltyForRelation(CutoffRelation $relation, Distributor $distributor): void
+    {
+        $penalty = PointMovement::query()
+            ->where('distributor_id', $distributor->id)
+            ->where('cutoff_id', $relation->cutoff_id)
+            ->where('transaction_type', PointMovementType::PENALIZACION_ATRASO)
+            ->first();
+
+        if ($penalty === null) {
+            return;
+        }
+
+        $alreadyReversed = PointMovement::query()
+            ->where('distributor_id', $distributor->id)
+            ->where('cutoff_id', $relation->cutoff_id)
+            ->where('transaction_type', PointMovementType::REVERSO)
+            ->exists();
+
+        if ($alreadyReversed) {
+            return;
+        }
+
+        $pointsToRestore = abs((float) $penalty->points);
+
+        if ($pointsToRestore <= 0) {
+            return;
+        }
+
+        PointMovement::query()->create([
+            'distributor_id' => $distributor->id,
+            'cutoff_id' => $relation->cutoff_id,
+            'transaction_type' => PointMovementType::REVERSO,
+            'points' => $pointsToRestore,
+            'point_value_snapshot' => $penalty->point_value_snapshot,
+            'reason' => "Corrección retroactiva: el corte {$relation->relation_number} se había marcado vencido por error de la cajera al registrar el pago; el depósito real sí llegó a tiempo -- se le regresan los {$pointsToRestore} puntos que se le habían quitado.",
+            'transaction_date' => now(),
+        ]);
+
+        $distributor->increment('current_points', $pointsToRestore);
     }
 
     private function recalculateRelationTotals(CutoffRelation $relation): void

@@ -6,18 +6,24 @@ namespace App\Services\Cutoffs;
 
 use App\Enums\CutoffStatus;
 use App\Models\Cutoff;
-use App\Models\CutoffRelation;
 use App\Models\Distributor;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Reprocesar un corte NO crea otro corte: vuelve a revisar el MISMO periodo
- * (mismo Cutoff) por si desde que se generó aparecieron distribuidoras que
- * ahora sí califican (por ejemplo, un vale que se aprobó/entregó después y
- * cuyo payment_due_date cae dentro de este mismo periodo). Las relaciones que
- * ya existen en este corte (con o sin pagos) no se tocan — solo se generan
- * relaciones nuevas para las distribuidoras que todavía no tienen una aquí.
+ * (mismo Cutoff) por si desde que se generó aparecieron vales nuevos que
+ * ahora sí califican (por ejemplo, un vale que se aprobó después y cuyo
+ * payment_due_date cae dentro de este mismo periodo). Se revisan TODAS las
+ * distribuidoras activas de la sucursal, no solo las que todavía no tienen
+ * relación en este corte: generateRelation() es idempotente (ver su
+ * docblock) -- si la distribuidora ya tiene relación aquí, solo le agrega
+ * los vales nuevos que le falten (por ejemplo, un vale otorgado a OTRO
+ * cliente de la misma distribuidora); si no tiene, crea la relación como de
+ * costumbre. Antes esto se saltaba por completo a las distribuidoras que ya
+ * tenían relación en este corte, así que un vale nuevo para un cliente
+ * distinto de esa misma distribuidora quedaba invisible hasta el siguiente
+ * periodo.
  */
 final class ReprocessCutoffService
 {
@@ -50,14 +56,13 @@ final class ReprocessCutoffService
             $periodStart = Carbon::parse($cutoff->period_start)->startOfDay();
             $periodEnd = Carbon::parse($cutoff->scheduled_at)->endOfDay();
 
-            $existingDistributorIds = CutoffRelation::query()
-                ->where('cutoff_id', $cutoff->id)
-                ->pluck('distributor_id');
-
+            // Ya no se excluye a las distribuidoras que ya tienen relación en
+            // este corte -- generateRelation() decide por si sola, por
+            // distribuidora, si hay algo nuevo que agregarle o si no hay
+            // nada que hacer (ver su docblock).
             $distributors = Distributor::query()
                 ->where('branch_id', $cutoff->branch_id)
                 ->whereNull('deactivated_at')
-                ->whereNotIn('id', $existingDistributorIds)
                 ->orderBy('id')
                 ->get();
 

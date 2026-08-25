@@ -6,9 +6,12 @@ namespace App\Services\Vouchers;
 
 use App\Enums\CustomerDistributorRelationshipStatus;
 use App\Enums\CustomerStatus;
+use App\Enums\CutoffStatus;
+use App\Enums\CutoffType;
 use App\Enums\VoucherRequestStatus;
 use App\Enums\VoucherStatus;
 use App\Models\BranchSetting;
+use App\Models\Cutoff;
 use App\Models\CustomerDistributor;
 use App\Models\User;
 use App\Models\Voucher;
@@ -48,6 +51,17 @@ final class ApproveVoucherService
             $voucherRequest->load(['distributor.person', 'customer.person']);
 
             $distributor = $voucherRequest->distributor;
+
+            // Red de seguridad: si la solicitud se creó antes de que la
+            // distribuidora quedara MOROSA (ver MarkOverdueRelationsCommand),
+            // RequestVoucherService ya no la habría dejado crearla hoy, pero
+            // pudo quedar pendiente de aprobación de antes -- no se debe
+            // aprobar/entregar un vale a una distribuidora bloqueada aunque
+            // la solicitud ya existiera.
+            if (! $distributor->can_issue_vouchers) {
+                abort(422, 'La distribuidora está bloqueada por adeudo vencido y no puede recibir vales nuevos hasta regularizar el pago.');
+            }
+
             $snapshot = $voucherRequest->snapshot_json ?? [];
             // total_debt_amount es el total COMPLETO que le cobra al cliente (con
             // la comisión de la distribuidora incluida — ver
@@ -129,15 +143,36 @@ final class ApproveVoucherService
             // coincida con lo que trae impreso/en el correo cuando se presente.
             $voucherNumber = 'V-'.$voucherRequest->id;
 
-            // La primera quincena de un vale recien otorgado SIEMPRE cae en el
-            // periodo de corte que sigue al periodo actual (nunca en el periodo
-            // donde se otorga, sin importar que tan temprano caiga): el cliente
-            // apenas recibio el vale, no le puede tocar pagar en unos dias solo
-            // porque el periodo actual ya casi cierra. Ver CutoffPeriodCalculator
-            // y branch_settings.cutoff_day (1-15/16-31 por default).
+            // La primera quincena de un vale recien otorgado cae en el periodo
+            // del corte que esta sucursal tiene ACTUALMENTE ABIERTO (no
+            // cerrado) -- revision del profesor. No se usa el reloj real
+            // (now()) como referencia principal porque aqui las
+            // distribuidoras generan y cierran cortes de prueba muy
+            // adelantados o atrasados respecto a la fecha real (ver el corte
+            // mas reciente de la sucursal, que puede estar meses adelante o
+            // atras del dia de hoy) -- "el periodo actual" para un vale
+            // nuevo es el periodo del corte que ya esta en curso, no el que
+            // tocaria segun la fecha real. Si la sucursal ya tiene un corte
+            // sin cerrar, el vale cae exactamente en su fecha limite
+            // (scheduled_at), para que aparezca ahi al reprocesarlo (ver
+            // ReprocessCutoffService). Si todavia no tiene ningun corte
+            // abierto (sucursal nueva, o se cerraron todos y no se ha
+            // generado el siguiente), se usa el reloj real como respaldo
+            // (CutoffPeriodCalculator + branch_settings.cutoff_day, 1-15/16-31
+            // por default) -- el primer corte que se genere despues cae en
+            // ese mismo periodo.
+            $openCutoff = Cutoff::query()
+                ->where('branch_id', $distributor->branch_id)
+                ->where('cutoff_type', CutoffType::PAGOS)
+                ->where('status', '!=', CutoffStatus::CERRADO)
+                ->orderByDesc('period_start')
+                ->first();
+
             $dueDays = (int) ($branchSetting->payment_due_days ?? 15);
             $frequencyDays = (int) ($branchSetting->payment_frequency_days ?? 14);
-            $dueDate = $periods->nextPeriodEnd(now(), $branchSetting->cutoff_day);
+            $dueDate = $openCutoff !== null
+                ? $openCutoff->scheduled_at->copy()
+                : $periods->currentPeriodEnd(now(), $branchSetting->cutoff_day);
 
             // No hay una transferencia bancaria real que registrar (el dinero
             // sale de la linea de credito de la distribuidora, se entrega en el
