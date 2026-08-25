@@ -55,8 +55,13 @@ final class CustomerChangeRequestController extends ApiController
             [
                 'customer_id' => $changeRequest->customer_id,
                 'change_request_id' => $changeRequest->id,
+                'change_type' => $changeRequest->change_type->value,
                 'decision' => $changeRequest->status->value,
-            ]
+                'rejection_reason' => $changeRequest->rejection_reason,
+                'new_values' => $changeRequest->new_values_json,
+            ],
+            null,
+            $changeRequest->old_values_json
         );
 
         return $this->success(new CustomerChangeRequestResource($changeRequest->load('customer')));

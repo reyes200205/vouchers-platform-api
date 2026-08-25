@@ -64,6 +64,8 @@ final class PointController extends ApiController
 
     public function updateCategory(UpdateDistributorCategoryRequest $request, Distributor $distributor, AuditLogger $audit): JsonResponse
     {
+        $oldCategoryId = $distributor->category_id;
+
         $distributor->update(['category_id' => $request->validated('category_id')]);
 
         $audit->record(
@@ -75,7 +77,9 @@ final class PointController extends ApiController
             [
                 'distributor_id' => $distributor->id,
                 'category_id' => $distributor->category_id,
-            ]
+            ],
+            null,
+            ['category_id' => $oldCategoryId]
         );
 
         return $this->success([

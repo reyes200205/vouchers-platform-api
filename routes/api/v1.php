@@ -13,7 +13,6 @@ use App\Http\Controllers\Cashier\CustomerController as CashierCustomerController
 use App\Http\Controllers\Cashier\PaymentController as CashierPaymentController;
 use App\Http\Controllers\Cashier\PointRedemptionController as CashierPointRedemptionController;
 use App\Http\Controllers\Cashier\ReconciliationController as CashierReconciliationController;
-use App\Http\Controllers\Cashier\VoucherController as CashierVoucherController;
 use App\Http\Controllers\Checker\VerificadorController;
 use App\Http\Controllers\Checker\VerificationPhotoController;
 use App\Http\Controllers\Coordinator\ApplicationDocumentController;
@@ -201,7 +200,6 @@ Route::middleware(['auth:sanctum', 'user.active', 'throttle:authenticated'])->gr
     Route::middleware('business.ability:vouchers.approve')->get('/voucher-requests', [CoordinatorVoucherController::class, 'pendingRequests'])->name('voucher-requests.index');
     Route::middleware('business.ability:vouchers.approve,voucherRequest')->post('/voucher-requests/{voucherRequest}/approve', [CoordinatorVoucherController::class, 'approve'])->name('vouchers.approve');
     Route::middleware('business.ability:vouchers.reject,voucherRequest')->post('/voucher-requests/{voucherRequest}/reject', [CoordinatorVoucherController::class, 'reject'])->name('vouchers.reject');
-    Route::middleware('business.ability:vouchers.disburse,voucher')->post('/vouchers/{voucher}/disburse', [CashierVoucherController::class, 'disburse'])->name('vouchers.disburse');
 
     Route::middleware('business.ability:credit-increase.view')->get('/credit-increase-requests', [GeneralManagerCreditIncreaseController::class, 'index'])->name('credit-increase-requests.index');
     Route::middleware('business.ability:credit-increase.request')->post('/credit-increase-requests', [CoordinatorCreditIncreaseController::class, 'store'])->name('credit-increase-requests.store');

@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Enums\CutoffRelationStatus;
+use App\Enums\ReconciliationStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'cutoff_id',
@@ -90,5 +92,26 @@ final class CutoffRelation extends Model
     public function payments(): HasMany
     {
         return $this->hasMany(DistributorPayment::class);
+    }
+
+    /**
+     * Cuando esta relación quedó CERRADA (su deuda ya se arrastró a una
+     * relación más nueva) y después se comprobó, vía ManualMatchDepositService
+     * + RetroactiveReconciliationService, que el depósito real sí había
+     * llegado a tiempo, esa corrección le quita la multa a sus items pero
+     * NUNCA cambia el status de esta relación -- sigue siendo CERRADA para
+     * siempre (así debe ser: su deuda de verdad ya se arrastró a otra
+     * relación, que es la que quedó PAGADA/PARCIAL). Sin este dato, la
+     * pantalla no tiene forma de distinguir una CERRADA cuyo pago se corrigió
+     * retroactivamente de una CERRADA cuyo pago simplemente nunca llegó a
+     * tiempo -- ambas se ven idénticas.
+     *
+     * @return HasOne<Reconciliation, $this>
+     */
+    public function retroactiveReconciliation(): HasOne
+    {
+        return $this->hasOne(Reconciliation::class, 'original_cutoff_relation_id')
+            ->whereIn('status', [ReconciliationStatus::CONCILIADA, ReconciliationStatus::CON_DIFERENCIA])
+            ->latest('verified_at');
     }
 }

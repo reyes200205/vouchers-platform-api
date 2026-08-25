@@ -20,7 +20,24 @@ final class ApplicationDecisionController extends ApiController
         /** @var User $user */
         $user = $request->user();
         $result = $service->execute($application, $user, $request->validated());
-        $audit->record($request, AuditEventType::Decided, 'applications', 'Decision final de solicitud registrada.', $application->branch_id, ['application_id' => $application->id, 'decision' => $request->string('decision')->value()]);
+        $distributor = $result['distributor'];
+
+        $audit->record(
+            $request,
+            AuditEventType::Decided,
+            'applications',
+            'Decision final de solicitud registrada.',
+            $application->branch_id,
+            [
+                'application_id' => $application->id,
+                'decision' => $request->string('decision')->value(),
+                'rejection_reason' => $request->string('rejection_reason')->value() ?: null,
+                'distributor_id' => $distributor?->id,
+                'credit_limit' => $distributor?->credit_limit,
+                'category_id' => $distributor?->category_id,
+                'coordinator_user_id' => $distributor?->coordinator_user_id,
+            ]
+        );
 
         return $this->success([
             'application' => $result['application'],

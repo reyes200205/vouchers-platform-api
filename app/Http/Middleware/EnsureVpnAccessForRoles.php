@@ -33,7 +33,7 @@ final class EnsureVpnAccessForRoles
             return $next($request);
         }
 
-        $hasRestrictedRole = $user->businessRoles()->whereIn('roles.name', $roleCodes)->exists();
+        $hasRestrictedRole = $user->businessRoles()->wherePivotNull('revoked_at')->whereIn('roles.name', $roleCodes)->exists();
 
         if (! $hasRestrictedRole || $this->isFromVpn($request)) {
             return $next($request);

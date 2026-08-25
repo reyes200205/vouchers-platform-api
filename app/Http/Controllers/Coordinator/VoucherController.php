@@ -73,6 +73,9 @@ final class VoucherController extends ApiController
 
     public function approve(ApproveVoucherRequest $request, VoucherRequest $voucherRequest, ApproveVoucherService $service, AuditLogger $audit): JsonResponse
     {
+        $voucherRequest->loadMissing('distributor');
+        $oldAvailableCredit = $voucherRequest->distributor->available_credit;
+
         $voucher = $service->execute($request->user(), $voucherRequest);
 
         $audit->record(
@@ -81,7 +84,17 @@ final class VoucherController extends ApiController
             'vouchers',
             'Vale aprobado; credito disponible descontado.',
             $voucher->branch_id,
-            ['voucher_id' => $voucher->id, 'voucher_number' => $voucher->voucher_number, 'total_debt' => $voucher->total_debt_amount]
+            [
+                'voucher_id' => $voucher->id,
+                'voucher_number' => $voucher->voucher_number,
+                'customer_id' => $voucher->customer_id,
+                'distributor_id' => $voucher->distributor_id,
+                'amount' => $voucher->amount,
+                'total_debt' => $voucher->total_debt_amount,
+                'available_credit' => $voucherRequest->distributor->available_credit,
+            ],
+            null,
+            ['available_credit' => $oldAvailableCredit]
         );
 
         return $this->success(new VoucherResource($voucher->load(['customer.person', 'distributor.person'])));

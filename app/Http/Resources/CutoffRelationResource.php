@@ -49,6 +49,20 @@ final class CutoffRelationResource extends JsonResource
                     : null,
             ] : null),
             'items' => $this->whenLoaded('items', fn () => CutoffRelationItemResource::collection($this->items)),
+            // Solo tiene sentido en una relación CERRADA: es la Reconciliation
+            // (ya verificada por un gerente) que comprobó retroactivamente que
+            // el depósito de ESTA relación sí llegó a tiempo -- ver
+            // CutoffRelation::retroactiveReconciliation(). Null si nunca se
+            // corrigió (el atraso fue real, o nadie la ha revisado todavía).
+            'retroactive_reconciliation' => $this->whenLoaded(
+                'retroactiveReconciliation',
+                fn () => $this->retroactiveReconciliation ? [
+                    'id' => $this->retroactiveReconciliation->id,
+                    'verified_at' => $this->retroactiveReconciliation->verified_at?->toIso8601String(),
+                    'reconciled_amount' => $this->retroactiveReconciliation->reconciled_amount,
+                    'waived_late_fees_total' => $this->retroactiveReconciliation->waived_late_fees_total,
+                ] : null
+            ),
         ];
     }
 }

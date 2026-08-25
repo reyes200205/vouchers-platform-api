@@ -8,7 +8,7 @@ return [
     // Roles que deben verificar un codigo OTP por correo (segundo factor)
     // ademas de su contrasena para poder iniciar sesion. Ver
     // AuthController::login()/verifyMfa() y User::requiresOtp().
-    'otp_required_role_codes' => ['super-admin', ],
+    'otp_required_role_codes' => ['super-admin', 'general_manager', 'branch_manager'],
 
     'abilities' => [
         'audit-logs.view' => ['super-admin'],
@@ -77,13 +77,13 @@ return [
         'vouchers.pre-issue' => ['distributor'],
         'vouchers.approve' => ['cashier', 'branch_manager', 'general_manager'],
         'vouchers.reject' => ['cashier', 'branch_manager', 'general_manager'],
-        'vouchers.disburse' => ['cashier', 'branch_manager', 'general_manager'],
+        'vouchers.disburse' => ['cashier'],
         'customers.view' => ['general_manager', 'branch_manager', 'coordinator', 'cashier', 'distributor'],
         'customers.create' => ['distributor'],
         'customers.manage' => ['general_manager', 'branch_manager'],
         'customers.update.request' => ['cashier'],
         'customers.update.approve' => ['branch_manager', 'general_manager'],
-        'customers.verify' => ['cashier'],
+        'customers.verify' => ['cashier', 'branch_manager', 'general_manager'],
         'customers.transfer.view' => ['general_manager', 'branch_manager', 'coordinator', 'distributor'],
         'customers.transfer.request' => ['distributor'],
         'customers.transfer.decide' => ['coordinator', 'general_manager'],

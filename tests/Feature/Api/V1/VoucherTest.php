@@ -15,6 +15,7 @@ use App\Models\FinancialProduct;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Voucher;
+use App\Models\VoucherRequest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
@@ -409,20 +410,25 @@ describe('Voucher approval (cajera/gerente)', function (): void {
         $cashier = User::factory()->create();
         signInBusinessRole($cashier, 'cashier', $branch);
 
-        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+        $response = $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
             ->assertOk()
-            ->assertJsonPath('data.status', 'APROBADO')
+            ->assertJsonPath('data.status', 'ACTIVO')
             ->assertJsonPath('data.is_pre_vale', true)
             ->assertJsonPath('data.voucher_number', 'V-1')
             ->assertJsonPath('data.total_debt_amount', '22600.00')
             ->assertJsonPath('data.fortnightly_payment_amount', '2825.00')
-            ->assertJsonPath('data.approved_by_user_id', $cashier->id);
+            ->assertJsonPath('data.approved_by_user_id', $cashier->id)
+            ->assertJsonPath('data.disbursed_by_user_id', $cashier->id);
+
+        expect($response->json('data.transfer_reference'))->not->toBeNull();
+        expect($response->json('data.authorized_number'))->not->toBeNull();
+        expect($response->json('data.payment_due_date'))->not->toBeNull();
 
         $this->assertDatabaseHas('vouchers', [
             'voucher_number' => 'V-1',
             'distributor_id' => $distributor->id,
             'customer_id' => $customer->id,
-            'status' => 'APROBADO',
+            'status' => 'ACTIVO',
             'is_pre_vale' => true,
             'current_balance' => 22600.00,
         ]);
@@ -522,6 +528,88 @@ describe('Voucher approval (cajera/gerente)', function (): void {
 
         $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")->assertForbidden();
     });
+
+    it('rejects approval when the customer has not been verified by the cashier', function (): void {
+        // Solo el PRIMER vale de un cliente puede ser pre-vale (y ese si
+        // auto-verifica al cliente al aprobarse -- ver ApproveVoucherService).
+        // Para llegar a la red de seguridad hace falta una solicitud NO
+        // pre-vale con un cliente que, por alguna razon, sigue sin verificar
+        // -- se construye directo con el factory, sin pasar por
+        // RequestVoucherService, igual que antes se hacia con Voucher::factory().
+        ['branch' => $branch, 'distributor' => $distributor] = voucherScenario();
+        $customer = Customer::factory()->create([
+            'branch_id' => $branch->id,
+            'status' => CustomerStatus::EN_VERIFICACION,
+            'verified_at' => null,
+        ]);
+        $voucherRequest = VoucherRequest::factory()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'is_pre_vale' => false,
+            'requested_amount' => 15000.00,
+        ]);
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$voucherRequest->id}/approve")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'El cliente debe ser verificado antes de poder otorgarle el vale.');
+
+        $this->assertDatabaseCount('vouchers', 0);
+    });
+
+    it('rolls the first payment_due_date to the NEXT cutoff period, never the current one', function (): void {
+        // El dia 27 cae en el periodo 16-31 (branch_settings.cutoff_day = 15 por
+        // default). El vale se acaba de pedir, asi que el primer pago NO debe
+        // caer el 30/31 de ESTE mes (el periodo actual, a solo unos dias) --
+        // debe caer hasta el 15 del mes SIGUIENTE. Ver CutoffPeriodCalculator.
+        $this->travelTo(now()->setDate(2026, 8, 27)->setTime(10, 0, 0));
+
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.payment_due_date', '2026-09-15');
+
+        $this->assertDatabaseHas('vouchers', [
+            'voucher_number' => 'V-1',
+            'payment_due_date' => '2026-09-15 00:00:00',
+        ]);
+    });
+
+    it('rejects approving a request that was already decided', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")->assertOk();
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'La solicitud ya fue resuelta.');
+
+        $this->assertDatabaseCount('vouchers', 1);
+    });
 });
 
 describe('Voucher rejection (cajera/gerente)', function (): void {
@@ -588,6 +676,8 @@ describe('Voucher rejection (cajera/gerente)', function (): void {
     });
 });
 
+<<<<<<< HEAD
+=======
 describe('Voucher disbursement (cajera)', function (): void {
     it('disburses an approved voucher capturing the transfer reference', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
@@ -717,8 +807,36 @@ describe('Voucher disbursement (cajera)', function (): void {
             'authorized_number' => 'AUT-0003',
         ])->assertForbidden();
     });
+
+    it('forbids a branch manager and a general manager from disbursing vouchers — only the cashier hands over the money', function (): void {
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $voucher = Voucher::factory()->create([
+            'distributor_id' => $distributor->id,
+            'customer_id' => $customer->id,
+            'branch_id' => $branch->id,
+            'financial_product_id' => $product->id,
+            'status' => VoucherStatus::APROBADO,
+        ]);
+
+        $branchManager = User::factory()->create();
+        signInBusinessRole($branchManager, 'branch_manager', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260816-005',
+            'authorized_number' => 'AUT-0005',
+        ])->assertForbidden();
+
+        $generalManager = User::factory()->create();
+        signInBusinessRole($generalManager, 'general_manager', $branch);
+
+        $this->postJson("/api/v1/vouchers/{$voucher->id}/disburse", [
+            'transfer_reference' => 'SPEI-20260816-006',
+            'authorized_number' => 'AUT-0006',
+        ])->assertForbidden();
+    });
 });
 
+>>>>>>> b19b1bf7cc09c2a40b6b793e27c7c3a8e942f0e9
 describe('Voucher views', function (): void {
     it('lets a distributor see only its own vouchers', function (): void {
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();

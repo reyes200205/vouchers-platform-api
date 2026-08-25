@@ -60,7 +60,14 @@ final class CustomerController extends ApiController
             'customers',
             'Solicitud de cambio de datos del cliente registrada.',
             $customer->branch_id,
-            ['customer_id' => $customer->id, 'change_request_id' => $changeRequest->id, 'change_type' => $changeRequest->change_type->value]
+            [
+                'customer_id' => $customer->id,
+                'change_request_id' => $changeRequest->id,
+                'change_type' => $changeRequest->change_type->value,
+                'new_values' => $changeRequest->new_values_json,
+            ],
+            null,
+            $changeRequest->old_values_json
         );
 
         return $this->created(new CustomerChangeRequestResource($changeRequest));

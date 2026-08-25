@@ -38,6 +38,10 @@ final class CreditIncreaseController extends ApiController
 
     public function decide(DecideCreditIncreaseRequest $request, CreditIncreaseRequest $creditIncreaseRequest, DecideCreditIncreaseService $service, AuditLogger $audit): JsonResponse
     {
+        $creditIncreaseRequest->loadMissing('distributor');
+        $oldCreditLimit = $creditIncreaseRequest->distributor->credit_limit;
+        $oldAvailableCredit = $creditIncreaseRequest->distributor->available_credit;
+
         $creditIncreaseRequest = $service->execute($request->user(), $creditIncreaseRequest, $request->validated());
 
         $audit->record(
@@ -48,8 +52,17 @@ final class CreditIncreaseController extends ApiController
             $creditIncreaseRequest->branch_id,
             [
                 'credit_increase_request_id' => $creditIncreaseRequest->id,
+                'distributor_id' => $creditIncreaseRequest->distributor_id,
                 'status' => $creditIncreaseRequest->status->value,
                 'approved_amount' => $creditIncreaseRequest->approved_amount,
+                'decision_notes' => $creditIncreaseRequest->decision_notes,
+                'credit_limit' => $creditIncreaseRequest->distributor->credit_limit,
+                'available_credit' => $creditIncreaseRequest->distributor->available_credit,
+            ],
+            null,
+            [
+                'credit_limit' => $oldCreditLimit,
+                'available_credit' => $oldAvailableCredit,
             ]
         );
 
