@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Storage;
 
 use App\Exceptions\SpacesStorageException;
+use DateTimeInterface;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -74,7 +75,7 @@ final class SpacesStorageService
         try {
             $this->assertConfigured();
 
-            return Storage::disk('spaces')->temporaryUrl($path, now()->addMinutes($expiresInMinutes));
+            return $this->signUrl($path, now()->addMinutes($expiresInMinutes));
         } catch (Throwable $exception) {
             report($exception);
 
@@ -90,22 +91,32 @@ final class SpacesStorageService
         $this->assertConfigured();
 
         try {
-            $storedPath = Storage::disk('spaces')->putFileAs(
-                dirname($path),
-                $file,
-                basename($path),
-                ['visibility' => 'private']
-            );
+            // Un solo error de red no debe tirar la subida: se reintenta hasta
+            // 3 veces (con una espera chica y creciente entre cada intento)
+            // antes de darse por vencido. UploadedFile envuelve un archivo
+            // temporal real en disco, no un stream que se consuma al leerlo,
+            // asi que reintentar putFileAs vuelve a leerlo desde el inicio
+            // cada vez -- es seguro repetirlo.
+            $storedPath = retry(3, function () use ($file, $path) {
+                $result = Storage::disk('spaces')->putFileAs(
+                    dirname($path),
+                    $file,
+                    basename($path),
+                    ['visibility' => 'private']
+                );
 
-            if ($storedPath === false) {
-                throw new SpacesStorageException('DigitalOcean Spaces did not return an object path.');
-            }
+                if ($result === false) {
+                    throw new SpacesStorageException('DigitalOcean Spaces did not return an object path.');
+                }
+
+                return $result;
+            }, fn (int $attempt): int => $attempt * 200);
 
             $expiresAt = now()->addMinutes($expiresInMinutes);
 
             return [
                 'path' => $storedPath,
-                'temporary_url' => Storage::disk('spaces')->temporaryUrl($storedPath, $expiresAt),
+                'temporary_url' => $this->signUrl($storedPath, $expiresAt),
                 'expires_at' => $expiresAt->toIso8601String(),
             ];
         } catch (Throwable $exception) {
@@ -116,6 +127,15 @@ final class SpacesStorageService
             // el mismo incidente en el log con dos formatos distintos.
             throw new SpacesStorageException('No se pudo guardar el archivo en DigitalOcean Spaces. Revisa la configuración y los permisos de la llave.', previous: $exception);
         }
+    }
+
+    /**
+     * Firma la URL con hasta 3 intentos -- generar una URL firmada no debe
+     * fallar por un tropiezo pasajero de red al armar la peticion firmada.
+     */
+    private function signUrl(string $path, DateTimeInterface $expiresAt): string
+    {
+        return retry(3, fn () => Storage::disk('spaces')->temporaryUrl($path, $expiresAt), fn (int $attempt): int => $attempt * 100);
     }
 
     private function assertConfigured(): void
