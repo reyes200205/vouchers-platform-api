@@ -111,24 +111,23 @@ final class ApproveVoucherService
             // coincida con lo que trae impreso/en el correo cuando se presente.
             $voucherNumber = 'V-'.$voucherRequest->id;
 
-            // La primera quincena de un vale recien otorgado cae en el periodo
-            // del corte que esta sucursal tiene ACTUALMENTE ABIERTO (no
-            // cerrado) -- revision del profesor. No se usa el reloj real
-            // (now()) como referencia principal porque aqui las
-            // distribuidoras generan y cierran cortes de prueba muy
-            // adelantados o atrasados respecto a la fecha real (ver el corte
-            // mas reciente de la sucursal, que puede estar meses adelante o
-            // atras del dia de hoy) -- "el periodo actual" para un vale
-            // nuevo es el periodo del corte que ya esta en curso, no el que
-            // tocaria segun la fecha real. Si la sucursal ya tiene un corte
-            // sin cerrar, el vale cae exactamente en su fecha limite
-            // (scheduled_at), para que aparezca ahi al reprocesarlo (ver
-            // ReprocessCutoffService). Si todavia no tiene ningun corte
-            // abierto (sucursal nueva, o se cerraron todos y no se ha
-            // generado el siguiente), se usa el reloj real como respaldo
-            // (CutoffPeriodCalculator + branch_settings.cutoff_day, 1-15/16-31
-            // por default) -- el primer corte que se genere despues cae en
-            // ese mismo periodo.
+            // La primera quincena de un vale recien otorgado cae en el corte
+            // que esta sucursal tiene ACTUALMENTE ABIERTO (no cerrado), SIN
+            // IMPORTAR que tan lejos de la fecha real este ese corte -- aqui
+            // las distribuidoras generan y cierran cortes de prueba muy
+            // adelantados o atrasados respecto a hoy (ej. llevan la
+            // simulacion hasta enero aunque hoy sea 25 de agosto), y el vale
+            // debe caer en ESE corte abierto (su scheduled_at), no en uno
+            // calculado con el reloj real. Si todavia no tiene NINGUN corte
+            // (sucursal nueva, antes de generar el primero), ahi si se usa el
+            // reloj real, pero apuntando a la SIGUIENTE quincena
+            // (nextPeriodEnd), no a la que ya esta corriendo: en la practica,
+            // el gerente arranca el primer corte de una sucursal desde el
+            // proximo limite de quincena "limpio" (ej. hoy 25-ago -> genera
+            // desde 1-sep), no desde la mitad de la quincena ya en curso -- si
+            // aqui se usara currentPeriodEnd() (la quincena ya en curso), el
+            // vale quedaria con fecha dentro de un periodo que el gerente
+            // nunca llega a generar, y no aparece en ningun corte.
             $openCutoff = Cutoff::query()
                 ->where('branch_id', $distributor->branch_id)
                 ->where('cutoff_type', CutoffType::PAGOS)
@@ -140,7 +139,7 @@ final class ApproveVoucherService
             $frequencyDays = (int) ($branchSetting->payment_frequency_days ?? 14);
             $dueDate = $openCutoff !== null
                 ? $openCutoff->scheduled_at->copy()
-                : $periods->currentPeriodEnd(now(), $branchSetting->cutoff_day);
+                : $periods->nextPeriodEnd(now(), $branchSetting->cutoff_day);
 
             // No hay una transferencia bancaria real que registrar (el dinero
             // sale de la linea de credito de la distribuidora, se entrega en el

@@ -630,12 +630,16 @@ describe('Voucher approval (cajera/gerente)', function (): void {
         $this->assertDatabaseCount('vouchers', 0);
     });
 
-    it('assigns the first payment_due_date to the CURRENT cutoff period (revision del profesor: la relacion nueva debe aparecer en el corte que ya esta abierto, no en el siguiente)', function (): void {
+    it('assigns the first payment_due_date to the NEXT cutoff period when the branch has no cutoff at all yet (el gerente arranca el primer corte desde el proximo limite de quincena, no desde la mitad de la que ya esta corriendo)', function (): void {
         // El dia 27 cae en el periodo 16-31 (branch_settings.cutoff_day = 15 por
-        // default). El vale se acaba de otorgar; su primer pago debe caer
-        // dentro de ESE MISMO periodo (31 de agosto), no en el que sigue --
-        // asi, si ya hay un corte abierto para 16-31 de agosto, esta relacion
-        // aparece ahi al reprocesarlo. Ver CutoffPeriodCalculator::currentPeriodEnd().
+        // default), pero como la sucursal todavia no tiene NINGUN corte
+        // generado, el respaldo debe apuntar a la SIGUIENTE quincena (15 de
+        // septiembre) -- no a la que ya esta corriendo (31 de agosto). En la
+        // practica el gerente genera el primer corte de una sucursal desde el
+        // proximo limite "limpio", no desde la mitad de una quincena ya
+        // empezada; si el vale quedara con fecha en la quincena en curso,
+        // caeria en un periodo que el gerente nunca llega a generar. Ver
+        // CutoffPeriodCalculator::nextPeriodEnd().
         $this->travelTo(now()->setDate(2026, 8, 27)->setTime(10, 0, 0));
 
         ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
@@ -652,11 +656,58 @@ describe('Voucher approval (cajera/gerente)', function (): void {
 
         $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
             ->assertOk()
-            ->assertJsonPath('data.payment_due_date', '2026-08-31');
+            ->assertJsonPath('data.payment_due_date', '2026-09-15');
 
         $this->assertDatabaseHas('vouchers', [
             'voucher_number' => 'V-1',
-            'payment_due_date' => '2026-08-31 00:00:00',
+            'payment_due_date' => '2026-09-15 00:00:00',
+        ]);
+    });
+
+    it('makes the relation of a voucher approved before any cutoff existed show up when the branch later generates the matching next cutoff', function (): void {
+        // Caso reportado: hoy 25-ago, la sucursal no tiene NINGUN corte
+        // todavia. Se otorga un vale (cae en 15-sep, ver el test de arriba) y
+        // DESPUES el gerente genera el primer corte de la sucursal para
+        // 01-sep al 15-sep -- la relacion del vale debe aparecer ahi, no
+        // quedar huerfana en un periodo (16-31 ago) que nadie va a generar.
+        $this->travelTo(now()->setDate(2026, 8, 25)->setTime(10, 0, 0));
+
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $voucher = $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+            ->assertOk()
+            ->json('data');
+
+        expect($voucher['payment_due_date'])->toBe('2026-09-15');
+
+        $manager = User::factory()->create();
+        signInBusinessRole($manager, 'branch_manager', $branch);
+
+        $cutoff = $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+            'period_start' => '2026-09-01',
+            'period_end' => '2026-09-15',
+        ])->assertCreated()->json('data');
+
+        $this->assertDatabaseHas('cutoff_relations', [
+            'cutoff_id' => $cutoff['id'],
+            'distributor_id' => $distributor->id,
+        ]);
+
+        $relation = CutoffRelation::query()->where('cutoff_id', $cutoff['id'])->firstOrFail();
+
+        $this->assertDatabaseHas('cutoff_relation_items', [
+            'cutoff_relation_id' => $relation->id,
+            'voucher_id' => $voucher['id'],
         ]);
     });
 

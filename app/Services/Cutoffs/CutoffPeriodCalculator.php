@@ -11,16 +11,18 @@ use Illuminate\Support\Carbon;
  * fijo: del 1 al `cutoffDay` del mes, y de `cutoffDay + 1` al ultimo dia del
  * mes — ej. con cutoffDay = 15: periodos 1-15 y 16-31).
  *
- * Se usa para fijar la primera fecha de pago (payment_due_date) de un vale
- * recien dispersado: la regla de negocio (revision del profesor) es que un
- * vale otorgado cae en el periodo ACTUAL — el que ya esta corriendo, tenga o
- * no un corte generado todavia — no en el que sigue. Asi, si ya existe un
- * corte abierto para ese periodo, la nueva relacion aparece ahi al
- * reprocesarlo (ver ReprocessCutoffService); si el corte de ese periodo
- * todavia no se genera, aparece la primera vez que se genere. Antes se usaba
- * nextPeriodEnd() para esto (saltar siempre al periodo siguiente); se deja
- * el metodo por si hace falta en otro lado, pero ApproveVoucherService ya NO
- * lo usa.
+ * Se usan para fijar la primera fecha de pago (payment_due_date) de un vale
+ * recien dispersado, pero SOLO como respaldo cuando la sucursal todavia no
+ * tiene ningun corte generado (ver ApproveVoucherService, que primero
+ * intenta usar el corte ACTUALMENTE ABIERTO si ya existe uno -- sin importar
+ * que tan lejos este de la fecha real). Para ese respaldo se usa
+ * nextPeriodEnd() (saltar al periodo siguiente), no currentPeriodEnd(): en
+ * la practica el gerente genera el primer corte de una sucursal desde el
+ * proximo limite de quincena "limpio" (ej. hoy 25-ago -> corte desde 1-sep),
+ * no desde la mitad de la quincena que ya esta corriendo -- si el vale
+ * quedara con fecha en la quincena en curso, caeria en un periodo que el
+ * gerente nunca llega a generar y jamas aparece en ningun corte.
+ * currentPeriodEnd() se deja disponible por si hace falta en otro lado.
  */
 final class CutoffPeriodCalculator
 {
