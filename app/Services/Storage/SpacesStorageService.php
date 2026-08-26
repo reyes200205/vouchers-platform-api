@@ -109,6 +109,23 @@ final class SpacesStorageService
                     throw new SpacesStorageException('DigitalOcean Spaces did not return an object path.');
                 }
 
+                // putFileAs puede regresar un path "exitoso" aunque la subida se
+                // haya cortado a medias por un tropiezo de red (el objeto queda
+                // incompleto en el bucket sin que el SDK lo detecte como error).
+                // Comparar el tamaño real ya guardado contra el tamaño del
+                // archivo original detecta ese caso y lo trata como fallo, para
+                // que el retry lo vuelva a intentar en vez de dar una falsa
+                // señal de éxito.
+                $uploadedSize = Storage::disk('spaces')->size($result);
+                $expectedSize = $file->getSize();
+                if ($uploadedSize !== $expectedSize) {
+                    Storage::disk('spaces')->delete($result);
+
+                    throw new SpacesStorageException(
+                        "El archivo subido a Spaces quedó incompleto (se esperaban {$expectedSize} bytes, se guardaron {$uploadedSize})."
+                    );
+                }
+
                 return $result;
             }, fn (int $attempt): int => $attempt * 200);
 
