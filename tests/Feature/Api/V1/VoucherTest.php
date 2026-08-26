@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 use App\Enums\CustomerDistributorRelationshipStatus;
 use App\Enums\CustomerStatus;
+use App\Enums\CutoffStatus;
 use App\Enums\VoucherStatus;
 use App\Mail\VoucherIssuedMail;
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\CustomerDistributor;
+use App\Models\Cutoff;
 use App\Models\CutoffRelation;
 use App\Models\Distributor;
 use App\Models\DistributorCategory;
@@ -708,6 +710,61 @@ describe('Voucher approval (cajera/gerente)', function (): void {
         $this->assertDatabaseHas('cutoff_relation_items', [
             'cutoff_relation_id' => $relation->id,
             'voucher_id' => $voucher['id'],
+        ]);
+    });
+
+    it('assigns the first payment_due_date to the period right after the branch LAST cutoff (closed or not), not to a real-clock period, when no cutoff is open at the moment of approval', function (): void {
+        // Caso reportado en producción: la sucursal ya lleva su simulación
+        // hasta diciembre (varios cortes generados y cerrados), pero justo en
+        // el momento de otorgar un vale nuevo a un tercer cliente, el último
+        // corte ya se había cerrado y el siguiente (diciembre) todavía no se
+        // generaba -- es decir, sin NINGÚN corte abierto en ese instante. El
+        // reloj real del servidor seguía en 26-ago; antes de este fix el vale
+        // caía en 15-sep (nextPeriodEnd de la fecha real) en vez de seguir la
+        // línea de tiempo real de la sucursal (diciembre), y por eso nunca
+        // aparecía al generar el corte de diciembre.
+        $this->travelTo(now()->setDate(2026, 8, 26)->setTime(10, 0, 0));
+
+        ['branch' => $branch, 'product' => $product, 'distributor' => $distributor, 'customer' => $customer] = voucherScenario();
+
+        // Simula que la sucursal ya tuvo un corte anterior (16-30 de
+        // noviembre), YA CERRADO, muy adelantado respecto al reloj real --
+        // y que todavía no se genera el de diciembre.
+        Cutoff::factory()->create([
+            'branch_id' => $branch->id,
+            'period_start' => '2026-11-16',
+            'scheduled_at' => '2026-11-30 23:59:59',
+            'status' => CutoffStatus::CERRADO,
+        ]);
+
+        $distributorUser = User::factory()->create();
+        signInDistributor($distributorUser, $distributor);
+
+        $request = $this->postJson('/api/v1/vouchers', [
+            'customer_id' => $customer->id,
+            'financial_product_id' => $product->id,
+        ])->assertCreated()->json('data');
+
+        $cashier = User::factory()->create();
+        signInBusinessRole($cashier, 'cashier', $branch);
+
+        $this->postJson("/api/v1/voucher-requests/{$request['id']}/approve")
+            ->assertOk()
+            ->assertJsonPath('data.payment_due_date', '2026-12-15');
+
+        $manager = User::factory()->create();
+        signInBusinessRole($manager, 'branch_manager', $branch);
+
+        $cutoff = $this->postJson("/api/v1/branches/{$branch->id}/cutoffs/generate", [
+            'period_start' => '2026-12-01',
+            'period_end' => '2026-12-15',
+        ])->assertCreated()->json('data');
+
+        $relation = CutoffRelation::query()->where('cutoff_id', $cutoff['id'])->firstOrFail();
+
+        $this->assertDatabaseHas('cutoff_relation_items', [
+            'cutoff_relation_id' => $relation->id,
+            'customer_id' => $customer->id,
         ]);
     });
 

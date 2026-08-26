@@ -116,18 +116,9 @@ final class ApproveVoucherService
             // IMPORTAR que tan lejos de la fecha real este ese corte -- aqui
             // las distribuidoras generan y cierran cortes de prueba muy
             // adelantados o atrasados respecto a hoy (ej. llevan la
-            // simulacion hasta enero aunque hoy sea 25 de agosto), y el vale
-            // debe caer en ESE corte abierto (su scheduled_at), no en uno
-            // calculado con el reloj real. Si todavia no tiene NINGUN corte
-            // (sucursal nueva, antes de generar el primero), ahi si se usa el
-            // reloj real, pero apuntando a la SIGUIENTE quincena
-            // (nextPeriodEnd), no a la que ya esta corriendo: en la practica,
-            // el gerente arranca el primer corte de una sucursal desde el
-            // proximo limite de quincena "limpio" (ej. hoy 25-ago -> genera
-            // desde 1-sep), no desde la mitad de la quincena ya en curso -- si
-            // aqui se usara currentPeriodEnd() (la quincena ya en curso), el
-            // vale quedaria con fecha dentro de un periodo que el gerente
-            // nunca llega a generar, y no aparece en ningun corte.
+            // simulacion hasta diciembre aunque hoy sea 26 de agosto), y el
+            // vale debe caer en ESE corte abierto (su scheduled_at), no en
+            // uno calculado con el reloj real.
             $openCutoff = Cutoff::query()
                 ->where('branch_id', $distributor->branch_id)
                 ->where('cutoff_type', CutoffType::PAGOS)
@@ -137,9 +128,35 @@ final class ApproveVoucherService
 
             $dueDays = (int) ($branchSetting->payment_due_days ?? 15);
             $frequencyDays = (int) ($branchSetting->payment_frequency_days ?? 14);
-            $dueDate = $openCutoff !== null
-                ? $openCutoff->scheduled_at->copy()
-                : $periods->nextPeriodEnd(now(), $branchSetting->cutoff_day);
+
+            if ($openCutoff !== null) {
+                $dueDate = $openCutoff->scheduled_at->copy();
+            } else {
+                // No hay corte abierto EN ESTE MOMENTO (el ultimo se cerro y
+                // todavia no se genera el siguiente) -- si la sucursal YA
+                // tiene historial de cortes (aunque esten cerrados), el vale
+                // debe seguir esa MISMA linea de tiempo (el periodo justo
+                // despues del ultimo que tuvo la sucursal), no la fecha real
+                // del reloj: el reporte que motivo esto fue exactamente este
+                // caso -- una sucursal ya simulada hasta diciembre, sin
+                // ningun corte abierto en el momento de otorgar un vale
+                // nuevo, terminaba con el vale fechado en septiembre (segun
+                // el reloj real) en vez de diciembre (donde en realidad va la
+                // sucursal); cuando el gerente generaba el siguiente corte
+                // consecutivo de diciembre (el unico que GenerateCutoffService
+                // le permite generar), el vale nunca aparecia ahi. Solo si la
+                // sucursal JAMAS ha tenido NINGUN corte (ni abierto ni
+                // cerrado) se usa el reloj real como ultimo recurso.
+                $lastCutoff = Cutoff::query()
+                    ->where('branch_id', $distributor->branch_id)
+                    ->where('cutoff_type', CutoffType::PAGOS)
+                    ->orderByDesc('scheduled_at')
+                    ->first();
+
+                $dueDate = $lastCutoff !== null
+                    ? $periods->nextPeriodEnd($lastCutoff->scheduled_at->copy(), $branchSetting->cutoff_day)
+                    : $periods->nextPeriodEnd(now(), $branchSetting->cutoff_day);
+            }
 
             // No hay una transferencia bancaria real que registrar (el dinero
             // sale de la linea de credito de la distribuidora, se entrega en el
